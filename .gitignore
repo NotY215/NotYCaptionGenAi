@@ -1,0 +1,5 @@
+/build
+/whisper.cpp
+/.vscode
+*.log
+*.pyc
