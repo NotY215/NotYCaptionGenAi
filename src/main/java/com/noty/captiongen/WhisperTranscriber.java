@@ -10,24 +10,26 @@ public class WhisperTranscriber {
         System.out.println("Transcribing: " + audioFile.getAbsolutePath());
         System.out.println("Using model: " + modelPath);
 
-        // Get the directory where the model is located
-        File modelFile = new File(modelPath);
-        String modelDir = modelFile.getParent();
-        String modelName = modelFile.getName();
+        // Try JNI library first
+        if (WhisperJNIWrapper.isAvailable()) {
+            try {
+                return transcribeWithJNI(audioFile, language, modelPath);
+            } catch (Exception e) {
+                System.err.println("JNI transcription failed: " + e.getMessage());
+            }
+        }
 
-        // Use Whisper.cpp executable if available
+        // Try whisper.cpp executable
         String whisperExecutable = findWhisperExecutable();
-
         if (whisperExecutable != null) {
             try {
                 return transcribeWithWhisperCpp(audioFile, language, modelPath, whisperExecutable);
             } catch (Exception e) {
                 System.err.println("Whisper.cpp execution failed: " + e.getMessage());
-                System.err.println("Trying Python whisper...");
             }
         }
 
-        // Try Python whisper as fallback
+        // Try Python whisper
         if (isPythonWhisperInstalled()) {
             try {
                 return transcribeWithPythonWhisper(audioFile, language);
@@ -36,23 +38,41 @@ public class WhisperTranscriber {
             }
         }
 
-        throw new Exception("No working Whisper installation found. Please install whisper.cpp or Python whisper.");
+        // If all else fails, show helpful message
+        throw new Exception(
+                "No Whisper installation found!\n\n" +
+                        "Please install one of the following:\n\n" +
+                        "1. Download whisper.cpp from: https://github.com/ggerganov/whisper.cpp\n" +
+                        "   Place the executable (main.exe or whisper.exe) in the application folder\n\n" +
+                        "2. Install Python whisper: pip install openai-whisper\n\n" +
+                        "3. Place whisper-jni.dll in the application folder\n\n" +
+                        "The application will automatically detect and use any available installation."
+        );
+    }
+
+    private static String transcribeWithJNI(File audioFile, String language, String modelPath) throws Exception {
+        WhisperJNIWrapper whisper = new WhisperJNIWrapper();
+
+        // Load model
+        if (!whisper.loadModel(modelPath)) {
+            throw new Exception("Failed to load model: " + modelPath);
+        }
+
+        // Transcribe
+        String languageCode = getLanguageCode(language);
+        String result = whisper.transcribe(audioFile.getAbsolutePath(), languageCode);
+
+        // Unload model
+        whisper.unloadModel();
+
+        return result;
     }
 
     private static String findWhisperExecutable() {
         String[] possiblePaths = {
-                "whisper",
-                "whisper.exe",
-                "./whisper",
-                "./whisper.exe",
-                "main",
-                "main.exe",
-                "./main",
-                "./main.exe",
-                "whisper-cli",
-                "whisper-cli.exe",
-                "./whisper-cli",
-                "./whisper-cli.exe"
+                "whisper", "whisper.exe", "./whisper", "./whisper.exe",
+                "main", "main.exe", "./main", "./main.exe",
+                "whisper-cli", "whisper-cli.exe", "./whisper-cli", "./whisper-cli.exe"
         };
 
         for (String path : possiblePaths) {
@@ -60,63 +80,39 @@ public class WhisperTranscriber {
             if (file.exists() && file.canExecute()) {
                 return path;
             }
-            try {
-                ProcessBuilder pb = new ProcessBuilder(path, "--help");
-                Process process = pb.start();
-                int exitCode = process.waitFor();
-                if (exitCode == 0 || exitCode == 1) {
-                    return path;
-                }
-            } catch (Exception e) {
-                // Continue searching
-            }
         }
         return null;
     }
 
     private static String transcribeWithWhisperCpp(File audioFile, String language, String modelPath, String whisperExecutable) throws Exception {
-        // First convert to 16kHz WAV if not already
-        File wavFile = audioFile;
-        if (!audioFile.getName().toLowerCase().endsWith(".wav")) {
-            wavFile = AudioExtractor.extractAudio(audioFile);
-        }
-
         String languageCode = getLanguageCode(language);
-        String outputPath = wavFile.getParent() + File.separator +
-                getFileNameWithoutExtension(wavFile);
+        String outputPath = audioFile.getParent() + File.separator +
+                getFileNameWithoutExtension(audioFile);
 
-        // Build command for whisper.cpp
         List<String> command = new ArrayList<>();
         command.add(whisperExecutable);
         command.add("-m");
         command.add(modelPath);
         command.add("-f");
-        command.add(wavFile.getAbsolutePath());
+        command.add(audioFile.getAbsolutePath());
         command.add("-o");
         command.add(outputPath);
         command.add("-t");
         command.add(String.valueOf(Runtime.getRuntime().availableProcessors()));
-        command.add("-osrt"); // Output SRT format
+        command.add("-osrt");
 
         if (!languageCode.equals("auto")) {
             command.add("-l");
             command.add(languageCode);
         }
 
-        System.out.println("Running command: " + String.join(" ", command));
-
-        // Execute whisper.cpp
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
         Process process = pb.start();
 
-        // Read output
-        StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append("\n");
-                System.out.println(line);
+            while (reader.readLine() != null) {
+                // Consume output
             }
         }
 
@@ -125,27 +121,20 @@ public class WhisperTranscriber {
             throw new Exception("Whisper.cpp failed with exit code: " + exitCode);
         }
 
-        // Read the generated SRT file
         String srtPath = outputPath + ".srt";
         File srtFile = new File(srtPath);
         if (srtFile.exists()) {
-            String content = new String(Files.readAllBytes(srtFile.toPath()));
-            // Clean up temporary file if it was created
-            if (wavFile != audioFile && wavFile.exists()) {
-                wavFile.delete();
-            }
-            return content;
+            return new String(Files.readAllBytes(srtFile.toPath()));
         }
 
-        return output.toString();
+        throw new Exception("No SRT file generated");
     }
 
     private static boolean isPythonWhisperInstalled() {
         try {
-            ProcessBuilder pb = new ProcessBuilder("pip", "show", "openai-whisper");
+            ProcessBuilder pb = new ProcessBuilder("python", "-c", "import whisper");
             Process process = pb.start();
-            int exitCode = process.waitFor();
-            return exitCode == 0;
+            return process.waitFor() == 0;
         } catch (Exception e) {
             return false;
         }
@@ -156,30 +145,21 @@ public class WhisperTranscriber {
         String outputPath = audioFile.getParent() + File.separator +
                 getFileNameWithoutExtension(audioFile);
 
-        // Build Python whisper command
         List<String> command = new ArrayList<>();
-        command.add("whisper");
-        command.add(audioFile.getAbsolutePath());
-        command.add("--model");
-        command.add("base");
-        command.add("--language");
-        command.add(languageCode);
-        command.add("--output_dir");
-        command.add(audioFile.getParent());
-        command.add("--output_format");
-        command.add("srt");
+        command.add("python");
+        command.add("-c");
+        command.add(String.format(
+                "import whisper; model = whisper.load_model('base'); " +
+                        "result = model.transcribe('%s', language='%s'); " +
+                        "with open('%s.srt', 'w') as f: f.write(result['text'])",
+                audioFile.getAbsolutePath().replace("\\", "/"),
+                languageCode,
+                outputPath.replace("\\", "/")
+        ));
 
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
         Process process = pb.start();
-
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append("\n");
-            }
-        }
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {
@@ -192,7 +172,7 @@ public class WhisperTranscriber {
             return new String(Files.readAllBytes(srtFile.toPath()));
         }
 
-        return output.toString();
+        throw new Exception("No SRT file generated");
     }
 
     private static String getLanguageCode(String language) {
