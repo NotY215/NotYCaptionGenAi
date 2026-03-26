@@ -231,7 +231,7 @@ For the full license text, visit: [https://www.gnu.org/licenses/lgpl-3.0.en.html
 | **Download Latest EXE** | [GitHub Releases](https://github.com/NotY215/NotYCaptionGenAi/releases) |
 | **Report Issues** | [GitHub Issues](https://github.com/NotY215/NotYCaptionGenAi/issues) |
 | **Feature Requests** | [Submit Request](https://github.com/NotY215/NotYCaptionGenAi/issues/new) |
-| **Email** | noty215@protonmail.com |
+
 
 ---
 
