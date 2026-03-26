@@ -12,20 +12,57 @@ public class GUI extends JFrame {
     private JButton btnSelectFile;
     private JButton btnGenerate;
     private JButton btnDownloadModel;
+    private JComboBox<String> modelCombo;
     private JLabel lblFileInfo;
     private JLabel lblStatus;
     private JSlider letterSpacingSlider;
     private JLabel lblLetterSpacingValue;
     private JComboBox<String> languageCombo;
     private JCheckBox chkTransliterate;
+    private JLabel lblModelSize;
     private File selectedFile;
     private ModelDownloader modelDownloader;
     private boolean modelAvailable;
+    private DownloadProgressDialog downloadDialog;
+    private String selectedModelPath;
+
+    // Model information
+    private static final class ModelInfo {
+        String name;
+        String url;
+        String fileName;
+        long sizeBytes;
+
+        ModelInfo(String name, String url, String fileName, long sizeBytes) {
+            this.name = name;
+            this.url = url;
+            this.fileName = fileName;
+            this.sizeBytes = sizeBytes;
+        }
+    }
+
+    private final ModelInfo[] MODELS = {
+            new ModelInfo("Tiny (39 MB)",
+                    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+                    "ggml-tiny.bin", 39 * 1024 * 1024),
+            new ModelInfo("Base (142 MB)",
+                    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+                    "ggml-base.bin", 142 * 1024 * 1024),
+            new ModelInfo("Small (466 MB)",
+                    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
+                    "ggml-small.bin", 466 * 1024 * 1024),
+            new ModelInfo("Medium (1.5 GB)",
+                    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
+                    "ggml-medium.bin", 1536 * 1024 * 1024),
+            new ModelInfo("Large V1 (2.9 GB)",
+                    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin",
+                    "ggml-large-v1.bin", 2900 * 1024 * 1024)
+    };
 
     public GUI() {
         setTitle("NotYCaptionGenAi - AI Subtitle Generator");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(650, 550);
+        setSize(700, 650);
         setLocationRelativeTo(null);
 
         // Load icon
@@ -38,7 +75,6 @@ public class GUI extends JFrame {
 
         initComponents();
         checkModelStatus();
-        startModelCheckThread();
     }
 
     private void initComponents() {
@@ -57,11 +93,17 @@ public class GUI extends JFrame {
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         titlePanel.add(titleLabel);
 
-        JLabel subtitleLabel = new JLabel("AI-Powered Subtitle Generator");
+        JLabel subtitleLabel = new JLabel("AI-Powered Subtitle Generator v2.0");
         subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         subtitleLabel.setForeground(Color.GRAY);
         subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         titlePanel.add(subtitleLabel);
+
+        JLabel creditLabel = new JLabel("Developed By NotY215");
+        creditLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
+        creditLabel.setForeground(new Color(150, 150, 150));
+        creditLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        titlePanel.add(creditLabel);
 
         // File Selection Panel
         JPanel filePanel = new JPanel(new BorderLayout(10, 10));
@@ -70,7 +112,7 @@ public class GUI extends JFrame {
                 BorderFactory.createLineBorder(new Color(200, 200, 200)),
                 BorderFactory.createEmptyBorder(15, 15, 15, 15)
         ));
-        filePanel.setMaximumSize(new Dimension(600, 100));
+        filePanel.setMaximumSize(new Dimension(660, 100));
 
         btnSelectFile = new JButton("📁 Select Video/Audio File");
         btnSelectFile.setFont(new Font("Segoe UI", Font.PLAIN, 14));
@@ -86,6 +128,61 @@ public class GUI extends JFrame {
         filePanel.add(btnSelectFile, BorderLayout.CENTER);
         filePanel.add(lblFileInfo, BorderLayout.SOUTH);
 
+        // Model Selection Panel
+        JPanel modelPanel = new JPanel(new GridBagLayout());
+        modelPanel.setBackground(Color.WHITE);
+        modelPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(200, 200, 200)),
+                BorderFactory.createEmptyBorder(15, 15, 15, 15)
+        ));
+        modelPanel.setMaximumSize(new Dimension(660, 120));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 10, 5, 10);
+
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        JLabel modelLabel = new JLabel("Whisper Model:");
+        modelLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        modelPanel.add(modelLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.gridwidth = 2;
+        String[] modelNames = new String[MODELS.length];
+        for (int i = 0; i < MODELS.length; i++) {
+            modelNames[i] = MODELS[i].name;
+        }
+        modelCombo = new JComboBox<>(modelNames);
+        modelCombo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        modelCombo.addActionListener(e -> updateModelInfo());
+        modelPanel.add(modelCombo, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 1;
+        JLabel sizeLabel = new JLabel("Model Size:");
+        sizeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        modelPanel.add(sizeLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.gridwidth = 2;
+        lblModelSize = new JLabel("");
+        lblModelSize.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblModelSize.setForeground(new Color(100, 100, 100));
+        modelPanel.add(lblModelSize, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.gridwidth = 3;
+        btnDownloadModel = new JButton("📥 Download Selected Model");
+        btnDownloadModel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        btnDownloadModel.setBackground(new Color(255, 152, 0));
+        btnDownloadModel.setForeground(Color.WHITE);
+        btnDownloadModel.setFocusPainted(false);
+        btnDownloadModel.addActionListener(e -> confirmAndDownloadModel());
+        modelPanel.add(btnDownloadModel, gbc);
+
         // Settings Panel
         JPanel settingsPanel = new JPanel();
         settingsPanel.setLayout(new GridBagLayout());
@@ -94,9 +191,9 @@ public class GUI extends JFrame {
                 BorderFactory.createLineBorder(new Color(200, 200, 200)),
                 BorderFactory.createEmptyBorder(15, 15, 15, 15)
         ));
-        settingsPanel.setMaximumSize(new Dimension(600, 250));
+        settingsPanel.setMaximumSize(new Dimension(660, 200));
 
-        GridBagConstraints gbc = new GridBagConstraints();
+        gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(10, 10, 10, 10);
 
@@ -132,7 +229,7 @@ public class GUI extends JFrame {
 
         gbc.gridx = 1;
         gbc.gridwidth = 2;
-        String[] languages = {"Auto Detect", "English", "Hindi", "Japanese", "Spanish", "French", "German", "Chinese", "Arabic"};
+        String[] languages = {"Auto Detect", "English", "Hindi", "Japanese", "Spanish", "French", "German", "Chinese", "Arabic", "Russian", "Korean"};
         languageCombo = new JComboBox<>(languages);
         languageCombo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         settingsPanel.add(languageCombo, gbc);
@@ -156,19 +253,8 @@ public class GUI extends JFrame {
         btnGenerate.setForeground(Color.WHITE);
         btnGenerate.setFocusPainted(false);
         btnGenerate.setEnabled(false);
-        btnGenerate.addActionListener(e -> generateSubtitles());
+        btnGenerate.addActionListener(e -> confirmAndGenerate());
         settingsPanel.add(btnGenerate, gbc);
-
-        // Model Download Button (initially hidden)
-        gbc.gridy = 4;
-        btnDownloadModel = new JButton("📥 Download Whisper Model");
-        btnDownloadModel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        btnDownloadModel.setBackground(new Color(255, 152, 0));
-        btnDownloadModel.setForeground(Color.WHITE);
-        btnDownloadModel.setFocusPainted(false);
-        btnDownloadModel.setVisible(false);
-        btnDownloadModel.addActionListener(e -> downloadModel());
-        settingsPanel.add(btnDownloadModel, gbc);
 
         // Status Panel
         JPanel statusPanel = new JPanel(new BorderLayout());
@@ -177,9 +263,9 @@ public class GUI extends JFrame {
                 BorderFactory.createLineBorder(new Color(200, 200, 200)),
                 BorderFactory.createEmptyBorder(10, 15, 10, 15)
         ));
-        statusPanel.setMaximumSize(new Dimension(600, 80));
+        statusPanel.setMaximumSize(new Dimension(660, 80));
 
-        lblStatus = new JLabel("✅ Ready. Select a file to begin.");
+        lblStatus = new JLabel("✅ Ready. Select a file and model to begin.");
         lblStatus.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblStatus.setForeground(new Color(76, 175, 80));
         statusPanel.add(lblStatus, BorderLayout.CENTER);
@@ -189,11 +275,41 @@ public class GUI extends JFrame {
         mainPanel.add(Box.createRigidArea(new Dimension(0, 20)));
         mainPanel.add(filePanel);
         mainPanel.add(Box.createRigidArea(new Dimension(0, 20)));
+        mainPanel.add(modelPanel);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 20)));
         mainPanel.add(settingsPanel);
         mainPanel.add(Box.createRigidArea(new Dimension(0, 20)));
         mainPanel.add(statusPanel);
 
         add(mainPanel);
+        updateModelInfo();
+    }
+
+    private void updateModelInfo() {
+        int index = modelCombo.getSelectedIndex();
+        if (index >= 0 && index < MODELS.length) {
+            long sizeMB = MODELS[index].sizeBytes / (1024 * 1024);
+            lblModelSize.setText(String.format("%d MB", sizeMB));
+
+            // Check if this model exists
+            File modelFile = new File(MODELS[index].fileName);
+            if (modelFile.exists() && modelFile.length() > 0) {
+                modelAvailable = true;
+                selectedModelPath = modelFile.getAbsolutePath();
+                btnDownloadModel.setText("✓ Model Available");
+                btnDownloadModel.setEnabled(false);
+                btnGenerate.setEnabled(selectedFile != null);
+                lblStatus.setText("✅ Model available. Ready to generate.");
+                lblStatus.setForeground(new Color(76, 175, 80));
+            } else {
+                modelAvailable = false;
+                btnDownloadModel.setText("📥 Download Selected Model");
+                btnDownloadModel.setEnabled(true);
+                btnGenerate.setEnabled(false);
+                lblStatus.setText("⚠️ Model not found. Please download it first.");
+                lblStatus.setForeground(Color.ORANGE);
+            }
+        }
     }
 
     private void selectFile() {
@@ -209,19 +325,33 @@ public class GUI extends JFrame {
         if (result == JFileChooser.APPROVE_OPTION) {
             selectedFile = fileChooser.getSelectedFile();
             lblFileInfo.setText(selectedFile.getName() + " (" + (selectedFile.length() / 1024 / 1024) + " MB)");
-            btnGenerate.setEnabled(modelAvailable);
 
-            if (!modelAvailable) {
-                lblStatus.setText("⚠️ Model not found. Please download the Whisper model first.");
-                lblStatus.setForeground(Color.ORANGE);
-            } else {
+            if (modelAvailable) {
+                btnGenerate.setEnabled(true);
                 lblStatus.setText("✅ File selected. Ready to generate.");
-                lblStatus.setForeground(new Color(76, 175, 80));
             }
         }
     }
 
-    private void generateSubtitles() {
+    private void confirmAndDownloadModel() {
+        int index = modelCombo.getSelectedIndex();
+        if (index < 0 || index >= MODELS.length) return;
+
+        ModelInfo model = MODELS[index];
+        long sizeMB = model.sizeBytes / (1024 * 1024);
+
+        int response = JOptionPane.showConfirmDialog(this,
+                String.format("Download %s (%d MB)?\n\nThis may take several minutes depending on your internet speed.",
+                        model.name, sizeMB),
+                "Confirm Download",
+                JOptionPane.YES_NO_OPTION);
+
+        if (response == JOptionPane.YES_OPTION) {
+            downloadModel(model);
+        }
+    }
+
+    private void confirmAndGenerate() {
         if (selectedFile == null) {
             JOptionPane.showMessageDialog(this, "Please select a file first!", "Error", JOptionPane.ERROR_MESSAGE);
             return;
@@ -233,9 +363,112 @@ public class GUI extends JFrame {
             return;
         }
 
-        // Disable button during processing
+        int response = JOptionPane.showConfirmDialog(this,
+                String.format("Generate subtitles for:\n%s\n\nModel: %s\nLanguage: %s\nMax letters: %d\nTransliteration: %s",
+                        selectedFile.getName(),
+                        MODELS[modelCombo.getSelectedIndex()].name,
+                        languageCombo.getSelectedItem(),
+                        letterSpacingSlider.getValue(),
+                        chkTransliterate.isSelected() ? "Yes" : "No"),
+                "Confirm Generation",
+                JOptionPane.YES_NO_OPTION);
+
+        if (response == JOptionPane.YES_OPTION) {
+            generateSubtitles();
+        }
+    }
+
+    private void downloadModel(ModelInfo model) {
+        // Disable all buttons during download
+        setButtonsEnabled(false);
+
+        downloadDialog = new DownloadProgressDialog(this, model.name, model.sizeBytes);
+        downloadDialog.setVisible(true);
+
+        modelDownloader = new ModelDownloader();
+        modelDownloader.downloadModel(model.url, model.fileName, model.sizeBytes, new ModelDownloader.DownloadCallback() {
+            @Override
+            public void onProgress(int percent, long downloaded, long total, double speed) {
+                SwingUtilities.invokeLater(() -> {
+                    if (downloadDialog != null) {
+                        downloadDialog.updateProgress(percent, downloaded, total, speed);
+                    }
+                });
+            }
+
+            @Override
+            public void onComplete(boolean success) {
+                SwingUtilities.invokeLater(() -> {
+                    if (downloadDialog != null) {
+                        downloadDialog.dispose();
+                    }
+                    setButtonsEnabled(true);
+
+                    if (success) {
+                        checkModelStatus();
+                        JOptionPane.showMessageDialog(GUI.this,
+                                "Model downloaded successfully!",
+                                "Success", JOptionPane.INFORMATION_MESSAGE);
+                    } else {
+                        JOptionPane.showMessageDialog(GUI.this,
+                                "Failed to download model. Please check your internet connection.",
+                                "Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                });
+            }
+
+            @Override
+            public void onCancel() {
+                SwingUtilities.invokeLater(() -> {
+                    if (downloadDialog != null) {
+                        downloadDialog.dispose();
+                    }
+                    setButtonsEnabled(true);
+                    lblStatus.setText("❌ Download cancelled.");
+                    lblStatus.setForeground(Color.RED);
+                });
+            }
+        });
+    }
+
+    private void setButtonsEnabled(boolean enabled) {
+        btnSelectFile.setEnabled(enabled);
+        btnGenerate.setEnabled(enabled && modelAvailable && selectedFile != null);
+        btnDownloadModel.setEnabled(enabled && !modelAvailable);
+        modelCombo.setEnabled(enabled);
+        languageCombo.setEnabled(enabled);
+        letterSpacingSlider.setEnabled(enabled);
+        chkTransliterate.setEnabled(enabled);
+    }
+
+    private void checkModelStatus() {
+        int index = modelCombo.getSelectedIndex();
+        if (index >= 0 && index < MODELS.length) {
+            File modelFile = new File(MODELS[index].fileName);
+            modelAvailable = modelFile.exists() && modelFile.length() > 0;
+
+            if (modelAvailable) {
+                selectedModelPath = modelFile.getAbsolutePath();
+                btnDownloadModel.setText("✓ Model Available");
+                btnDownloadModel.setEnabled(false);
+                btnGenerate.setEnabled(selectedFile != null);
+                lblStatus.setText("✅ Model available. Ready to generate.");
+                lblStatus.setForeground(new Color(76, 175, 80));
+            } else {
+                btnDownloadModel.setText("📥 Download Selected Model");
+                btnDownloadModel.setEnabled(true);
+                btnGenerate.setEnabled(false);
+                lblStatus.setText("⚠️ Model not found. Please download it first.");
+                lblStatus.setForeground(Color.ORANGE);
+            }
+        }
+    }
+
+    private void generateSubtitles() {
+        // Disable all buttons during generation
+        setButtonsEnabled(false);
         btnGenerate.setEnabled(false);
-        btnSelectFile.setEnabled(false);
+
         lblStatus.setText("⏳ Processing... Extracting audio (if needed)...");
         lblStatus.setForeground(Color.BLUE);
 
@@ -248,7 +481,8 @@ public class GUI extends JFrame {
 
                     publish("🎤 Transcribing with Whisper AI...");
                     String transcription = WhisperTranscriber.transcribe(audioFile,
-                            languageCombo.getSelectedItem().toString());
+                            languageCombo.getSelectedItem().toString(),
+                            selectedModelPath);
 
                     publish("📝 Generating SRT subtitles...");
                     int maxLetters = letterSpacingSlider.getValue();
@@ -278,7 +512,8 @@ public class GUI extends JFrame {
 
                     SwingUtilities.invokeLater(() -> {
                         JOptionPane.showMessageDialog(GUI.this,
-                                "Subtitles generated successfully!\n\nSaved to:\n" + outputPath,
+                                "Subtitles generated successfully!\n\nSaved to:\n" + outputPath +
+                                        (chkTransliterate.isSelected() ? "\n\nTransliterated version also saved." : ""),
                                 "Success", JOptionPane.INFORMATION_MESSAGE);
                     });
 
@@ -302,72 +537,16 @@ public class GUI extends JFrame {
 
             @Override
             protected void done() {
-                btnGenerate.setEnabled(true);
-                btnSelectFile.setEnabled(true);
-                if (modelAvailable) {
-                    lblStatus.setText("✅ Ready for next file.");
-                    lblStatus.setForeground(new Color(76, 175, 80));
+                setButtonsEnabled(true);
+                if (modelAvailable && selectedFile != null) {
+                    btnGenerate.setEnabled(true);
                 }
+                lblStatus.setText("✅ Ready for next file.");
+                lblStatus.setForeground(new Color(76, 175, 80));
             }
         };
 
         worker.execute();
-    }
-
-    private void checkModelStatus() {
-        File modelFile = new File("ggml-base.bin");
-        modelAvailable = modelFile.exists() && modelFile.length() > 0;
-
-        if (!modelAvailable) {
-            btnDownloadModel.setVisible(true);
-            btnGenerate.setEnabled(false);
-            lblStatus.setText("⚠️ Whisper model not found. Please download it first.");
-            lblStatus.setForeground(Color.ORANGE);
-        } else {
-            btnDownloadModel.setVisible(false);
-            if (selectedFile != null) {
-                btnGenerate.setEnabled(true);
-            }
-            lblStatus.setText("✅ Model available. Ready to generate subtitles.");
-            lblStatus.setForeground(new Color(76, 175, 80));
-        }
-    }
-
-    private void startModelCheckThread() {
-        Timer timer = new Timer(5000, e -> checkModelStatus());
-        timer.start();
-    }
-
-    private void downloadModel() {
-        modelDownloader = new ModelDownloader();
-        modelDownloader.downloadModel(this, new ModelDownloader.DownloadCallback() {
-            @Override
-            public void onProgress(int percent) {
-                SwingUtilities.invokeLater(() -> {
-                    lblStatus.setText("📥 Downloading model: " + percent + "%");
-                });
-            }
-
-            @Override
-            public void onComplete(boolean success) {
-                SwingUtilities.invokeLater(() -> {
-                    if (success) {
-                        checkModelStatus();
-                        lblStatus.setText("✅ Model downloaded successfully!");
-                        lblStatus.setForeground(new Color(76, 175, 80));
-                        JOptionPane.showMessageDialog(GUI.this,
-                                "Whisper model downloaded successfully!",
-                                "Success", JOptionPane.INFORMATION_MESSAGE);
-                    } else {
-                        lblStatus.setText("❌ Model download failed. Please check your internet connection.");
-                        lblStatus.setForeground(Color.RED);
-                        JOptionPane.showMessageDialog(GUI.this,
-                                "Failed to download model. Please check your internet connection.",
-                                "Error", JOptionPane.ERROR_MESSAGE);
-                    }
-                });
-            }
-        });
     }
 
     private String getFileNameWithoutExtension(File file) {
