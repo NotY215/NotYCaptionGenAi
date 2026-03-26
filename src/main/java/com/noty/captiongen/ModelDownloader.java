@@ -2,6 +2,7 @@ package com.noty.captiongen;
 
 import java.io.*;
 import java.net.*;
+import java.nio.file.Files;
 
 public class ModelDownloader {
     private volatile boolean cancelled = false;
@@ -21,6 +22,7 @@ public class ModelDownloader {
                 connection.setRequestMethod("GET");
                 connection.setConnectTimeout(30000);
                 connection.setReadTimeout(60000);
+                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
                 connection.connect();
 
                 int responseCode = connection.getResponseCode();
@@ -68,7 +70,11 @@ public class ModelDownloader {
                 if (outputFile.exists()) {
                     outputFile.delete();
                 }
-                tempFile.renameTo(outputFile);
+                boolean renamed = tempFile.renameTo(outputFile);
+                if (!renamed) {
+                    // Try alternative rename method
+                    Files.move(tempFile.toPath(), outputFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
 
                 callback.onComplete(true);
 

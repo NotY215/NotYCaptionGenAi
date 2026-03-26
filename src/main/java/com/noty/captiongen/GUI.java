@@ -24,7 +24,16 @@ public class GUI extends JFrame {
     private boolean modelAvailable;
     private DownloadProgressDialog downloadDialog;
     private String selectedModelPath;
-    private boolean whisperAvailable;
+
+    // Dark mode colors
+    private final Color DARK_BG = new Color(43, 43, 43);
+    private final Color DARKER_BG = new Color(30, 30, 30);
+    private final Color DARK_PANEL = new Color(53, 53, 53);
+    private final Color LIGHT_TEXT = new Color(220, 220, 220);
+    private final Color ACCENT_BLUE = new Color(66, 133, 244);
+    private final Color ACCENT_GREEN = new Color(76, 175, 80);
+    private final Color ACCENT_ORANGE = new Color(255, 152, 0);
+    private final Color ACCENT_RED = new Color(244, 67, 54);
 
     // Model information
     private static final class ModelInfo {
@@ -62,18 +71,41 @@ public class GUI extends JFrame {
     public GUI() {
         setTitle("NotYCaptionGenAi - AI Subtitle Generator");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(700, 700);
+        setSize(800, 750);
         setLocationRelativeTo(null);
 
-        // Check Whisper availability
-        whisperAvailable = WhisperJNIWrapper.isAvailable();
-
-        // Load icon
+        // Set application icon
         try {
+            // Try to load from resources
             ImageIcon icon = new ImageIcon(getClass().getResource("/app.ico"));
             setIconImage(icon.getImage());
+
+            // Also try to load from file system for standalone EXE
+            File iconFile = new File("app.ico");
+            if (iconFile.exists()) {
+                ImageIcon fileIcon = new ImageIcon(iconFile.getAbsolutePath());
+                setIconImage(fileIcon.getImage());
+            }
         } catch (Exception e) {
-            // Icon not found, continue without icon
+            System.err.println("Could not load icon: " + e.getMessage());
+            // Continue without icon
+        }
+
+        // Set dark mode look and feel
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            UIManager.put("Panel.background", DARK_BG);
+            UIManager.put("Button.background", DARK_PANEL);
+            UIManager.put("Button.foreground", LIGHT_TEXT);
+            UIManager.put("Label.foreground", LIGHT_TEXT);
+            UIManager.put("ComboBox.background", DARK_PANEL);
+            UIManager.put("ComboBox.foreground", LIGHT_TEXT);
+            UIManager.put("TextField.background", DARK_PANEL);
+            UIManager.put("TextField.foreground", LIGHT_TEXT);
+            UIManager.put("CheckBox.background", DARK_BG);
+            UIManager.put("CheckBox.foreground", LIGHT_TEXT);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
         initComponents();
@@ -81,24 +113,24 @@ public class GUI extends JFrame {
     }
 
     private void initComponents() {
-        // Main panel with padding
+        // Main panel with dark background
         JPanel mainPanel = new JPanel();
         mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        mainPanel.setBackground(new Color(245, 245, 245));
+        mainPanel.setBackground(DARK_BG);
 
         // Title Panel
         JPanel titlePanel = new JPanel();
-        titlePanel.setBackground(new Color(245, 245, 245));
+        titlePanel.setBackground(DARK_BG);
         JLabel titleLabel = new JLabel("NotYCaptionGenAi");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 28));
-        titleLabel.setForeground(new Color(66, 133, 244));
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 32));
+        titleLabel.setForeground(ACCENT_BLUE);
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         titlePanel.add(titleLabel);
 
         JLabel subtitleLabel = new JLabel("AI-Powered Subtitle Generator v2.0");
         subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        subtitleLabel.setForeground(Color.GRAY);
+        subtitleLabel.setForeground(LIGHT_TEXT);
         subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         titlePanel.add(subtitleLabel);
 
@@ -110,35 +142,37 @@ public class GUI extends JFrame {
 
         // File Selection Panel
         JPanel filePanel = new JPanel(new BorderLayout(10, 10));
-        filePanel.setBackground(Color.WHITE);
+        filePanel.setBackground(DARK_PANEL);
         filePanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200)),
+                BorderFactory.createLineBorder(new Color(80, 80, 80)),
                 BorderFactory.createEmptyBorder(15, 15, 15, 15)
         ));
-        filePanel.setMaximumSize(new Dimension(660, 100));
+        filePanel.setMaximumSize(new Dimension(760, 100));
 
         btnSelectFile = new JButton("📁 Select Video/Audio File");
         btnSelectFile.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        btnSelectFile.setBackground(new Color(66, 133, 244));
+        btnSelectFile.setBackground(ACCENT_BLUE);
         btnSelectFile.setForeground(Color.WHITE);
         btnSelectFile.setFocusPainted(false);
+        btnSelectFile.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
         btnSelectFile.addActionListener(e -> selectFile());
 
         lblFileInfo = new JLabel("No file selected");
         lblFileInfo.setFont(new Font("Segoe UI", Font.ITALIC, 12));
-        lblFileInfo.setForeground(Color.GRAY);
+        lblFileInfo.setForeground(new Color(150, 150, 150));
+        lblFileInfo.setHorizontalAlignment(SwingConstants.CENTER);
 
         filePanel.add(btnSelectFile, BorderLayout.CENTER);
         filePanel.add(lblFileInfo, BorderLayout.SOUTH);
 
         // Model Selection Panel
         JPanel modelPanel = new JPanel(new GridBagLayout());
-        modelPanel.setBackground(Color.WHITE);
+        modelPanel.setBackground(DARK_PANEL);
         modelPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200)),
+                BorderFactory.createLineBorder(new Color(80, 80, 80)),
                 BorderFactory.createEmptyBorder(15, 15, 15, 15)
         ));
-        modelPanel.setMaximumSize(new Dimension(660, 120));
+        modelPanel.setMaximumSize(new Dimension(760, 120));
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -148,6 +182,7 @@ public class GUI extends JFrame {
         gbc.gridy = 0;
         JLabel modelLabel = new JLabel("Whisper Model:");
         modelLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        modelLabel.setForeground(LIGHT_TEXT);
         modelPanel.add(modelLabel, gbc);
 
         gbc.gridx = 1;
@@ -158,6 +193,8 @@ public class GUI extends JFrame {
         }
         modelCombo = new JComboBox<>(modelNames);
         modelCombo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        modelCombo.setBackground(DARKER_BG);
+        modelCombo.setForeground(LIGHT_TEXT);
         modelCombo.addActionListener(e -> updateModelInfo());
         modelPanel.add(modelCombo, gbc);
 
@@ -166,13 +203,14 @@ public class GUI extends JFrame {
         gbc.gridwidth = 1;
         JLabel sizeLabel = new JLabel("Model Size:");
         sizeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        sizeLabel.setForeground(LIGHT_TEXT);
         modelPanel.add(sizeLabel, gbc);
 
         gbc.gridx = 1;
         gbc.gridwidth = 2;
         lblModelSize = new JLabel("");
         lblModelSize.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        lblModelSize.setForeground(new Color(100, 100, 100));
+        lblModelSize.setForeground(new Color(150, 150, 150));
         modelPanel.add(lblModelSize, gbc);
 
         gbc.gridx = 0;
@@ -180,21 +218,22 @@ public class GUI extends JFrame {
         gbc.gridwidth = 3;
         btnDownloadModel = new JButton("📥 Download Selected Model");
         btnDownloadModel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        btnDownloadModel.setBackground(new Color(255, 152, 0));
+        btnDownloadModel.setBackground(ACCENT_ORANGE);
         btnDownloadModel.setForeground(Color.WHITE);
         btnDownloadModel.setFocusPainted(false);
+        btnDownloadModel.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
         btnDownloadModel.addActionListener(e -> confirmAndDownloadModel());
         modelPanel.add(btnDownloadModel, gbc);
 
         // Settings Panel
         JPanel settingsPanel = new JPanel();
         settingsPanel.setLayout(new GridBagLayout());
-        settingsPanel.setBackground(Color.WHITE);
+        settingsPanel.setBackground(DARK_PANEL);
         settingsPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200)),
+                BorderFactory.createLineBorder(new Color(80, 80, 80)),
                 BorderFactory.createEmptyBorder(15, 15, 15, 15)
         ));
-        settingsPanel.setMaximumSize(new Dimension(660, 220));
+        settingsPanel.setMaximumSize(new Dimension(760, 220));
 
         gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -205,6 +244,7 @@ public class GUI extends JFrame {
         gbc.gridy = 0;
         JLabel letterSpacingLabel = new JLabel("Max Letters per Line:");
         letterSpacingLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        letterSpacingLabel.setForeground(LIGHT_TEXT);
         settingsPanel.add(letterSpacingLabel, gbc);
 
         gbc.gridx = 1;
@@ -212,11 +252,14 @@ public class GUI extends JFrame {
         letterSpacingSlider.setMajorTickSpacing(10);
         letterSpacingSlider.setPaintTicks(true);
         letterSpacingSlider.setPaintLabels(true);
+        letterSpacingSlider.setBackground(DARK_PANEL);
+        letterSpacingSlider.setForeground(LIGHT_TEXT);
         settingsPanel.add(letterSpacingSlider, gbc);
 
         gbc.gridx = 2;
         lblLetterSpacingValue = new JLabel("42");
         lblLetterSpacingValue.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblLetterSpacingValue.setForeground(ACCENT_BLUE);
         settingsPanel.add(lblLetterSpacingValue, gbc);
 
         letterSpacingSlider.addChangeListener(e -> {
@@ -228,6 +271,7 @@ public class GUI extends JFrame {
         gbc.gridy = 1;
         JLabel languageLabel = new JLabel("Language:");
         languageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        languageLabel.setForeground(LIGHT_TEXT);
         settingsPanel.add(languageLabel, gbc);
 
         gbc.gridx = 1;
@@ -235,6 +279,8 @@ public class GUI extends JFrame {
         String[] languages = {"Auto Detect", "English", "Hindi", "Japanese", "Spanish", "French", "German", "Chinese", "Arabic", "Russian", "Korean"};
         languageCombo = new JComboBox<>(languages);
         languageCombo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        languageCombo.setBackground(DARKER_BG);
+        languageCombo.setForeground(LIGHT_TEXT);
         settingsPanel.add(languageCombo, gbc);
 
         // Transliteration Option
@@ -243,7 +289,8 @@ public class GUI extends JFrame {
         gbc.gridwidth = 3;
         chkTransliterate = new JCheckBox("🔄 Transliterate to English (Hindi, Japanese, Arabic, Chinese, Korean, Russian)");
         chkTransliterate.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        chkTransliterate.setBackground(Color.WHITE);
+        chkTransliterate.setBackground(DARK_PANEL);
+        chkTransliterate.setForeground(LIGHT_TEXT);
         settingsPanel.add(chkTransliterate, gbc);
 
         // Generate Button
@@ -252,25 +299,26 @@ public class GUI extends JFrame {
         gbc.gridwidth = 3;
         btnGenerate = new JButton("🚀 Generate Subtitles");
         btnGenerate.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btnGenerate.setBackground(new Color(76, 175, 80));
+        btnGenerate.setBackground(ACCENT_GREEN);
         btnGenerate.setForeground(Color.WHITE);
         btnGenerate.setFocusPainted(false);
+        btnGenerate.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 20));
         btnGenerate.setEnabled(false);
         btnGenerate.addActionListener(e -> confirmAndGenerate());
         settingsPanel.add(btnGenerate, gbc);
 
         // Status Panel
         JPanel statusPanel = new JPanel(new BorderLayout());
-        statusPanel.setBackground(Color.WHITE);
+        statusPanel.setBackground(DARK_PANEL);
         statusPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200)),
+                BorderFactory.createLineBorder(new Color(80, 80, 80)),
                 BorderFactory.createEmptyBorder(10, 15, 10, 15)
         ));
-        statusPanel.setMaximumSize(new Dimension(660, 80));
+        statusPanel.setMaximumSize(new Dimension(760, 80));
 
         lblStatus = new JLabel("✅ Ready. Select a file and model to begin.");
         lblStatus.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        lblStatus.setForeground(new Color(76, 175, 80));
+        lblStatus.setForeground(ACCENT_GREEN);
         statusPanel.add(lblStatus, BorderLayout.CENTER);
 
         // Add all panels
@@ -303,14 +351,14 @@ public class GUI extends JFrame {
                 btnDownloadModel.setEnabled(false);
                 btnGenerate.setEnabled(selectedFile != null);
                 lblStatus.setText("✅ Model available. Ready to generate.");
-                lblStatus.setForeground(new Color(76, 175, 80));
+                lblStatus.setForeground(ACCENT_GREEN);
             } else {
                 modelAvailable = false;
                 btnDownloadModel.setText("📥 Download Selected Model");
                 btnDownloadModel.setEnabled(true);
                 btnGenerate.setEnabled(false);
                 lblStatus.setText("⚠️ Model not found. Please download it first.");
-                lblStatus.setForeground(Color.ORANGE);
+                lblStatus.setForeground(ACCENT_ORANGE);
             }
         }
     }
@@ -382,7 +430,6 @@ public class GUI extends JFrame {
     }
 
     private void downloadModel(ModelInfo model) {
-        // Disable all buttons during download
         setButtonsEnabled(false);
 
         downloadDialog = new DownloadProgressDialog(this, model.name, model.sizeBytes);
@@ -428,7 +475,7 @@ public class GUI extends JFrame {
                     }
                     setButtonsEnabled(true);
                     lblStatus.setText("❌ Download cancelled.");
-                    lblStatus.setForeground(Color.RED);
+                    lblStatus.setForeground(ACCENT_RED);
                 });
             }
         });
@@ -456,24 +503,23 @@ public class GUI extends JFrame {
                 btnDownloadModel.setEnabled(false);
                 btnGenerate.setEnabled(selectedFile != null);
                 lblStatus.setText("✅ Model available. Ready to generate.");
-                lblStatus.setForeground(new Color(76, 175, 80));
+                lblStatus.setForeground(ACCENT_GREEN);
             } else {
                 btnDownloadModel.setText("📥 Download Selected Model");
                 btnDownloadModel.setEnabled(true);
                 btnGenerate.setEnabled(false);
                 lblStatus.setText("⚠️ Model not found. Please download it first.");
-                lblStatus.setForeground(Color.ORANGE);
+                lblStatus.setForeground(ACCENT_ORANGE);
             }
         }
     }
 
     private void generateSubtitles() {
-        // Disable all buttons during generation
         setButtonsEnabled(false);
         btnGenerate.setEnabled(false);
 
         lblStatus.setText("⏳ Processing... Extracting audio (if needed)...");
-        lblStatus.setForeground(Color.BLUE);
+        lblStatus.setForeground(ACCENT_BLUE);
 
         SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
             @Override
@@ -487,6 +533,10 @@ public class GUI extends JFrame {
                             languageCombo.getSelectedItem().toString(),
                             selectedModelPath);
 
+                    if (transcription == null || transcription.trim().isEmpty()) {
+                        throw new Exception("Transcription failed - no text generated");
+                    }
+
                     publish("📝 Generating SRT subtitles...");
                     int maxLetters = letterSpacingSlider.getValue();
                     String srtContent = SRTGenerator.generateSRT(transcription, maxLetters);
@@ -496,7 +546,6 @@ public class GUI extends JFrame {
                             getFileNameWithoutExtension(selectedFile) + ".srt";
                     Files.write(Paths.get(outputPath), srtContent.getBytes());
 
-                    // Transliteration if needed
                     if (chkTransliterate.isSelected()) {
                         publish("🔄 Performing transliteration...");
                         String transliterated = Transliterator.transliterate(srtContent);
@@ -508,7 +557,6 @@ public class GUI extends JFrame {
 
                     publish("🎉 Subtitle generation completed successfully!");
 
-                    // Clean up temporary audio file if it was extracted
                     if (!selectedFile.getName().toLowerCase().endsWith(".wav")) {
                         audioFile.delete();
                     }
@@ -545,7 +593,7 @@ public class GUI extends JFrame {
                     btnGenerate.setEnabled(true);
                 }
                 lblStatus.setText("✅ Ready for next file.");
-                lblStatus.setForeground(new Color(76, 175, 80));
+                lblStatus.setForeground(ACCENT_GREEN);
             }
         };
 

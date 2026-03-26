@@ -12,18 +12,29 @@ public class DownloadProgressDialog extends JDialog {
     private JButton btnCancel;
     private boolean cancelled = false;
 
+    // Dark mode colors
+    private final Color DARK_BG = new Color(43, 43, 43);
+    private final Color DARK_PANEL = new Color(53, 53, 53);
+    private final Color LIGHT_TEXT = new Color(220, 220, 220);
+    private final Color ACCENT_BLUE = new Color(66, 133, 244);
+
     public DownloadProgressDialog(JFrame parent, String modelName, long totalSize) {
         super(parent, "Downloading Model", true);
-        setSize(450, 220);
+        setSize(500, 250);
         setLocationRelativeTo(parent);
         setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+
+        // Set dark theme
+        getContentPane().setBackground(DARK_BG);
 
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        panel.setBackground(DARK_BG);
 
         JLabel lblTitle = new JLabel("Downloading " + modelName);
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblTitle.setForeground(LIGHT_TEXT);
         lblTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(lblTitle);
 
@@ -31,28 +42,36 @@ public class DownloadProgressDialog extends JDialog {
 
         progressBar = new JProgressBar(0, 100);
         progressBar.setStringPainted(true);
-        progressBar.setPreferredSize(new Dimension(400, 25));
+        progressBar.setPreferredSize(new Dimension(450, 25));
         progressBar.setAlignmentX(Component.CENTER_ALIGNMENT);
+        progressBar.setBackground(DARK_PANEL);
+        progressBar.setForeground(ACCENT_BLUE);
         panel.add(progressBar);
 
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
 
         lblPercent = new JLabel("0%");
         lblPercent.setAlignmentX(Component.CENTER_ALIGNMENT);
+        lblPercent.setForeground(LIGHT_TEXT);
         panel.add(lblPercent);
 
         lblSize = new JLabel(formatSize(0) + " / " + formatSize(totalSize));
         lblSize.setAlignmentX(Component.CENTER_ALIGNMENT);
+        lblSize.setForeground(LIGHT_TEXT);
         panel.add(lblSize);
 
         lblSpeed = new JLabel("Speed: 0 KB/s");
         lblSpeed.setAlignmentX(Component.CENTER_ALIGNMENT);
+        lblSpeed.setForeground(LIGHT_TEXT);
         panel.add(lblSpeed);
 
         panel.add(Box.createRigidArea(new Dimension(0, 15)));
 
         btnCancel = new JButton("Cancel Download");
         btnCancel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        btnCancel.setBackground(new Color(80, 80, 80));
+        btnCancel.setForeground(LIGHT_TEXT);
+        btnCancel.setFocusPainted(false);
         btnCancel.addActionListener(e -> {
             cancelled = true;
             dispose();

@@ -15,32 +15,40 @@ public class AudioExtractor {
             return inputFile;
         }
 
-        // Try system FFmpeg first
+        // Find FFmpeg
         String ffmpegPath = findFFmpeg();
 
+        System.out.println("Using FFmpeg: " + ffmpegPath);
+        System.out.println("Extracting audio from: " + inputPath);
+        System.out.println("Output to: " + outputPath);
+
+        // Build FFmpeg command for better audio extraction
         ProcessBuilder pb = new ProcessBuilder(
                 ffmpegPath,
                 "-i", inputPath,
-                "-acodec", "pcm_s16le",
-                "-ar", "16000",
-                "-ac", "1",
-                "-y",
+                "-acodec", "pcm_s16le",  // PCM 16-bit little-endian
+                "-ar", "16000",           // 16kHz sample rate
+                "-ac", "1",               // Mono channel
+                "-y",                     // Overwrite output file
                 outputPath
         );
 
         pb.redirectErrorStream(true);
         Process process = pb.start();
 
-        // Read output to avoid buffer blocking
+        // Read and log output for debugging
+        StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            while (reader.readLine() != null) {
-                // Consume output
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+                System.out.println(line);
             }
         }
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new Exception("FFmpeg extraction failed with exit code: " + exitCode);
+            throw new Exception("FFmpeg extraction failed with exit code: " + exitCode + "\nOutput: " + output.toString());
         }
 
         File outputFile = new File(outputPath);
@@ -48,18 +56,22 @@ public class AudioExtractor {
             throw new Exception("Audio extraction failed: Output file is empty or missing");
         }
 
+        System.out.println("Audio extracted successfully: " + outputFile.length() + " bytes");
         return outputFile;
     }
 
     private static String findFFmpeg() {
-        // Check common locations
+        // Check current directory first
         String[] commonPaths = {
                 "ffmpeg",
                 "ffmpeg.exe",
+                "./ffmpeg",
+                "./ffmpeg.exe",
                 "/usr/bin/ffmpeg",
                 "/usr/local/bin/ffmpeg",
                 "C:\\ffmpeg\\bin\\ffmpeg.exe",
-                "C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe"
+                "C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe",
+                "C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe"
         };
 
         for (String path : commonPaths) {
@@ -67,6 +79,18 @@ public class AudioExtractor {
             if (file.exists() && file.canExecute()) {
                 return path;
             }
+        }
+
+        // Try to find in PATH
+        try {
+            ProcessBuilder pb = new ProcessBuilder("ffmpeg", "-version");
+            Process process = pb.start();
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+                return "ffmpeg";
+            }
+        } catch (Exception e) {
+            // Not found
         }
 
         // Return default, hoping it's in PATH
