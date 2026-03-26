@@ -2,7 +2,7 @@ package com.noty.captiongen;
 
 import javax.swing.*;
 import java.awt.*;
-import java.text.DecimalFormat;
+import java.awt.geom.*;
 
 public class DownloadProgressDialog extends JDialog {
     private JProgressBar progressBar;
@@ -12,25 +12,34 @@ public class DownloadProgressDialog extends JDialog {
     private JButton btnCancel;
     private boolean cancelled = false;
 
-    // Dark mode colors
-    private final Color DARK_BG = new Color(43, 43, 43);
-    private final Color DARK_PANEL = new Color(53, 53, 53);
-    private final Color LIGHT_TEXT = new Color(220, 220, 220);
-    private final Color ACCENT_BLUE = new Color(66, 133, 244);
+    private final Color DARK_BG = new Color(18, 18, 24);
+    private final Color CARD_BG = new Color(28, 28, 35);
+    private final Color LIGHT_TEXT = new Color(240, 240, 245);
+    private final Color ACCENT_BLUE = new Color(64, 128, 255);
+    private final Color ACCENT_RED = new Color(255, 80, 80);
 
     public DownloadProgressDialog(JFrame parent, String modelName, long totalSize) {
         super(parent, "Downloading Model", true);
-        setSize(500, 250);
+        setSize(500, 280);
         setLocationRelativeTo(parent);
         setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
 
-        // Set dark theme
         getContentPane().setBackground(DARK_BG);
 
-        JPanel panel = new JPanel();
+        JPanel panel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                GradientPaint gp = new GradientPaint(0, 0, DARK_BG, getWidth(), getHeight(), new Color(13, 13, 18));
+                g2d.setPaint(gp);
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+            }
+        };
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        panel.setBackground(DARK_BG);
+        panel.setOpaque(false);
 
         JLabel lblTitle = new JLabel("Downloading " + modelName);
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
@@ -42,9 +51,9 @@ public class DownloadProgressDialog extends JDialog {
 
         progressBar = new JProgressBar(0, 100);
         progressBar.setStringPainted(true);
-        progressBar.setPreferredSize(new Dimension(450, 25));
+        progressBar.setPreferredSize(new Dimension(450, 30));
         progressBar.setAlignmentX(Component.CENTER_ALIGNMENT);
-        progressBar.setBackground(DARK_PANEL);
+        progressBar.setBackground(new Color(40, 40, 50));
         progressBar.setForeground(ACCENT_BLUE);
         panel.add(progressBar);
 
@@ -53,25 +62,27 @@ public class DownloadProgressDialog extends JDialog {
         lblPercent = new JLabel("0%");
         lblPercent.setAlignmentX(Component.CENTER_ALIGNMENT);
         lblPercent.setForeground(LIGHT_TEXT);
+        lblPercent.setFont(new Font("Segoe UI", Font.BOLD, 16));
         panel.add(lblPercent);
 
         lblSize = new JLabel(formatSize(0) + " / " + formatSize(totalSize));
         lblSize.setAlignmentX(Component.CENTER_ALIGNMENT);
-        lblSize.setForeground(LIGHT_TEXT);
+        lblSize.setForeground(new Color(150, 150, 170));
         panel.add(lblSize);
 
         lblSpeed = new JLabel("Speed: 0 KB/s");
         lblSpeed.setAlignmentX(Component.CENTER_ALIGNMENT);
-        lblSpeed.setForeground(LIGHT_TEXT);
+        lblSpeed.setForeground(new Color(150, 150, 170));
         panel.add(lblSpeed);
 
         panel.add(Box.createRigidArea(new Dimension(0, 15)));
 
         btnCancel = new JButton("Cancel Download");
         btnCancel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        btnCancel.setBackground(new Color(80, 80, 80));
-        btnCancel.setForeground(LIGHT_TEXT);
+        btnCancel.setBackground(ACCENT_RED);
+        btnCancel.setForeground(Color.WHITE);
         btnCancel.setFocusPainted(false);
+        btnCancel.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
         btnCancel.addActionListener(e -> {
             cancelled = true;
             dispose();

@@ -19,24 +19,75 @@ public class AudioExtractor {
         String ffmpegPath = findFFmpeg();
 
         System.out.println("Using FFmpeg: " + ffmpegPath);
-        System.out.println("Extracting audio from: " + inputPath);
+        System.out.println("Extracting vocals from: " + inputPath);
         System.out.println("Output to: " + outputPath);
 
-        // Build FFmpeg command for better audio extraction
+        // Try to extract vocals using FFmpeg filters
+        File outputFile = new File(outputPath);
+
+        // Method 1: Try vocal isolation using ffmpeg filters
+        if (extractVocalsWithFFmpeg(ffmpegPath, inputPath, outputPath)) {
+            System.out.println("Vocal extraction successful");
+            return outputFile;
+        }
+
+        // Method 2: Fallback to standard audio extraction
+        System.out.println("Vocal extraction failed, falling back to standard audio extraction");
+        return extractStandardAudio(ffmpegPath, inputPath, outputPath);
+    }
+
+    private static boolean extractVocalsWithFFmpeg(String ffmpegPath, String inputPath, String outputPath) {
+        try {
+            // Use FFmpeg's voice isolation filter
+            ProcessBuilder pb = new ProcessBuilder(
+                    ffmpegPath,
+                    "-i", inputPath,
+                    "-af", "highpass=f=200, lowpass=f=3000, acompressor=threshold=0.1:ratio=2:attack=200:release=1000, volume=2",
+                    "-acodec", "pcm_s16le",
+                    "-ar", "16000",
+                    "-ac", "1",
+                    "-y",
+                    outputPath
+            );
+
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+                File outputFile = new File(outputPath);
+                return outputFile.exists() && outputFile.length() > 0;
+            }
+            return false;
+
+        } catch (Exception e) {
+            System.err.println("Vocal extraction error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static File extractStandardAudio(String ffmpegPath, String inputPath, String outputPath) throws Exception {
         ProcessBuilder pb = new ProcessBuilder(
                 ffmpegPath,
                 "-i", inputPath,
-                "-acodec", "pcm_s16le",  // PCM 16-bit little-endian
-                "-ar", "16000",           // 16kHz sample rate
-                "-ac", "1",               // Mono channel
-                "-y",                     // Overwrite output file
+                "-acodec", "pcm_s16le",
+                "-ar", "16000",
+                "-ac", "1",
+                "-y",
                 outputPath
         );
 
         pb.redirectErrorStream(true);
         Process process = pb.start();
 
-        // Read and log output for debugging
         StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
@@ -93,7 +144,6 @@ public class AudioExtractor {
             // Not found
         }
 
-        // Return default, hoping it's in PATH
         return "ffmpeg";
     }
 

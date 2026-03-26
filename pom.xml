@@ -24,6 +24,14 @@
     </dependency>
 
     <dependency>
+      <groupId>com.github.opensource21</groupId>
+      <artifactId>whisper-jni</artifactId>
+      <version>1.7.1</version>
+      <scope>system</scope>
+      <systemPath>${project.basedir}/lib/whisper-jni-1.7.1.jar</systemPath>
+    </dependency>
+
+    <dependency>
       <groupId>commons-io</groupId>
       <artifactId>commons-io</artifactId>
       <version>2.11.0</version>
