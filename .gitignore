@@ -3,3 +3,7 @@
 /.vscode
 *.log
 *.pyc
+/launch4j-config.xml
+/build-exe.bat
+/create-distribution.bat
+/target
