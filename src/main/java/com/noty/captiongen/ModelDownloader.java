@@ -1,65 +1,94 @@
 package com.noty.captiongen;
 
-import javax.swing.*;
 import java.io.*;
 import java.net.*;
-import java.nio.file.*;
+import java.util.concurrent.*;
+import javax.net.ssl.HttpsURLConnection;
 
 public class ModelDownloader {
-    private static final String MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin";
-    private static final String MODEL_FILE = "ggml-base.bin";
+    private volatile boolean cancelled = false;
+    private Thread downloadThread;
 
-    public void downloadModel(JFrame parent, DownloadCallback callback) {
-        SwingWorker<Void, Integer> worker = new SwingWorker<Void, Integer>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                try {
-                    URL url = new URL(MODEL_URL);
-                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                    connection.setRequestMethod("GET");
-                    connection.connect();
+    public void downloadModel(String urlString, String fileName, long expectedSize, DownloadCallback callback) {
+        cancelled = false;
 
-                    int fileSize = connection.getContentLength();
-                    File outputFile = new File(MODEL_FILE);
+        downloadThread = new Thread(() -> {
+            try {
+                URL url = new URL(urlString);
+                HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(30000);
+                connection.connect();
 
-                    try (InputStream in = connection.getInputStream();
-                         FileOutputStream out = new FileOutputStream(outputFile)) {
+                int responseCode = connection.getResponseCode();
+                if (responseCode != HttpsURLConnection.HTTP_OK) {
+                    callback.onComplete(false);
+                    return;
+                }
 
-                        byte[] buffer = new byte[8192];
-                        int bytesRead;
-                        long totalRead = 0;
+                long fileSize = connection.getContentLength();
+                if (fileSize <= 0) fileSize = expectedSize;
 
-                        while ((bytesRead = in.read(buffer)) != -1) {
-                            out.write(buffer, 0, bytesRead);
-                            totalRead += bytesRead;
+                File outputFile = new File(fileName);
+                File tempFile = new File(fileName + ".tmp");
 
-                            if (fileSize > 0) {
-                                int percent = (int) ((totalRead * 100) / fileSize);
-                                publish(percent);
-                            }
+                try (InputStream in = connection.getInputStream();
+                     FileOutputStream out = new FileOutputStream(tempFile)) {
+
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    long totalRead = 0;
+                    long startTime = System.currentTimeMillis();
+
+                    while ((bytesRead = in.read(buffer)) != -1 && !cancelled) {
+                        out.write(buffer, 0, bytesRead);
+                        totalRead += bytesRead;
+
+                        if (fileSize > 0) {
+                            int percent = (int) ((totalRead * 100) / fileSize);
+                            long elapsedTime = System.currentTimeMillis() - startTime;
+                            double speed = (totalRead / 1024.0) / (elapsedTime / 1000.0); // KB/s
+                            callback.onProgress(percent, totalRead, fileSize, speed);
                         }
                     }
 
-                    callback.onComplete(true);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    callback.onComplete(false);
+                    if (cancelled) {
+                        tempFile.delete();
+                        callback.onCancel();
+                        return;
+                    }
+
+                    out.flush();
                 }
-                return null;
-            }
 
-            @Override
-            protected void process(java.util.List<Integer> chunks) {
-                int latest = chunks.get(chunks.size() - 1);
-                callback.onProgress(latest);
-            }
-        };
+                // Rename temp file to final file
+                if (outputFile.exists()) {
+                    outputFile.delete();
+                }
+                tempFile.renameTo(outputFile);
 
-        worker.execute();
+                callback.onComplete(true);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                callback.onComplete(false);
+            }
+        });
+
+        downloadThread.start();
+    }
+
+    public void cancelDownload() {
+        cancelled = true;
+        if (downloadThread != null) {
+            downloadThread.interrupt();
+        }
     }
 
     public interface DownloadCallback {
-        void onProgress(int percent);
+        void onProgress(int percent, long downloaded, long total, double speed);
         void onComplete(boolean success);
+        void onCancel();
     }
 }
