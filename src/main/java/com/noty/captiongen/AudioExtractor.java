@@ -1,9 +1,5 @@
 package com.noty.captiongen;
 
-import net.bramp.ffmpeg.FFmpeg;
-import net.bramp.ffmpeg.FFmpegExecutor;
-import net.bramp.ffmpeg.FFprobe;
-import net.bramp.ffmpeg.builder.FFmpegBuilder;
 import java.io.*;
 import java.nio.file.*;
 
@@ -19,60 +15,12 @@ public class AudioExtractor {
             return inputFile;
         }
 
-        // Check if FFmpeg exists in current directory
+        // Try system FFmpeg first
         String ffmpegPath = findFFmpeg();
 
-        try {
-            FFmpeg ffmpeg = new FFmpeg(ffmpegPath);
-            FFprobe ffprobe = new FFprobe(ffmpegPath.replace("ffmpeg", "ffprobe"));
-
-            FFmpegBuilder builder = new FFmpegBuilder()
-                    .setInput(inputPath)
-                    .overrideOutputFiles(true)
-                    .addOutput(outputPath)
-                    .setAudioCodec("pcm_s16le")
-                    .setAudioSampleRate(16000)
-                    .setAudioChannels(1)
-                    .done();
-
-            FFmpegExecutor executor = new FFmpegExecutor(ffmpeg, ffprobe);
-            executor.createJob(builder).run();
-
-            return new File(outputPath);
-
-        } catch (Exception e) {
-            // Fallback: Use embedded FFmpeg
-            return extractWithEmbeddedFFmpeg(inputFile, outputPath);
-        }
-    }
-
-    private static File extractWithEmbeddedFFmpeg(File inputFile, String outputPath) throws Exception {
-        String os = System.getProperty("os.name").toLowerCase();
-        String ffmpegExecutable;
-
-        if (os.contains("win")) {
-            ffmpegExecutable = "ffmpeg.exe";
-        } else if (os.contains("mac")) {
-            ffmpegExecutable = "ffmpeg";
-        } else {
-            ffmpegExecutable = "ffmpeg";
-        }
-
-        // Check if ffmpeg is in resources
-        File ffmpegFile = new File(ffmpegExecutable);
-        if (!ffmpegFile.exists()) {
-            // Extract from JAR
-            try (InputStream is = GUI.class.getResourceAsStream("/ffmpeg/" + ffmpegExecutable)) {
-                if (is != null) {
-                    Files.copy(is, ffmpegFile.toPath());
-                    ffmpegFile.setExecutable(true);
-                }
-            }
-        }
-
         ProcessBuilder pb = new ProcessBuilder(
-                ffmpegFile.getAbsolutePath(),
-                "-i", inputFile.getAbsolutePath(),
+                ffmpegPath,
+                "-i", inputPath,
                 "-acodec", "pcm_s16le",
                 "-ar", "16000",
                 "-ac", "1",
@@ -82,9 +30,25 @@ public class AudioExtractor {
 
         pb.redirectErrorStream(true);
         Process process = pb.start();
-        process.waitFor();
 
-        return new File(outputPath);
+        // Read output to avoid buffer blocking
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            while (reader.readLine() != null) {
+                // Consume output
+            }
+        }
+
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new Exception("FFmpeg extraction failed with exit code: " + exitCode);
+        }
+
+        File outputFile = new File(outputPath);
+        if (!outputFile.exists() || outputFile.length() == 0) {
+            throw new Exception("Audio extraction failed: Output file is empty or missing");
+        }
+
+        return outputFile;
     }
 
     private static String findFFmpeg() {

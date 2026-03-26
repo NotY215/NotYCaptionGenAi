@@ -14,7 +14,7 @@ public class DownloadProgressDialog extends JDialog {
 
     public DownloadProgressDialog(JFrame parent, String modelName, long totalSize) {
         super(parent, "Downloading Model", true);
-        setSize(450, 200);
+        setSize(450, 220);
         setLocationRelativeTo(parent);
         setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
 
@@ -51,7 +51,7 @@ public class DownloadProgressDialog extends JDialog {
 
         panel.add(Box.createRigidArea(new Dimension(0, 15)));
 
-        btnCancel = new JButton("Cancel");
+        btnCancel = new JButton("Cancel Download");
         btnCancel.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnCancel.addActionListener(e -> {
             cancelled = true;

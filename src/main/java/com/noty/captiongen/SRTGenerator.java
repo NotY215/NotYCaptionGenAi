@@ -6,20 +6,14 @@ import java.util.regex.*;
 public class SRTGenerator {
 
     public static String generateSRT(String transcription, int maxLettersPerLine) {
-        // Parse transcription with timestamps
         List<SubtitleEntry> entries = parseTranscription(transcription);
-
-        // Apply letter spacing
         entries = applyLetterSpacing(entries, maxLettersPerLine);
-
-        // Generate SRT format
         return generateSRTFormat(entries);
     }
 
     private static List<SubtitleEntry> parseTranscription(String transcription) {
         List<SubtitleEntry> entries = new ArrayList<>();
 
-        // Pattern for SRT format: index\nstart --> end\ntext\n\n
         Pattern pattern = Pattern.compile("(\\d+)\\n(\\d{2}:\\d{2}:\\d{2},\\d{3}) --> (\\d{2}:\\d{2}:\\d{2},\\d{3})\\n(.*?)(?:\\n\\n|$)",
                 Pattern.DOTALL);
         Matcher matcher = pattern.matcher(transcription);
@@ -62,12 +56,10 @@ public class SRTGenerator {
                 lines.add(currentLine.toString());
             }
 
-            // Create multiple entries if text spans multiple lines
             if (lines.size() == 1) {
                 entry.text = lines.get(0);
                 result.add(entry);
             } else {
-                // Split time equally among lines
                 long startMs = parseTimeToMs(entry.startTime);
                 long endMs = parseTimeToMs(entry.endTime);
                 long durationMs = endMs - startMs;
@@ -86,7 +78,6 @@ public class SRTGenerator {
             }
         }
 
-        // Re-index
         for (int i = 0; i < result.size(); i++) {
             result.get(i).index = i + 1;
         }

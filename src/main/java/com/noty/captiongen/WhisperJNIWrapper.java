@@ -3,9 +3,10 @@ package com.noty.captiongen;
 public class WhisperJNIWrapper {
     static {
         try {
+            // Try to load native library
             System.loadLibrary("whisper-jni");
         } catch (UnsatisfiedLinkError e) {
-            System.err.println("Native library not loaded: " + e.getMessage());
+            System.err.println("Native whisper-jni library not loaded: " + e.getMessage());
         }
     }
 

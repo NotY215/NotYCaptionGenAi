@@ -3,7 +3,6 @@ package com.noty.captiongen;
 import java.io.*;
 import java.net.*;
 import java.util.concurrent.*;
-import javax.net.ssl.HttpsURLConnection;
 
 public class ModelDownloader {
     private volatile boolean cancelled = false;
@@ -13,16 +12,20 @@ public class ModelDownloader {
         cancelled = false;
 
         downloadThread = new Thread(() -> {
+            HttpURLConnection connection = null;
+            InputStream in = null;
+            FileOutputStream out = null;
+
             try {
                 URL url = new URL(urlString);
-                HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
+                connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
-                connection.setConnectTimeout(10000);
-                connection.setReadTimeout(30000);
+                connection.setConnectTimeout(30000);
+                connection.setReadTimeout(60000);
                 connection.connect();
 
                 int responseCode = connection.getResponseCode();
-                if (responseCode != HttpsURLConnection.HTTP_OK) {
+                if (responseCode != HttpURLConnection.HTTP_OK) {
                     callback.onComplete(false);
                     return;
                 }
@@ -33,36 +36,36 @@ public class ModelDownloader {
                 File outputFile = new File(fileName);
                 File tempFile = new File(fileName + ".tmp");
 
-                try (InputStream in = connection.getInputStream();
-                     FileOutputStream out = new FileOutputStream(tempFile)) {
+                in = connection.getInputStream();
+                out = new FileOutputStream(tempFile);
 
-                    byte[] buffer = new byte[8192];
-                    int bytesRead;
-                    long totalRead = 0;
-                    long startTime = System.currentTimeMillis();
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                long totalRead = 0;
+                long startTime = System.currentTimeMillis();
 
-                    while ((bytesRead = in.read(buffer)) != -1 && !cancelled) {
-                        out.write(buffer, 0, bytesRead);
-                        totalRead += bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1 && !cancelled) {
+                    out.write(buffer, 0, bytesRead);
+                    totalRead += bytesRead;
 
-                        if (fileSize > 0) {
-                            int percent = (int) ((totalRead * 100) / fileSize);
-                            long elapsedTime = System.currentTimeMillis() - startTime;
-                            double speed = (totalRead / 1024.0) / (elapsedTime / 1000.0); // KB/s
-                            callback.onProgress(percent, totalRead, fileSize, speed);
-                        }
+                    if (fileSize > 0) {
+                        int percent = (int) ((totalRead * 100) / fileSize);
+                        long elapsedTime = System.currentTimeMillis() - startTime;
+                        double speed = (totalRead / 1024.0) / (elapsedTime / 1000.0);
+                        callback.onProgress(percent, totalRead, fileSize, speed);
                     }
-
-                    if (cancelled) {
-                        tempFile.delete();
-                        callback.onCancel();
-                        return;
-                    }
-
-                    out.flush();
                 }
 
-                // Rename temp file to final file
+                if (cancelled) {
+                    tempFile.delete();
+                    callback.onCancel();
+                    return;
+                }
+
+                out.flush();
+                out.close();
+                in.close();
+
                 if (outputFile.exists()) {
                     outputFile.delete();
                 }
@@ -73,6 +76,14 @@ public class ModelDownloader {
             } catch (Exception e) {
                 e.printStackTrace();
                 callback.onComplete(false);
+            } finally {
+                try {
+                    if (in != null) in.close();
+                    if (out != null) out.close();
+                    if (connection != null) connection.disconnect();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
         });
 

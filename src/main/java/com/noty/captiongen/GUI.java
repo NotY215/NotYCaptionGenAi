@@ -62,7 +62,7 @@ public class GUI extends JFrame {
     public GUI() {
         setTitle("NotYCaptionGenAi - AI Subtitle Generator");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(700, 650);
+        setSize(700, 700);
         setLocationRelativeTo(null);
 
         // Load icon
@@ -99,7 +99,7 @@ public class GUI extends JFrame {
         subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         titlePanel.add(subtitleLabel);
 
-        JLabel creditLabel = new JLabel("Developed By NotY215");
+        JLabel creditLabel = new JLabel("Developed By NotY215 | LGPL v3 License");
         creditLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
         creditLabel.setForeground(new Color(150, 150, 150));
         creditLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -191,7 +191,7 @@ public class GUI extends JFrame {
                 BorderFactory.createLineBorder(new Color(200, 200, 200)),
                 BorderFactory.createEmptyBorder(15, 15, 15, 15)
         ));
-        settingsPanel.setMaximumSize(new Dimension(660, 200));
+        settingsPanel.setMaximumSize(new Dimension(660, 220));
 
         gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -237,8 +237,8 @@ public class GUI extends JFrame {
         // Transliteration Option
         gbc.gridx = 0;
         gbc.gridy = 2;
-        gbc.gridwidth = 1;
-        chkTransliterate = new JCheckBox("Transliterate to English (Hindi/Japanese support)");
+        gbc.gridwidth = 3;
+        chkTransliterate = new JCheckBox("🔄 Transliterate to English (Hindi, Japanese, Arabic, Chinese, Korean, Russian)");
         chkTransliterate.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         chkTransliterate.setBackground(Color.WHITE);
         settingsPanel.add(chkTransliterate, gbc);
@@ -390,7 +390,7 @@ public class GUI extends JFrame {
             @Override
             public void onProgress(int percent, long downloaded, long total, double speed) {
                 SwingUtilities.invokeLater(() -> {
-                    if (downloadDialog != null) {
+                    if (downloadDialog != null && !downloadDialog.isCancelled()) {
                         downloadDialog.updateProgress(percent, downloaded, total, speed);
                     }
                 });
