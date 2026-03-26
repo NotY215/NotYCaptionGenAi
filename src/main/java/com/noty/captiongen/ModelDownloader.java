@@ -2,7 +2,6 @@ package com.noty.captiongen;
 
 import java.io.*;
 import java.net.*;
-import java.util.concurrent.*;
 
 public class ModelDownloader {
     private volatile boolean cancelled = false;
@@ -30,7 +29,7 @@ public class ModelDownloader {
                     return;
                 }
 
-                long fileSize = connection.getContentLength();
+                long fileSize = connection.getContentLengthLong();
                 if (fileSize <= 0) fileSize = expectedSize;
 
                 File outputFile = new File(fileName);

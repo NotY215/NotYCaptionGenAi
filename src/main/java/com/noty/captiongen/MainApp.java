@@ -11,11 +11,11 @@ public class MainApp {
             e.printStackTrace();
         }
 
-        // Load native library for Whisper
-        try {
-            System.loadLibrary("whisper-jni");
-        } catch (UnsatisfiedLinkError e) {
-            System.err.println("Whisper JNI library not found. Will use fallback mode.");
+        // Check if Whisper JNI is available
+        if (WhisperJNIWrapper.isAvailable()) {
+            System.out.println("Whisper JNI native library loaded successfully");
+        } else {
+            System.out.println("Whisper JNI native library not found. Using fallback mode.");
         }
 
         // Start application

@@ -3,7 +3,6 @@ package com.noty.captiongen;
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
-import java.awt.event.*;
 import java.io.*;
 import java.nio.file.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -25,6 +24,7 @@ public class GUI extends JFrame {
     private boolean modelAvailable;
     private DownloadProgressDialog downloadDialog;
     private String selectedModelPath;
+    private boolean whisperAvailable;
 
     // Model information
     private static final class ModelInfo {
@@ -64,6 +64,9 @@ public class GUI extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(700, 700);
         setLocationRelativeTo(null);
+
+        // Check Whisper availability
+        whisperAvailable = WhisperJNIWrapper.isAvailable();
 
         // Load icon
         try {
