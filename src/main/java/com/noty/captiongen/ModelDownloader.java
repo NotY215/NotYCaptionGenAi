@@ -2,7 +2,7 @@ package com.noty.captiongen;
 
 import java.io.*;
 import java.net.*;
-import java.nio.file.Files;
+import java.nio.file.*;
 
 public class ModelDownloader {
     private volatile boolean cancelled = false;
@@ -72,8 +72,7 @@ public class ModelDownloader {
                 }
                 boolean renamed = tempFile.renameTo(outputFile);
                 if (!renamed) {
-                    // Try alternative rename method
-                    Files.move(tempFile.toPath(), outputFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    Files.move(tempFile.toPath(), outputFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 }
 
                 callback.onComplete(true);

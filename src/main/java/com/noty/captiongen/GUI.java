@@ -1,50 +1,31 @@
 package com.noty.captiongen;
 
+import javafx.application.Platform;
+import javafx.embed.swing.JFXPanel;
+import javafx.scene.Scene;
+import javafx.scene.web.WebView;
+import javafx.scene.web.WebEngine;
 import javax.swing.*;
-import javax.swing.border.*;
-import javax.swing.plaf.basic.BasicButtonUI;
 import java.awt.*;
-import java.awt.event.*;
-import java.awt.geom.*;
 import java.io.*;
+import java.net.URI;
+import java.net.URL;
 import java.nio.file.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javafx.concurrent.Worker;
+import netscape.javascript.JSObject;
 
 public class GUI extends JFrame {
-    private JButton btnSelectFile;
-    private JButton btnGenerate;
-    private JButton btnDownloadModel;
-    private JComboBox<String> modelCombo;
-    private JLabel lblFileInfo;
-    private JLabel lblStatus;
-    private JSlider letterSpacingSlider;
-    private JLabel lblLetterSpacingValue;
-    private JComboBox<String> languageCombo;
-    private JCheckBox chkTransliterate;
-    private JLabel lblModelSize;
+    private JFXPanel jfxPanel;
+    private WebEngine webEngine;
     private File selectedFile;
-    private ModelDownloader modelDownloader;
-    private boolean modelAvailable;
-    private DownloadProgressDialog downloadDialog;
     private String selectedModelPath;
-    private JPanel mainPanel;
-    private Timer glowTimer;
-    private float glowAlpha = 0.5f;
-    private boolean glowing = false;
-    private boolean maximized = false;
-    private Rectangle normalBounds;
-    
-    // Professional Topaz-like colors
-    private final Color DARK_BG = new Color(18, 18, 24);
-    private final Color DARKER_BG = new Color(13, 13, 18);
-    private final Color CARD_BG = new Color(28, 28, 35);
-    private final Color LIGHT_TEXT = new Color(240, 240, 245);
-    private final Color ACCENT_BLUE = new Color(64, 128, 255);
-    private final Color ACCENT_GREEN = new Color(80, 200, 120);
-    private final Color ACCENT_ORANGE = new Color(255, 160, 64);
-    private final Color ACCENT_RED = new Color(255, 80, 80);
-    private final Color ACCENT_PURPLE = new Color(160, 80, 255);
-    private final Color GLOW_COLOR = new Color(64, 128, 255, 100);
+    private boolean modelAvailable;
+    private ModelDownloader modelDownloader;
+    private DownloadProgressDialog downloadDialog;
     
     // Model information
     private static final class ModelInfo {
@@ -52,811 +33,870 @@ public class GUI extends JFrame {
         String url;
         String fileName;
         long sizeBytes;
+        boolean isEmbedded;
         
-        ModelInfo(String name, String url, String fileName, long sizeBytes) {
+        ModelInfo(String name, String url, String fileName, long sizeBytes, boolean isEmbedded) {
             this.name = name;
             this.url = url;
             this.fileName = fileName;
             this.sizeBytes = sizeBytes;
+            this.isEmbedded = isEmbedded;
         }
     }
     
     private final ModelInfo[] MODELS = {
         new ModelInfo("Tiny (39 MB)", 
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
-            "ggml-tiny.bin", 39 * 1024 * 1024),
+            "models/ggml-tiny.bin", 39 * 1024 * 1024, true),
         new ModelInfo("Base (142 MB)", 
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
-            "ggml-base.bin", 142 * 1024 * 1024),
+            "models/ggml-base.bin", 142 * 1024 * 1024, true),
         new ModelInfo("Small (466 MB)", 
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
-            "ggml-small.bin", 466 * 1024 * 1024),
+            "models/ggml-small.bin", 466 * 1024 * 1024, false),
         new ModelInfo("Medium (1.5 GB)", 
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
-            "ggml-medium.bin", 1536 * 1024 * 1024),
+            "models/ggml-medium.bin", 1536 * 1024 * 1024, false),
         new ModelInfo("Large V1 (2.9 GB)", 
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin",
-            "ggml-large-v1.bin", 2900 * 1024 * 1024)
+            "models/ggml-large-v1.bin", 2900 * 1024 * 1024, false)
     };
     
     public GUI() {
-        setTitle("NotYCaptionGenAi - AI Subtitle Generator v3.0");
+        setTitle("NotYCaptionGenAi - AI Subtitle Generator");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(900, 800);
+        setSize(1200, 800);
         setLocationRelativeTo(null);
-        setUndecorated(true);
         
-        // Set application icon
+        // Create required folders
+        createRequiredFolders();
+        
+        // Copy embedded files
+        copyEmbeddedFiles();
+        
+        // Extract models
+        extractEmbeddedModels();
+        
+        // Initialize JavaFX
+        initJavaFX();
+        
+        // Set icon
         setAppIcon();
         
-        initComponents();
-        checkModelStatus();
-        
-        // Setup window dragging
-        setupWindowDragging();
+        // Check whisper executable
+        checkWhisperExecutable();
+    }
+    
+    private void createRequiredFolders() {
+        new File("models").mkdirs();
+        new File("files").mkdirs();
+        new File("temp").mkdirs();
+    }
+    
+    private void copyEmbeddedFiles() {
+        copyFileIfNeeded("/whisper.exe", "files/whisper.exe");
+        copyFileIfNeeded("/ffmpeg.exe", "files/ffmpeg.exe");
+        copyFileIfNeeded("/ffprobe.exe", "files/ffprobe.exe");
+    }
+    
+    private void copyFileIfNeeded(String resourcePath, String destPath) {
+        File destFile = new File(destPath);
+        if (!destFile.exists()) {
+            try {
+                InputStream in = getClass().getResourceAsStream(resourcePath);
+                if (in != null) {
+                    Files.copy(in, destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    System.out.println("Extracted: " + destPath);
+                    destFile.setExecutable(true);
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to extract: " + destPath);
+            }
+        }
+    }
+    
+    private void extractEmbeddedModels() {
+        extractModelIfNeeded("ggml-tiny.bin", "models/ggml-tiny.bin");
+        extractModelIfNeeded("ggml-base.bin", "models/ggml-base.bin");
+    }
+    
+    private void extractModelIfNeeded(String resourceName, String destPath) {
+        File modelFile = new File(destPath);
+        if (!modelFile.exists() || modelFile.length() == 0) {
+            try {
+                InputStream in = getClass().getResourceAsStream("/" + resourceName);
+                if (in != null) {
+                    Files.copy(in, modelFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    System.out.println("Extracted model: " + destPath);
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to extract model: " + resourceName);
+            }
+        }
+    }
+    
+    private void checkWhisperExecutable() {
+        File whisperExe = new File("files/whisper.exe");
+        if (!whisperExe.exists()) {
+            System.out.println("Warning: whisper.exe not found in files folder");
+        }
     }
     
     private void setAppIcon() {
         try {
-            // Try multiple icon sources
-            java.util.List<Image> icons = new ArrayList<>();
-            
-            // Try from resources
             URL iconURL = getClass().getResource("/app.ico");
             if (iconURL != null) {
                 ImageIcon icon = new ImageIcon(iconURL);
-                icons.add(icon.getImage());
-            }
-            
-            // Try from file system
-            File iconFile = new File("app.ico");
-            if (iconFile.exists()) {
-                ImageIcon fileIcon = new ImageIcon(iconFile.getAbsolutePath());
-                icons.add(fileIcon.getImage());
-            }
-            
-            // Try from current directory
-            File currentIcon = new File(System.getProperty("user.dir"), "app.ico");
-            if (currentIcon.exists()) {
-                ImageIcon currentIconImg = new ImageIcon(currentIcon.getAbsolutePath());
-                icons.add(currentIconImg.getImage());
-            }
-            
-            if (!icons.isEmpty()) {
-                setIconImages(icons);
-            }
-            
-            // Set taskbar icon for Windows
-            if (System.getProperty("os.name").toLowerCase().contains("win")) {
-                try {
-                    Taskbar taskbar = Taskbar.getTaskbar();
-                    if (!icons.isEmpty()) {
-                        taskbar.setIconImage(icons.get(0));
-                    }
-                } catch (Exception e) {
-                    System.err.println("Could not set taskbar icon: " + e.getMessage());
-                }
+                setIconImage(icon.getImage());
             }
         } catch (Exception e) {
             System.err.println("Could not load icon: " + e.getMessage());
         }
     }
     
-    private void initComponents() {
-        setBackground(DARK_BG);
+    private void initJavaFX() {
+        jfxPanel = new JFXPanel();
+        setLayout(new BorderLayout());
+        add(jfxPanel, BorderLayout.CENTER);
         
-        // Main panel with gradient background
-        mainPanel = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-                GradientPaint gp = new GradientPaint(0, 0, DARK_BG, getWidth(), getHeight(), DARKER_BG);
-                g2d.setPaint(gp);
-                g2d.fillRect(0, 0, getWidth(), getHeight());
+        Platform.runLater(() -> {
+            WebView webView = new WebView();
+            webEngine = webView.getEngine();
+            
+            // Enable JavaScript
+            webEngine.getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
+                if (newState == Worker.State.SUCCEEDED) {
+                    JSObject window = (JSObject) webEngine.executeScript("window");
+                    window.setMember("javaApp", new JavaBridge());
+                    
+                    // Remove default cursor
+                    webView.setCursor(javafx.scene.Cursor.DEFAULT);
+                }
+            });
+            
+            // Load HTML content
+            String htmlContent = getHTMLContent();
+            webEngine.loadContent(htmlContent);
+            
+            Scene scene = new Scene(webView);
+            jfxPanel.setScene(scene);
+        });
+    }
+    
+    private String getHTMLContent() {
+        return "<!DOCTYPE html>\n" +
+        "<html lang=\"en\">\n" +
+        "<head>\n" +
+        "    <meta charset=\"UTF-8\">\n" +
+        "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
+        "    <title>NotYCaptionGenAi</title>\n" +
+        "    <style>\n" +
+        "        * {\n" +
+        "            margin: 0;\n" +
+        "            padding: 0;\n" +
+        "            box-sizing: border-box;\n" +
+        "            cursor: default;\n" +
+        "        }\n" +
+        "        \n" +
+        "        body {\n" +
+        "            font-family: 'Segoe UI', 'System-ui', -apple-system, BlinkMacSystemFont, sans-serif;\n" +
+        "            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);\n" +
+        "            min-height: 100vh;\n" +
+        "            overflow-x: hidden;\n" +
+        "            position: relative;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .bg-animation {\n" +
+        "            position: fixed;\n" +
+        "            top: 0;\n" +
+        "            left: 0;\n" +
+        "            width: 100%;\n" +
+        "            height: 100%;\n" +
+        "            z-index: 0;\n" +
+        "            overflow: hidden;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .bg-animation::before {\n" +
+        "            content: '';\n" +
+        "            position: absolute;\n" +
+        "            width: 200%;\n" +
+        "            height: 200%;\n" +
+        "            background: radial-gradient(circle, rgba(0,120,212,0.1) 1px, transparent 1px);\n" +
+        "            background-size: 50px 50px;\n" +
+        "            animation: moveDots 20s linear infinite;\n" +
+        "        }\n" +
+        "        \n" +
+        "        @keyframes moveDots {\n" +
+        "            0% { transform: translate(0, 0); }\n" +
+        "            100% { transform: translate(-50px, -50px); }\n" +
+        "        }\n" +
+        "        \n" +
+        "        .gradient-bg {\n" +
+        "            position: fixed;\n" +
+        "            top: 0;\n" +
+        "            left: 0;\n" +
+        "            width: 100%;\n" +
+        "            height: 100%;\n" +
+        "            background: linear-gradient(125deg, \n" +
+        "                rgba(0,120,212,0.1) 0%, \n" +
+        "                rgba(0,200,120,0.05) 50%, \n" +
+        "                rgba(255,100,0,0.1) 100%);\n" +
+        "            animation: gradientShift 10s ease infinite;\n" +
+        "        }\n" +
+        "        \n" +
+        "        @keyframes gradientShift {\n" +
+        "            0%, 100% { opacity: 0.5; }\n" +
+        "            50% { opacity: 1; }\n" +
+        "        }\n" +
+        "        \n" +
+        "        .container {\n" +
+        "            position: relative;\n" +
+        "            z-index: 1;\n" +
+        "            max-width: 1200px;\n" +
+        "            margin: 0 auto;\n" +
+        "            padding: 20px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .title-bar {\n" +
+        "            background: rgba(20, 20, 30, 0.95);\n" +
+        "            backdrop-filter: blur(10px);\n" +
+        "            border-radius: 12px;\n" +
+        "            padding: 12px 20px;\n" +
+        "            margin-bottom: 20px;\n" +
+        "            display: flex;\n" +
+        "            justify-content: space-between;\n" +
+        "            align-items: center;\n" +
+        "            box-shadow: 0 4px 20px rgba(0,0,0,0.3);\n" +
+        "            border: 1px solid rgba(255,255,255,0.1);\n" +
+        "        }\n" +
+        "        \n" +
+        "        .title-bar h2 {\n" +
+        "            color: #fff;\n" +
+        "            font-size: 18px;\n" +
+        "            font-weight: 500;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .window-controls {\n" +
+        "            display: flex;\n" +
+        "            gap: 8px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .win-btn {\n" +
+        "            width: 32px;\n" +
+        "            height: 32px;\n" +
+        "            border: none;\n" +
+        "            background: rgba(255,255,255,0.1);\n" +
+        "            color: #fff;\n" +
+        "            font-size: 16px;\n" +
+        "            border-radius: 6px;\n" +
+        "            cursor: pointer;\n" +
+        "            transition: all 0.2s;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .win-btn:hover {\n" +
+        "            background: rgba(255,255,255,0.2);\n" +
+        "        }\n" +
+        "        \n" +
+        "        .win-btn.close:hover {\n" +
+        "            background: #e81123;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .card {\n" +
+        "            background: rgba(30, 30, 40, 0.9);\n" +
+        "            backdrop-filter: blur(10px);\n" +
+        "            border-radius: 16px;\n" +
+        "            padding: 24px;\n" +
+        "            margin-bottom: 20px;\n" +
+        "            border: 1px solid rgba(255,255,255,0.1);\n" +
+        "            transition: transform 0.3s, box-shadow 0.3s;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .card:hover {\n" +
+        "            transform: translateY(-2px);\n" +
+        "            box-shadow: 0 8px 30px rgba(0,0,0,0.3);\n" +
+        "        }\n" +
+        "        \n" +
+        "        .logo-section {\n" +
+        "            text-align: center;\n" +
+        "            margin-bottom: 30px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .windows-logo {\n" +
+        "            display: inline-flex;\n" +
+        "            gap: 12px;\n" +
+        "            margin-bottom: 20px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .win-logo-piece {\n" +
+        "            width: 50px;\n" +
+        "            height: 50px;\n" +
+        "            border-radius: 12px;\n" +
+        "            animation: pulse 2s ease-in-out infinite;\n" +
+        "        }\n" +
+        "        \n" +
+        "        @keyframes pulse {\n" +
+        "            0%, 100% { transform: scale(1); opacity: 0.8; }\n" +
+        "            50% { transform: scale(1.05); opacity: 1; }\n" +
+        "        }\n" +
+        "        \n" +
+        "        .logo-blue { background: #0078d4; animation-delay: 0s; }\n" +
+        "        .logo-green { background: #107c10; animation-delay: 0.2s; }\n" +
+        "        .logo-orange { background: #ff8c00; animation-delay: 0.4s; }\n" +
+        "        .logo-red { background: #e81123; animation-delay: 0.6s; }\n" +
+        "        \n" +
+        "        h1 {\n" +
+        "            font-size: 48px;\n" +
+        "            background: linear-gradient(135deg, #0078d4, #00b4d8);\n" +
+        "            -webkit-background-clip: text;\n" +
+        "            -webkit-text-fill-color: transparent;\n" +
+        "            background-clip: text;\n" +
+        "            margin-bottom: 10px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .subtitle {\n" +
+        "            color: #aaa;\n" +
+        "            font-size: 16px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .btn {\n" +
+        "            padding: 12px 28px;\n" +
+        "            font-size: 14px;\n" +
+        "            font-weight: 600;\n" +
+        "            border: none;\n" +
+        "            border-radius: 10px;\n" +
+        "            cursor: pointer;\n" +
+        "            transition: all 0.3s;\n" +
+        "            position: relative;\n" +
+        "            overflow: hidden;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .btn-primary {\n" +
+        "            background: linear-gradient(135deg, #0078d4, #00b4d8);\n" +
+        "            color: white;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .btn-success {\n" +
+        "            background: linear-gradient(135deg, #107c10, #2ecc71);\n" +
+        "            color: white;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .btn-warning {\n" +
+        "            background: linear-gradient(135deg, #ff8c00, #ffb347);\n" +
+        "            color: white;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .btn-telegram {\n" +
+        "            background: linear-gradient(135deg, #0088cc, #2ca5e0);\n" +
+        "            color: white;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .btn:hover {\n" +
+        "            transform: translateY(-2px);\n" +
+        "            box-shadow: 0 5px 20px rgba(0,0,0,0.3);\n" +
+        "        }\n" +
+        "        \n" +
+        "        .btn-glow {\n" +
+        "            animation: glowPulse 1.5s ease-in-out infinite;\n" +
+        "        }\n" +
+        "        \n" +
+        "        @keyframes glowPulse {\n" +
+        "            0%, 100% { box-shadow: 0 0 5px rgba(0,120,212,0.5); }\n" +
+        "            50% { box-shadow: 0 0 20px rgba(0,120,212,0.8); }\n" +
+        "        }\n" +
+        "        \n" +
+        "        .file-input-area {\n" +
+        "            border: 2px dashed rgba(255,255,255,0.2);\n" +
+        "            border-radius: 12px;\n" +
+        "            padding: 20px;\n" +
+        "            text-align: center;\n" +
+        "            cursor: pointer;\n" +
+        "            transition: all 0.3s;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .file-input-area:hover {\n" +
+        "            border-color: #0078d4;\n" +
+        "            background: rgba(0,120,212,0.1);\n" +
+        "        }\n" +
+        "        \n" +
+        "        .file-info {\n" +
+        "            color: #0078d4;\n" +
+        "            font-size: 14px;\n" +
+        "            margin-top: 10px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        select, input {\n" +
+        "            background: rgba(20,20,30,0.9);\n" +
+        "            border: 1px solid rgba(255,255,255,0.2);\n" +
+        "            border-radius: 8px;\n" +
+        "            padding: 10px 15px;\n" +
+        "            color: white;\n" +
+        "            font-size: 14px;\n" +
+        "            width: 100%;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .status {\n" +
+        "            background: rgba(0,0,0,0.5);\n" +
+        "            border-radius: 10px;\n" +
+        "            padding: 12px;\n" +
+        "            text-align: center;\n" +
+        "            font-size: 13px;\n" +
+        "            color: #2ecc71;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .status-error { color: #e81123; }\n" +
+        "        .status-warning { color: #ff8c00; }\n" +
+        "        \n" +
+        "        .slider-container {\n" +
+        "            display: flex;\n" +
+        "            align-items: center;\n" +
+        "            gap: 15px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        input[type=\"range\"] {\n" +
+        "            flex: 1;\n" +
+        "            height: 4px;\n" +
+        "            -webkit-appearance: none;\n" +
+        "            background: rgba(255,255,255,0.2);\n" +
+        "            border-radius: 2px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        input[type=\"range\"]::-webkit-slider-thumb {\n" +
+        "            -webkit-appearance: none;\n" +
+        "            width: 16px;\n" +
+        "            height: 16px;\n" +
+        "            border-radius: 50%;\n" +
+        "            background: #0078d4;\n" +
+        "            cursor: pointer;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .letter-value {\n" +
+        "            color: #0078d4;\n" +
+        "            font-weight: bold;\n" +
+        "            min-width: 40px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .grid-2 {\n" +
+        "            display: grid;\n" +
+        "            grid-template-columns: 1fr 1fr;\n" +
+        "            gap: 20px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        .model-status {\n" +
+        "            color: #2ecc71;\n" +
+        "            font-size: 12px;\n" +
+        "            margin-top: 8px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        footer {\n" +
+        "            text-align: center;\n" +
+        "            padding: 20px;\n" +
+        "            color: #666;\n" +
+        "            font-size: 12px;\n" +
+        "        }\n" +
+        "        \n" +
+        "        @media (max-width: 768px) {\n" +
+        "            .grid-2 { grid-template-columns: 1fr; }\n" +
+        "            h1 { font-size: 32px; }\n" +
+        "        }\n" +
+        "    </style>\n" +
+        "</head>\n" +
+        "<body>\n" +
+        "    <div class=\"bg-animation\"></div>\n" +
+        "    <div class=\"gradient-bg\"></div>\n" +
+        "    \n" +
+        "    <div class=\"container\">\n" +
+        "        <div class=\"title-bar\">\n" +
+        "            <h2>NotYCaptionGenAi v3.0</h2>\n" +
+        "            <div class=\"window-controls\">\n" +
+        "                <button class=\"win-btn\" onclick=\"javaApp.minimize()\">─</button>\n" +
+        "                <button class=\"win-btn\" onclick=\"javaApp.maximize()\">□</button>\n" +
+        "                <button class=\"win-btn close\" onclick=\"javaApp.close()\">✕</button>\n" +
+        "            </div>\n" +
+        "        </div>\n" +
+        "        \n" +
+        "        <div class=\"logo-section\">\n" +
+        "            <div class=\"windows-logo\">\n" +
+        "                <div class=\"win-logo-piece logo-blue\"></div>\n" +
+        "                <div class=\"win-logo-piece logo-green\"></div>\n" +
+        "                <div class=\"win-logo-piece logo-orange\"></div>\n" +
+        "                <div class=\"win-logo-piece logo-red\"></div>\n" +
+        "            </div>\n" +
+        "            <h1>NotYCaptionGenAi</h1>\n" +
+        "            <div class=\"subtitle\">AI-Powered Subtitle Generator for Windows</div>\n" +
+        "        </div>\n" +
+        "        \n" +
+        "        <div class=\"card\">\n" +
+        "            <div class=\"file-input-area\" onclick=\"javaApp.selectFile()\">\n" +
+        "                📁 Click to Select Video/Audio File\n" +
+        "                <div id=\"fileInfo\" class=\"file-info\">No file selected</div>\n" +
+        "            </div>\n" +
+        "        </div>\n" +
+        "        \n" +
+        "        <div class=\"grid-2\">\n" +
+        "            <div class=\"card\">\n" +
+        "                <h3>🤖 Whisper Model</h3>\n" +
+        "                <select id=\"modelSelect\" style=\"margin-top: 10px;\">\n" +
+        "                    <option value=\"0\">Tiny (39 MB) - Built-in</option>\n" +
+        "                    <option value=\"1\">Base (142 MB) - Built-in</option>\n" +
+        "                    <option value=\"2\">Small (466 MB) - Download</option>\n" +
+        "                    <option value=\"3\">Medium (1.5 GB) - Download</option>\n" +
+        "                    <option value=\"4\">Large V1 (2.9 GB) - Download</option>\n" +
+        "                </select>\n" +
+        "                <div id=\"modelStatus\" class=\"model-status\">✅ Ready to use</div>\n" +
+        "                <button id=\"downloadBtn\" class=\"btn btn-warning\" style=\"margin-top: 15px; width: 100%;\" onclick=\"javaApp.downloadModel()\">\n" +
+        "                    📥 Download Selected Model\n" +
+        "                </button>\n" +
+        "            </div>\n" +
+        "            \n" +
+        "            <div class=\"card\">\n" +
+        "                <h3>⚙️ Settings</h3>\n" +
+        "                <div style=\"margin-top: 15px;\">\n" +
+        "                    <label>Max Letters per Line:</label>\n" +
+        "                    <div class=\"slider-container\">\n" +
+        "                        <input type=\"range\" id=\"letterSpacing\" min=\"20\" max=\"80\" value=\"42\">\n" +
+        "                        <span id=\"letterValue\" class=\"letter-value\">42</span>\n" +
+        "                    </div>\n" +
+        "                </div>\n" +
+        "                <div style=\"margin-top: 15px;\">\n" +
+        "                    <label>Language:</label>\n" +
+        "                    <select id=\"languageSelect\" style=\"margin-top: 5px;\">\n" +
+        "                        <option value=\"auto\">Auto Detect</option>\n" +
+        "                        <option value=\"en\">English</option>\n" +
+        "                        <option value=\"hi\">Hindi</option>\n" +
+        "                        <option value=\"ja\">Japanese</option>\n" +
+        "                        <option value=\"es\">Spanish</option>\n" +
+        "                        <option value=\"fr\">French</option>\n" +
+        "                        <option value=\"de\">German</option>\n" +
+        "                        <option value=\"zh\">Chinese</option>\n" +
+        "                        <option value=\"ar\">Arabic</option>\n" +
+        "                        <option value=\"ru\">Russian</option>\n" +
+        "                        <option value=\"ko\">Korean</option>\n" +
+        "                    </select>\n" +
+        "                </div>\n" +
+        "                <div style=\"margin-top: 15px;\">\n" +
+        "                    <label>\n" +
+        "                        <input type=\"checkbox\" id=\"transliterate\"> \n" +
+        "                        🔄 Transliterate to English\n" +
+        "                    </label>\n" +
+        "                </div>\n" +
+        "                <button id=\"generateBtn\" class=\"btn btn-success btn-glow\" style=\"margin-top: 20px; width: 100%;\" onclick=\"javaApp.generate()\">\n" +
+        "                    🚀 Generate Subtitles\n" +
+        "                </button>\n" +
+        "            </div>\n" +
+        "        </div>\n" +
+        "        \n" +
+        "        <div class=\"card\">\n" +
+        "            <div id=\"status\" class=\"status\">✅ Ready. Select a file and model to begin.</div>\n" +
+        "        </div>\n" +
+        "        \n" +
+        "        <div class=\"grid-2\">\n" +
+        "            <button class=\"btn btn-telegram\" onclick=\"javaApp.openTelegram()\">\n" +
+        "                💬 Join Telegram Channel @Noty_215\n" +
+        "            </button>\n" +
+        "            <div style=\"text-align: right; color: #666; font-size: 12px; padding: 12px;\">\n" +
+        "                Developed with ❤️ by NotY215\n" +
+        "            </div>\n" +
+        "        </div>\n" +
+        "        \n" +
+        "        <footer>\n" +
+        "            LGPL v3 License | Tiny & Base Models Built-in | Windows 11 Optimized\n" +
+        "        </footer>\n" +
+        "    </div>\n" +
+        "    \n" +
+        "    <script>\n" +
+        "        const slider = document.getElementById('letterSpacing');\n" +
+        "        const letterValue = document.getElementById('letterValue');\n" +
+        "        slider.addEventListener('input', () => {\n" +
+        "            letterValue.textContent = slider.value;\n" +
+        "        });\n" +
+        "        \n" +
+        "        const modelSelect = document.getElementById('modelSelect');\n" +
+        "        const modelStatus = document.getElementById('modelStatus');\n" +
+        "        const downloadBtn = document.getElementById('downloadBtn');\n" +
+        "        \n" +
+        "        function updateModelUI(index) {\n" +
+        "            if (index === '0' || index === '1') {\n" +
+        "                modelStatus.innerHTML = '✅ Built-in model - Ready to use';\n" +
+        "                modelStatus.style.color = '#2ecc71';\n" +
+        "                downloadBtn.innerHTML = '✓ Model Available (Built-in)';\n" +
+        "                downloadBtn.disabled = true;\n" +
+        "                downloadBtn.style.opacity = '0.5';\n" +
+        "            } else {\n" +
+        "                modelStatus.innerHTML = '⚠️ Not downloaded';\n" +
+        "                modelStatus.style.color = '#ff8c00';\n" +
+        "                downloadBtn.innerHTML = '📥 Download Selected Model';\n" +
+        "                downloadBtn.disabled = false;\n" +
+        "                downloadBtn.style.opacity = '1';\n" +
+        "            }\n" +
+        "        }\n" +
+        "        \n" +
+        "        modelSelect.addEventListener('change', (e) => {\n" +
+        "            updateModelUI(e.target.value);\n" +
+        "        });\n" +
+        "        \n" +
+        "        updateModelUI(modelSelect.value);\n" +
+        "        \n" +
+        "        window.updateFileInfo = function(filename) {\n" +
+        "            document.getElementById('fileInfo').innerHTML = filename;\n" +
+        "        };\n" +
+        "        \n" +
+        "        window.updateStatus = function(message, isError, isWarning) {\n" +
+        "            const statusDiv = document.getElementById('status');\n" +
+        "            statusDiv.innerHTML = message;\n" +
+        "            statusDiv.className = 'status';\n" +
+        "            if (isError) statusDiv.classList.add('status-error');\n" +
+        "            if (isWarning) statusDiv.classList.add('status-warning');\n" +
+        "        };\n" +
+        "        \n" +
+        "        window.updateModelAvailable = function(available) {\n" +
+        "            const generateBtn = document.getElementById('generateBtn');\n" +
+        "            if (available) {\n" +
+        "                generateBtn.disabled = false;\n" +
+        "                generateBtn.style.opacity = '1';\n" +
+        "            } else {\n" +
+        "                generateBtn.disabled = true;\n" +
+        "                generateBtn.style.opacity = '0.5';\n" +
+        "            }\n" +
+        "        };\n" +
+        "    </script>\n" +
+        "</body>\n" +
+        "</html>";
+    }
+    
+    // Helper method to execute JavaScript and get value synchronously
+    private String executeScriptSync(String script) {
+        CountDownLatch latch = new CountDownLatch(1);
+        String[] result = new String[1];
+        
+        Platform.runLater(() -> {
+            try {
+                result[0] = (String) webEngine.executeScript(script);
+            } catch (Exception e) {
+                result[0] = "";
+            } finally {
+                latch.countDown();
             }
-        };
-        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
-        mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        mainPanel.setOpaque(false);
+        });
         
-        // Custom Title Bar
-        JPanel titleBar = createTitleBar();
-        mainPanel.add(titleBar);
-        
-        // Logo Panel
-        JPanel logoPanel = createLogoPanel();
-        mainPanel.add(logoPanel);
-        mainPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-        
-        // File Selection Panel
-        JPanel filePanel = createFilePanel();
-        mainPanel.add(filePanel);
-        mainPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-        
-        // Model Selection Panel
-        JPanel modelPanel = createModelPanel();
-        mainPanel.add(modelPanel);
-        mainPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-        
-        // Settings Panel
-        JPanel settingsPanel = createSettingsPanel();
-        mainPanel.add(settingsPanel);
-        mainPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-        
-        // Status Panel
-        JPanel statusPanel = createStatusPanel();
-        mainPanel.add(statusPanel);
-        
-        add(mainPanel);
-        
-        // Start glow animation
-        startGlowAnimation();
-    }
-    
-    private JPanel createTitleBar() {
-        JPanel titleBar = new JPanel(new BorderLayout());
-        titleBar.setBackground(new Color(13, 13, 18));
-        titleBar.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
-        titleBar.setOpaque(true);
-        
-        JLabel titleLabel = new JLabel("NotYCaptionGenAi v3.0");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        titleLabel.setForeground(ACCENT_BLUE);
-        
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
-        buttonPanel.setBackground(new Color(13, 13, 18));
-        
-        JButton minimizeBtn = createTitleButton("─");
-        minimizeBtn.addActionListener(e -> setState(JFrame.ICONIFIED));
-        
-        JButton maximizeBtn = createTitleButton("□");
-        maximizeBtn.addActionListener(e -> toggleMaximize());
-        
-        JButton closeBtn = createTitleButton("✕");
-        closeBtn.addActionListener(e -> exitApplication());
-        
-        buttonPanel.add(minimizeBtn);
-        buttonPanel.add(maximizeBtn);
-        buttonPanel.add(closeBtn);
-        
-        titleBar.add(titleLabel, BorderLayout.WEST);
-        titleBar.add(buttonPanel, BorderLayout.EAST);
-        
-        return titleBar;
-    }
-    
-    private void toggleMaximize() {
-        if (maximized) {
-            setBounds(normalBounds);
-            maximized = false;
-        } else {
-            normalBounds = getBounds();
-            setExtendedState(JFrame.MAXIMIZED_BOTH);
-            maximized = true;
-        }
-    }
-    
-    private void exitApplication() {
-        int confirm = JOptionPane.showConfirmDialog(this, 
-            "Are you sure you want to exit?", 
-            "Exit Confirmation", 
-            JOptionPane.YES_NO_OPTION);
-        if (confirm == JOptionPane.YES_OPTION) {
-            System.exit(0);
-        }
-    }
-    
-    private JPanel createLogoPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(CARD_BG);
-        panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(50, 50, 60), 1),
-            BorderFactory.createEmptyBorder(30, 30, 30, 30)
-        ));
-        panel.setMaximumSize(new Dimension(860, 180));
-        
-        // Load and scale logo
-        JLabel logoLabel = new JLabel();
         try {
-            ImageIcon logoIcon = null;
+            latch.await();
+        } catch (InterruptedException e) {
+            return "";
+        }
+        return result[0];
+    }
+    
+    private boolean executeScriptSyncBoolean(String script) {
+        CountDownLatch latch = new CountDownLatch(1);
+        boolean[] result = new boolean[1];
+        
+        Platform.runLater(() -> {
+            try {
+                result[0] = (Boolean) webEngine.executeScript(script);
+            } catch (Exception e) {
+                result[0] = false;
+            } finally {
+                latch.countDown();
+            }
+        });
+        
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            return false;
+        }
+        return result[0];
+    }
+    
+    // Java Bridge for JavaScript communication
+    public class JavaBridge {
+        
+        public void minimize() {
+            setState(JFrame.ICONIFIED);
+        }
+        
+        public void maximize() {
+            setExtendedState(getExtendedState() == JFrame.MAXIMIZED_BOTH ? JFrame.NORMAL : JFrame.MAXIMIZED_BOTH);
+        }
+        
+        public void close() {
+            int confirm = JOptionPane.showConfirmDialog(GUI.this, "Are you sure you want to exit?", "Exit", JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                System.exit(0);
+            }
+        }
+        
+        public void selectFile() {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("Select Video or Audio File");
+            String[] extensions = {"wav", "mp4", "mp3", "m4a", "mkv", "avi", "wmv", "mpeg", "flac"};
+            fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                "Media Files", extensions));
             
-            // Try multiple sources for logo
-            URL logoURL = getClass().getResource("/logo.png");
-            if (logoURL != null) {
-                logoIcon = new ImageIcon(logoURL);
-            } else {
-                File logoFile = new File("logo.png");
-                if (logoFile.exists()) {
-                    logoIcon = new ImageIcon(logoFile.getAbsolutePath());
-                }
-            }
-            
-            if (logoIcon != null) {
-                Image img = logoIcon.getImage().getScaledInstance(80, 80, Image.SCALE_SMOOTH);
-                logoLabel.setIcon(new ImageIcon(img));
-                logoLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-                panel.add(logoLabel);
-                panel.add(Box.createRigidArea(new Dimension(0, 15)));
-            }
-        } catch (Exception e) {
-            System.err.println("Could not load logo: " + e.getMessage());
-        }
-        
-        JLabel titleLabel = new JLabel("NotYCaptionGenAi");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 36));
-        titleLabel.setForeground(ACCENT_BLUE);
-        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(titleLabel);
-        
-        JLabel subtitleLabel = new JLabel("AI-Powered Subtitle Generator v3.0");
-        subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        subtitleLabel.setForeground(LIGHT_TEXT);
-        subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(subtitleLabel);
-        
-        JLabel creditLabel = new JLabel("Developed By NotY215 | LGPL v3 License");
-        creditLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
-        creditLabel.setForeground(new Color(150, 150, 170));
-        creditLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(creditLabel);
-        
-        return panel;
-    }
-    
-    private JButton createTitleButton(String text) {
-        JButton btn = new JButton(text);
-        btn.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        btn.setForeground(LIGHT_TEXT);
-        btn.setBackground(new Color(13, 13, 18));
-        btn.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-        btn.setFocusPainted(false);
-        btn.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent e) {
-                btn.setBackground(new Color(40, 40, 50));
-            }
-            public void mouseExited(MouseEvent e) {
-                btn.setBackground(new Color(13, 13, 18));
-            }
-        });
-        return btn;
-    }
-    
-    private JPanel createFilePanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBackground(CARD_BG);
-        panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(50, 50, 60), 1),
-            BorderFactory.createEmptyBorder(15, 15, 15, 15)
-        ));
-        panel.setMaximumSize(new Dimension(860, 100));
-        
-        btnSelectFile = createGlowButton("📁 Select Video/Audio File", ACCENT_BLUE);
-        btnSelectFile.addActionListener(e -> selectFile());
-        
-        lblFileInfo = new JLabel("No file selected");
-        lblFileInfo.setFont(new Font("Segoe UI", Font.ITALIC, 12));
-        lblFileInfo.setForeground(new Color(150, 150, 170));
-        lblFileInfo.setHorizontalAlignment(SwingConstants.CENTER);
-        
-        panel.add(btnSelectFile, BorderLayout.CENTER);
-        panel.add(lblFileInfo, BorderLayout.SOUTH);
-        
-        return panel;
-    }
-    
-    private JPanel createModelPanel() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(CARD_BG);
-        panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(50, 50, 60), 1),
-            BorderFactory.createEmptyBorder(15, 15, 15, 15)
-        ));
-        panel.setMaximumSize(new Dimension(860, 130));
-        
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(8, 10, 8, 10);
-        
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        JLabel modelLabel = new JLabel("Whisper Model:");
-        modelLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        modelLabel.setForeground(LIGHT_TEXT);
-        panel.add(modelLabel, gbc);
-        
-        gbc.gridx = 1;
-        gbc.gridwidth = 2;
-        String[] modelNames = new String[MODELS.length];
-        for (int i = 0; i < MODELS.length; i++) {
-            modelNames[i] = MODELS[i].name;
-        }
-        modelCombo = new JComboBox<>(modelNames);
-        modelCombo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        modelCombo.setBackground(DARKER_BG);
-        modelCombo.setForeground(LIGHT_TEXT);
-        modelCombo.addActionListener(e -> updateModelInfo());
-        panel.add(modelCombo, gbc);
-        
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        gbc.gridwidth = 1;
-        JLabel sizeLabel = new JLabel("Model Size:");
-        sizeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        sizeLabel.setForeground(LIGHT_TEXT);
-        panel.add(sizeLabel, gbc);
-        
-        gbc.gridx = 1;
-        gbc.gridwidth = 2;
-        lblModelSize = new JLabel("");
-        lblModelSize.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        lblModelSize.setForeground(ACCENT_GREEN);
-        panel.add(lblModelSize, gbc);
-        
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        gbc.gridwidth = 3;
-        btnDownloadModel = createGlowButton("📥 Download Selected Model", ACCENT_ORANGE);
-        btnDownloadModel.addActionListener(e -> confirmAndDownloadModel());
-        panel.add(btnDownloadModel, gbc);
-        
-        return panel;
-    }
-    
-    private JPanel createSettingsPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new GridBagLayout());
-        panel.setBackground(CARD_BG);
-        panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(50, 50, 60), 1),
-            BorderFactory.createEmptyBorder(15, 15, 15, 15)
-        ));
-        panel.setMaximumSize(new Dimension(860, 230));
-        
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(10, 10, 10, 10);
-        
-        // Letter Spacing
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        JLabel letterSpacingLabel = new JLabel("Max Letters per Line:");
-        letterSpacingLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        letterSpacingLabel.setForeground(LIGHT_TEXT);
-        panel.add(letterSpacingLabel, gbc);
-        
-        gbc.gridx = 1;
-        letterSpacingSlider = new JSlider(20, 80, 42);
-        letterSpacingSlider.setMajorTickSpacing(10);
-        letterSpacingSlider.setPaintTicks(true);
-        letterSpacingSlider.setPaintLabels(true);
-        letterSpacingSlider.setBackground(CARD_BG);
-        letterSpacingSlider.setForeground(LIGHT_TEXT);
-        panel.add(letterSpacingSlider, gbc);
-        
-        gbc.gridx = 2;
-        lblLetterSpacingValue = new JLabel("42");
-        lblLetterSpacingValue.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        lblLetterSpacingValue.setForeground(ACCENT_BLUE);
-        panel.add(lblLetterSpacingValue, gbc);
-        
-        letterSpacingSlider.addChangeListener(e -> {
-            lblLetterSpacingValue.setText(String.valueOf(letterSpacingSlider.getValue()));
-        });
-        
-        // Language Selection
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        JLabel languageLabel = new JLabel("Language:");
-        languageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        languageLabel.setForeground(LIGHT_TEXT);
-        panel.add(languageLabel, gbc);
-        
-        gbc.gridx = 1;
-        gbc.gridwidth = 2;
-        String[] languages = {"Auto Detect", "English", "Hindi", "Japanese", "Spanish", "French", "German", "Chinese", "Arabic", "Russian", "Korean"};
-        languageCombo = new JComboBox<>(languages);
-        languageCombo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        languageCombo.setBackground(DARKER_BG);
-        languageCombo.setForeground(LIGHT_TEXT);
-        panel.add(languageCombo, gbc);
-        
-        // Transliteration Option
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        gbc.gridwidth = 3;
-        chkTransliterate = new JCheckBox("🔄 Transliterate to English (Hindi, Japanese, Arabic, Chinese, Korean, Russian)");
-        chkTransliterate.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        chkTransliterate.setBackground(CARD_BG);
-        chkTransliterate.setForeground(LIGHT_TEXT);
-        panel.add(chkTransliterate, gbc);
-        
-        // Generate Button
-        gbc.gridx = 0;
-        gbc.gridy = 3;
-        gbc.gridwidth = 3;
-        btnGenerate = createGlowButton("🚀 Generate Subtitles", ACCENT_GREEN);
-        btnGenerate.setEnabled(false);
-        btnGenerate.addActionListener(e -> confirmAndGenerate());
-        panel.add(btnGenerate, gbc);
-        
-        return panel;
-    }
-    
-    private JPanel createStatusPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBackground(CARD_BG);
-        panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(50, 50, 60), 1),
-            BorderFactory.createEmptyBorder(12, 15, 12, 15)
-        ));
-        panel.setMaximumSize(new Dimension(860, 80));
-        
-        lblStatus = new JLabel("✅ Ready. Select a file and model to begin.");
-        lblStatus.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        lblStatus.setForeground(ACCENT_GREEN);
-        panel.add(lblStatus, BorderLayout.CENTER);
-        
-        return panel;
-    }
-    
-    private JButton createGlowButton(String text, Color color) {
-        JButton button = new JButton(text) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2d = (Graphics2D) g.create();
-                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                
-                if (glowing && isEnabled()) {
-                    g2d.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), (int)(glowAlpha * 100)));
-                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
-                }
-                
-                super.paintComponent(g);
-                g2d.dispose();
-            }
-        };
-        
-        button.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        button.setBackground(color);
-        button.setForeground(Color.WHITE);
-        button.setFocusPainted(false);
-        button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
-        button.setOpaque(true);
-        
-        button.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent e) {
-                if (button.isEnabled()) {
-                    button.setBackground(color.brighter());
-                }
-            }
-            public void mouseExited(MouseEvent e) {
-                if (button.isEnabled()) {
-                    button.setBackground(color);
-                }
-            }
-        });
-        
-        return button;
-    }
-    
-    private void startGlowAnimation() {
-        glowTimer = new Timer(50, e -> {
-            if (glowing) {
-                glowAlpha += 0.05f;
-                if (glowAlpha > 1.0f) {
-                    glowAlpha = 0.5f;
-                }
-                repaint();
-            }
-        });
-        glowTimer.start();
-    }
-    
-    private void setupWindowDragging() {
-        final Point[] mouseDrag = {null};
-        addMouseListener(new MouseAdapter() {
-            public void mousePressed(MouseEvent e) {
-                if (!maximized && e.getY() < 50) {
-                    mouseDrag[0] = e.getPoint();
-                }
-            }
-            public void mouseReleased(MouseEvent e) {
-                mouseDrag[0] = null;
-            }
-        });
-        addMouseMotionListener(new MouseMotionAdapter() {
-            public void mouseDragged(MouseEvent e) {
-                if (mouseDrag[0] != null && !maximized) {
-                    Point p = getLocation();
-                    setLocation(p.x + e.getX() - mouseDrag[0].x, p.y + e.getY() - mouseDrag[0].y);
-                }
-            }
-        });
-    }
-    
-    private void updateModelInfo() {
-        int index = modelCombo.getSelectedIndex();
-        if (index >= 0 && index < MODELS.length) {
-            long sizeMB = MODELS[index].sizeBytes / (1024 * 1024);
-            lblModelSize.setText(String.format("%d MB", sizeMB));
-            
-            File modelFile = new File(MODELS[index].fileName);
-            if (modelFile.exists() && modelFile.length() > 0) {
-                modelAvailable = true;
-                selectedModelPath = modelFile.getAbsolutePath();
-                btnDownloadModel.setText("✓ Model Available");
-                btnDownloadModel.setEnabled(false);
-                btnGenerate.setEnabled(selectedFile != null);
-                lblStatus.setText("✅ Model available. Ready to generate.");
-                lblStatus.setForeground(ACCENT_GREEN);
-            } else {
-                modelAvailable = false;
-                btnDownloadModel.setText("📥 Download Selected Model");
-                btnDownloadModel.setEnabled(true);
-                btnGenerate.setEnabled(false);
-                lblStatus.setText("⚠️ Model not found. Please download it first.");
-                lblStatus.setForeground(ACCENT_ORANGE);
-            }
-        }
-    }
-    
-    private void selectFile() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Select Video or Audio File");
-        
-        String[] extensions = {"wav", "mp4", "mp3", "m4a", "mkv", "avi", "wmv", "mpeg", "flac"};
-        FileNameExtensionFilter filter = new FileNameExtensionFilter(
-            "Media Files (WAV, MP4, MP3, M4A, MKV, AVI, WMV, MPEG, FLAC)", extensions);
-        fileChooser.setFileFilter(filter);
-        
-        int result = fileChooser.showOpenDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            selectedFile = fileChooser.getSelectedFile();
-            lblFileInfo.setText(selectedFile.getName() + " (" + (selectedFile.length() / 1024 / 1024) + " MB)");
-            
-            if (modelAvailable) {
-                btnGenerate.setEnabled(true);
-                lblStatus.setText("✅ File selected. Ready to generate.");
-            }
-        }
-    }
-    
-    private void confirmAndDownloadModel() {
-        int index = modelCombo.getSelectedIndex();
-        if (index < 0 || index >= MODELS.length) return;
-        
-        ModelInfo model = MODELS[index];
-        long sizeMB = model.sizeBytes / (1024 * 1024);
-        
-        int response = JOptionPane.showConfirmDialog(this,
-            String.format("Download %s (%d MB)?\n\nThis may take several minutes depending on your internet speed.",
-                model.name, sizeMB),
-            "Confirm Download",
-            JOptionPane.YES_NO_OPTION);
-        
-        if (response == JOptionPane.YES_OPTION) {
-            downloadModel(model);
-        }
-    }
-    
-    private void confirmAndGenerate() {
-        if (selectedFile == null) {
-            JOptionPane.showMessageDialog(this, "Please select a file first!", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        
-        if (!modelAvailable) {
-            JOptionPane.showMessageDialog(this, "Whisper model not available. Please download it first!", 
-                                         "Model Missing", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        
-        int response = JOptionPane.showConfirmDialog(this,
-            String.format("Generate subtitles for:\n%s\n\nModel: %s\nLanguage: %s\nMax letters: %d\nTransliteration: %s",
-                selectedFile.getName(),
-                MODELS[modelCombo.getSelectedIndex()].name,
-                languageCombo.getSelectedItem(),
-                letterSpacingSlider.getValue(),
-                chkTransliterate.isSelected() ? "Yes" : "No"),
-            "Confirm Generation",
-            JOptionPane.YES_NO_OPTION);
-        
-        if (response == JOptionPane.YES_OPTION) {
-            generateSubtitles();
-        }
-    }
-    
-    private void downloadModel(ModelInfo model) {
-        setButtonsEnabled(false);
-        
-        downloadDialog = new DownloadProgressDialog(this, model.name, model.sizeBytes);
-        downloadDialog.setVisible(true);
-        
-        modelDownloader = new ModelDownloader();
-        modelDownloader.downloadModel(model.url, model.fileName, model.sizeBytes, new ModelDownloader.DownloadCallback() {
-            @Override
-            public void onProgress(int percent, long downloaded, long total, double speed) {
-                SwingUtilities.invokeLater(() -> {
-                    if (downloadDialog != null && !downloadDialog.isCancelled()) {
-                        downloadDialog.updateProgress(percent, downloaded, total, speed);
-                    }
+            int result = fileChooser.showOpenDialog(GUI.this);
+            if (result == JFileChooser.APPROVE_OPTION) {
+                selectedFile = fileChooser.getSelectedFile();
+                Platform.runLater(() -> {
+                    webEngine.executeScript("updateFileInfo('" + selectedFile.getName() + " (" + 
+                        (selectedFile.length() / 1024 / 1024) + " MB)')");
                 });
+                checkModelAvailability();
             }
+        }
+        
+        public void downloadModel() {
+            int index = Integer.parseInt(executeScriptSync("document.getElementById('modelSelect').value"));
             
-            @Override
-            public void onComplete(boolean success) {
-                SwingUtilities.invokeLater(() -> {
-                    if (downloadDialog != null) {
-                        downloadDialog.dispose();
+            ModelInfo model = MODELS[index];
+            long sizeMB = model.sizeBytes / (1024 * 1024);
+            
+            int response = JOptionPane.showConfirmDialog(GUI.this,
+                String.format("Download %s (%d MB)?", model.name, sizeMB),
+                "Confirm Download", JOptionPane.YES_NO_OPTION);
+            
+            if (response == JOptionPane.YES_OPTION) {
+                downloadDialog = new DownloadProgressDialog(GUI.this, model.name, model.sizeBytes);
+                downloadDialog.setVisible(true);
+                
+                modelDownloader = new ModelDownloader();
+                modelDownloader.downloadModel(model.url, model.fileName, model.sizeBytes, new ModelDownloader.DownloadCallback() {
+                    @Override
+                    public void onProgress(int percent, long downloaded, long total, double speed) {
+                        Platform.runLater(() -> {
+                            if (downloadDialog != null) {
+                                downloadDialog.updateProgress(percent, downloaded, total, speed);
+                            }
+                        });
                     }
-                    setButtonsEnabled(true);
                     
-                    if (success) {
-                        checkModelStatus();
-                        JOptionPane.showMessageDialog(GUI.this, 
-                            "Model downloaded successfully!",
-                            "Success", JOptionPane.INFORMATION_MESSAGE);
-                    } else {
-                        JOptionPane.showMessageDialog(GUI.this, 
-                            "Failed to download model. Please check your internet connection.",
-                            "Error", JOptionPane.ERROR_MESSAGE);
+                    @Override
+                    public void onComplete(boolean success) {
+                        Platform.runLater(() -> {
+                            if (downloadDialog != null) downloadDialog.dispose();
+                            if (success) {
+                                checkModelAvailability();
+                                Platform.runLater(() -> {
+                                    webEngine.executeScript("updateStatus('✅ Model downloaded successfully!', false, false)");
+                                });
+                            } else {
+                                Platform.runLater(() -> {
+                                    webEngine.executeScript("updateStatus('❌ Download failed!', true, false)");
+                                });
+                            }
+                        });
+                    }
+                    
+                    @Override
+                    public void onCancel() {
+                        Platform.runLater(() -> {
+                            if (downloadDialog != null) downloadDialog.dispose();
+                            webEngine.executeScript("updateStatus('❌ Download cancelled', true, false)");
+                        });
                     }
                 });
-            }
-            
-            @Override
-            public void onCancel() {
-                SwingUtilities.invokeLater(() -> {
-                    if (downloadDialog != null) {
-                        downloadDialog.dispose();
-                    }
-                    setButtonsEnabled(true);
-                    lblStatus.setText("❌ Download cancelled.");
-                    lblStatus.setForeground(ACCENT_RED);
-                });
-            }
-        });
-    }
-    
-    private void setButtonsEnabled(boolean enabled) {
-        btnSelectFile.setEnabled(enabled);
-        btnGenerate.setEnabled(enabled && modelAvailable && selectedFile != null);
-        btnDownloadModel.setEnabled(enabled && !modelAvailable);
-        modelCombo.setEnabled(enabled);
-        languageCombo.setEnabled(enabled);
-        letterSpacingSlider.setEnabled(enabled);
-        chkTransliterate.setEnabled(enabled);
-        
-        glowing = enabled;
-    }
-    
-    private void checkModelStatus() {
-        int index = modelCombo.getSelectedIndex();
-        if (index >= 0 && index < MODELS.length) {
-            File modelFile = new File(MODELS[index].fileName);
-            modelAvailable = modelFile.exists() && modelFile.length() > 0;
-            
-            if (modelAvailable) {
-                selectedModelPath = modelFile.getAbsolutePath();
-                btnDownloadModel.setText("✓ Model Available");
-                btnDownloadModel.setEnabled(false);
-                btnGenerate.setEnabled(selectedFile != null);
-                lblStatus.setText("✅ Model available. Ready to generate.");
-                lblStatus.setForeground(ACCENT_GREEN);
-            } else {
-                btnDownloadModel.setText("📥 Download Selected Model");
-                btnDownloadModel.setEnabled(true);
-                btnGenerate.setEnabled(false);
-                lblStatus.setText("⚠️ Model not found. Please download it first.");
-                lblStatus.setForeground(ACCENT_ORANGE);
             }
         }
-    }
-    
-    private void generateSubtitles() {
-        setButtonsEnabled(false);
-        btnGenerate.setEnabled(false);
         
-        lblStatus.setText("⏳ Processing... Extracting audio (if needed)...");
-        lblStatus.setForeground(ACCENT_BLUE);
-        
-        SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
-            private File tempAudioFile;
+        public void generate() {
+            if (selectedFile == null) {
+                Platform.runLater(() -> {
+                    webEngine.executeScript("updateStatus('❌ Please select a file first!', true, false)");
+                });
+                return;
+            }
             
-            @Override
-            protected Void doInBackground() throws Exception {
+            int modelIndex = Integer.parseInt(executeScriptSync("document.getElementById('modelSelect').value"));
+            String language = executeScriptSync("document.getElementById('languageSelect').value");
+            int letterSpacing = Integer.parseInt(executeScriptSync("document.getElementById('letterSpacing').value"));
+            boolean transliterate = executeScriptSyncBoolean("document.getElementById('transliterate').checked");
+            
+            Platform.runLater(() -> {
+                webEngine.executeScript("updateStatus('⏳ Processing... Extracting audio...', false, false)");
+            });
+            
+            new Thread(() -> {
                 try {
-                    publish("🎵 Extracting audio from media file...");
-                    tempAudioFile = AudioExtractor.extractAudio(selectedFile);
-                    
-                    publish("🎤 Transcribing with Whisper AI...");
-                    String transcription = WhisperTranscriber.transcribe(tempAudioFile, 
-                        languageCombo.getSelectedItem().toString(),
-                        selectedModelPath);
-                    
-                    if (transcription == null || transcription.trim().isEmpty()) {
-                        throw new Exception("Transcription failed - no text generated");
+                    String modelPath = MODELS[modelIndex].fileName;
+                    File modelFile = new File(modelPath);
+                    if (!modelFile.exists()) {
+                        Platform.runLater(() -> {
+                            webEngine.executeScript("updateStatus('❌ Model not found! Please download it first.', true, false)");
+                        });
+                        return;
                     }
                     
-                    publish("📝 Generating SRT subtitles...");
-                    int maxLetters = letterSpacingSlider.getValue();
-                    String srtContent = SRTGenerator.generateSRT(transcription, maxLetters);
+                    File audioFile = AudioExtractor.extractAudio(selectedFile);
                     
-                    publish("💾 Saving subtitle file...");
+                    Platform.runLater(() -> {
+                        webEngine.executeScript("updateStatus('🎤 Transcribing with Whisper AI...', false, false)");
+                    });
+                    
+                    String transcription = WhisperTranscriber.transcribe(audioFile, language, modelPath);
+                    
+                    Platform.runLater(() -> {
+                        webEngine.executeScript("updateStatus('📝 Generating SRT subtitles...', false, false)");
+                    });
+                    
+                    String srtContent = SRTGenerator.generateSRT(transcription, letterSpacing);
+                    
                     String outputPath = selectedFile.getParent() + File.separator + 
-                                      getFileNameWithoutExtension(selectedFile) + ".srt";
+                                       getFileNameWithoutExtension(selectedFile) + ".srt";
                     Files.write(Paths.get(outputPath), srtContent.getBytes());
                     
-                    if (chkTransliterate.isSelected()) {
-                        publish("🔄 Performing transliteration...");
+                    if (transliterate) {
                         String transliterated = Transliterator.transliterate(srtContent);
                         String translitPath = selectedFile.getParent() + File.separator + 
                                              getFileNameWithoutExtension(selectedFile) + "_translit.srt";
                         Files.write(Paths.get(translitPath), transliterated.getBytes());
-                        publish("✅ Transliterated version saved separately.");
                     }
                     
-                    publish("🎉 Subtitle generation completed successfully!");
+                    if (!selectedFile.getName().toLowerCase().endsWith(".wav")) {
+                        audioFile.delete();
+                    }
                     
-                    SwingUtilities.invokeLater(() -> {
+                    Platform.runLater(() -> {
+                        webEngine.executeScript("updateStatus('🎉 Subtitle generation completed successfully!', false, false)");
                         JOptionPane.showMessageDialog(GUI.this, 
-                            "Subtitles generated successfully!\n\nSaved to:\n" + outputPath +
-                            (chkTransliterate.isSelected() ? "\n\nTransliterated version also saved." : ""),
+                            "Subtitles generated successfully!\n\nSaved to:\n" + outputPath,
                             "Success", JOptionPane.INFORMATION_MESSAGE);
                     });
                     
                 } catch (Exception e) {
                     e.printStackTrace();
-                    publish("❌ Error: " + e.getMessage());
-                    SwingUtilities.invokeLater(() -> {
-                        JOptionPane.showMessageDialog(GUI.this, 
-                            "Error generating subtitles:\n" + e.getMessage(),
-                            "Error", JOptionPane.ERROR_MESSAGE);
+                    String errorMsg = e.getMessage().replace("'", "\\'");
+                    Platform.runLater(() -> {
+                        webEngine.executeScript("updateStatus('❌ Error: " + errorMsg + "', true, false)");
                     });
-                } finally {
-                    // Clean up temporary audio file
-                    if (tempAudioFile != null && tempAudioFile.exists() && 
-                        !selectedFile.getName().toLowerCase().endsWith(".wav")) {
-                        try {
-                            Thread.sleep(1000);
-                            tempAudioFile.delete();
-                        } catch (Exception ex) {
-                            System.err.println("Could not delete temp file: " + ex.getMessage());
-                        }
-                    }
                 }
-                return null;
-            }
-            
-            @Override
-            protected void process(java.util.List<String> chunks) {
-                String lastMessage = chunks.get(chunks.size() - 1);
-                lblStatus.setText(lastMessage);
-            }
-            
-            @Override
-            protected void done() {
-                setButtonsEnabled(true);
-                if (modelAvailable && selectedFile != null) {
-                    btnGenerate.setEnabled(true);
-                }
-                lblStatus.setText("✅ Ready for next file.");
-                lblStatus.setForeground(ACCENT_GREEN);
-            }
-        };
-        
-        worker.execute();
-    }
-    
-    private String getFileNameWithoutExtension(File file) {
-        String name = file.getName();
-        int lastDot = name.lastIndexOf('.');
-        if (lastDot > 0) {
-            return name.substring(0, lastDot);
+            }).start();
         }
-        return name;
+        
+        public void openTelegram() {
+            try {
+                Desktop.getDesktop().browse(new URI("https://t.me/Noty_215"));
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(GUI.this, 
+                    "Visit: https://t.me/Noty_215", "Telegram Channel", JOptionPane.INFORMATION_MESSAGE);
+            }
+        }
+        
+        private void checkModelAvailability() {
+            int index = Integer.parseInt(executeScriptSync("document.getElementById('modelSelect').value"));
+            File modelFile = new File(MODELS[index].fileName);
+            boolean available = modelFile.exists() && modelFile.length() > 0;
+            
+            Platform.runLater(() -> {
+                webEngine.executeScript("updateModelAvailable(" + available + ")");
+                if (available) {
+                    webEngine.executeScript("updateStatus('✅ Model available. Ready to generate.', false, false)");
+                }
+            });
+        }
+        
+        private String getFileNameWithoutExtension(File file) {
+            String name = file.getName();
+            int lastDot = name.lastIndexOf('.');
+            return lastDot > 0 ? name.substring(0, lastDot) : name;
+        }
     }
 }

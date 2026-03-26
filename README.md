@@ -1,196 +1,219 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/NotY215/NotYCaptionGenAi/main/resources/app.ico" alt="NotYCaptionGenAi Logo" width="128">
+  <img src="resources/app.ico" alt="NotYCaptionGenAi Logo" width="128">
 </p>
 
 <h1 align="center">🎬 NotYCaptionGenAi v3.0</h1>
 <p align="center">
-  <strong>AI-Powered Subtitle Generator with Whisper Integration</strong>
+  <strong>AI-Powered Subtitle Generator for Windows 11</strong>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-blue.svg" alt="Platform">
-  <img src="https://img.shields.io/badge/License-LGPL%20v3-green.svg" alt="License">
   <img src="https://img.shields.io/badge/Version-3.0.0-brightgreen.svg" alt="Version">
-  <img src="https://img.shields.io/badge/Download-EXE-success.svg" alt="Download">
-  <img src="https://img.shields.io/badge/No%20Java%20Required-Yes-brightgreen.svg" alt="No Java Required">
+  <img src="https://img.shields.io/badge/Platform-Windows%2011%2F10-blue.svg" alt="Platform">
+  <img src="https://img.shields.io/badge/Java-21%2B-orange.svg" alt="Java">
+  <img src="https://img.shields.io/badge/License-LGPL%20v3-blue.svg" alt="License">
+  <img src="https://img.shields.io/badge/Models-Tiny%20%26%20Base%20Built-in-success.svg" alt="Built-in Models">
+  <img src="https://img.shields.io/badge/Join-Telegram%20Channel-2CA5E0?logo=telegram" alt="Telegram">
 </p>
 
 ---
 
 ## 📋 Overview
 
-**NotYCaptionGenAi** is a powerful desktop application that automatically generates subtitles/captions for video and audio files using OpenAI's Whisper AI model. Version 3.0 features a stunning Topaz-like dark UI, embedded Java runtime, maximize/restore functionality, and improved vocal extraction.
+**NotYCaptionGenAi v3.0** is a powerful Windows desktop application that automatically generates subtitles/captions for video and audio files using OpenAI's Whisper AI model. **Tiny and Base models are built-in** - no download required! The application features a stunning modern UI with animated backgrounds and professional Windows 11 design.
 
-### ✨ Key Features
+### ✨ Features
 
-| Feature | Description |
-|---------|-------------|
-| 🎥 **Multi-format Support** | MP4, MKV, AVI, WMV, MPEG, MP3, WAV, M4A, FLAC |
-| 🤖 **AI-Powered** | Uses OpenAI Whisper for accurate transcription |
-| 📦 **Multiple Models** | Tiny (39MB) to Large V1 (2.9GB) |
-| 🌐 **Multi-language** | Supports 10+ languages with auto-detection |
-| 🔄 **Transliteration** | Hindi, Japanese, Arabic, Chinese, Korean, Russian → English |
-| 📝 **Smart Line Breaking** | Adjustable letters per line (20-80) |
-| 💾 **SRT Format** | Universal subtitle format |
-| 🚀 **No Java Required** | Embedded JRE in EXE |
-| 🎨 **Modern UI** | Dark theme, glowing buttons, custom window controls |
-
----
-
-## 📥 Download
-
-### Latest Release
-🔗 **[Download NotYCaptionGenAi.exe](https://github.com/NotY215/NotYCaptionGenAi/releases/latest/download/NotYCaptionGenAi.exe)**
-
-**Requirements:**
-- Windows 10 or Windows 11 (64-bit)
-- 2GB RAM minimum (8GB recommended for Large model)
-- 500MB - 3.5GB free disk space (depending on model)
-
-**No Java installation needed!** Everything is included.
+- 🪟 **Windows 11 Modern UI** - Animated backgrounds, glowing buttons, professional design
+- 🎥 **Multi-format Support**: MP4, MKV, AVI, WMV, MPEG, MP3, WAV, M4A, FLAC
+- 🤖 **AI-Powered**: Uses OpenAI Whisper for accurate transcription
+- 📦 **Built-in Models**: Tiny (39MB) and Base (142MB) models included - no download needed!
+- 🌐 **Multi-language**: Supports all languages with Whisper's language detection
+- 🔄 **Advanced Transliteration**: Convert Hindi, Japanese, Arabic, Chinese, Korean, Russian to English
+- 📝 **Smart Line Breaking**: Adjustable maximum letters per line (20-80 characters)
+- 💾 **SRT Format**: Standard subtitle format compatible with all media players
+- 🚀 **Standalone**: Single EXE with embedded Java 21 - no installation required
+- 💬 **Telegram Support**: Join our channel for updates and help
+- 🎨 **Animated UI**: Dynamic backgrounds, pulsing logos, glowing buttons
 
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 Quick Start
 
-### 1️⃣ Download & Run
-- Download `NotYCaptionGenAi.exe` from the link above
-- Double-click to run (no installation required)
-- Allow through Windows Defender if prompted
+### System Requirements
 
-### 2️⃣ First-Time Setup
-1. **Select a Whisper Model** from the dropdown:
-   - **Tiny (39 MB)** - Fastest, for quick previews
-   - **Base (142 MB)** - Balanced speed/accuracy
-   - **Small (466 MB)** - Better accuracy
-   - **Medium (1.5 GB)** - High accuracy
-   - **Large V1 (2.9 GB)** - Maximum accuracy
+- **OS**: Windows 10/11 (64-bit)
+- **Java**: Java 21 or higher (embedded JRE included)
+- **RAM**: 2GB minimum (4GB recommended)
+- **Storage**: 1GB for application + models
 
-2. **Click "Download Selected Model"** 
-   - Progress shows: percentage, downloaded size, speed
+### Download
+
+**Download the latest EXE from:**  
+🔗 **[https://github.com/NotY215/NotYCaptionGenAi/releases](https://github.com/NotY215/NotYCaptionGenAi/releases)**
+
+**No Java installation required!** The application includes embedded Java 21.
+
+### Installation
+
+1. **Download the EXE**: Get `NotYCaptionGenAi.exe` from the releases page
+2. **Run the Application**: Double-click to launch - that's it!
+3. **First-time Setup**:
+   - Select a Whisper model (Tiny or Base are ready to use!)
+   - For larger models, click "Download Selected Model"
    - Wait for download to complete
 
-### 3️⃣ Generate Subtitles
-1. **Click "Select Video/Audio File"**
-2. **Choose your media file** (MP4, MP3, AVI, etc.)
-3. **Adjust settings:**
-   - Max letters per line (20-80 characters)
-   - Select language (or Auto Detect)
-   - Enable Transliteration (for Hindi/Japanese/etc.)
-4. **Click "Generate Subtitles"**
-5. **Confirm** the settings in the dialog
+### Usage Guide
 
-### 4️⃣ Find Your Subtitles
-- SRT file saved in the **same folder** as your media file
-- `[filename].srt` - Standard subtitles
-- `[filename]_translit.srt` - Transliterated version (if enabled)
+1. **Select Media File**
+   - Click "Select Video/Audio File"
+   - Choose any supported media file
 
----
+2. **Choose Model**
+   - **Tiny (39 MB) - Built-in**: Fastest, good for simple content
+   - **Base (142 MB) - Built-in**: Balanced speed and accuracy
+   - **Small (466 MB)**: Better accuracy (download required)
+   - **Medium (1.5 GB)**: High accuracy (download required)
+   - **Large V1 (2.9 GB)**: Best accuracy (download required)
 
-## 🎯 Model Comparison
+3. **Configure Settings**
+   - Adjust max letters per line (20-80 characters)
+   - Select language (or use auto-detect)
+   - Enable transliteration for non-English scripts
 
-| Model | Size | Speed | Accuracy | RAM | Best For |
-|-------|------|-------|----------|-----|----------|
-| Tiny | 39 MB | ⚡⚡⚡⚡⚡ | ⭐⭐ | 1 GB | Quick previews, short clips |
-| Base | 142 MB | ⚡⚡⚡⚡ | ⭐⭐⭐ | 2 GB | General use, balanced |
-| Small | 466 MB | ⚡⚡⚡ | ⭐⭐⭐⭐ | 3 GB | Higher quality needs |
-| Medium | 1.5 GB | ⚡⚡ | ⭐⭐⭐⭐⭐ | 5 GB | Professional use |
-| Large V1 | 2.9 GB | ⚡ | ⭐⭐⭐⭐⭐ | 8 GB | Maximum accuracy |
+4. **Generate Subtitles**
+   - Click "Generate Subtitles"
+   - Confirm settings in dialog
+   - Wait for processing (animated status updates)
+   - SRT file saved in the same folder as your media
 
----
-
-## 🎨 UI Features
-
-### Modern Dark Theme
-- **Gradient backgrounds** for depth
-- **Glowing button animations** during activity
-- **Rounded cards** with subtle borders
-- **Vibrant accent colors** for actions
-
-### Custom Window Controls
-- **Minimize** → Send to taskbar
-- **Maximize/Restore** → Toggle fullscreen
-- **Close** → Exit application
-- **Drag Title Bar** → Move window
-
-### Status Indicators
-- Real-time progress updates
-- Color-coded messages (✅ green, ⚠️ orange, ❌ red, 🔵 blue)
-- Loading animations during processing
+5. **Output Files**
+   - `[filename].srt` - Standard subtitles
+   - `[filename]_translit.srt` - Transliterated version (if enabled)
 
 ---
 
-## 📦 Model Download Links
+## 🎯 Model Information
 
-Download models manually if needed (place in same folder as EXE):
+| Model | Size | Speed | Accuracy | Availability |
+|-------|------|-------|----------|--------------|
+| Tiny | 39 MB | ⚡⚡⚡⚡⚡ | ⭐⭐ | ✅ **Built-in** |
+| Base | 142 MB | ⚡⚡⚡⚡ | ⭐⭐⭐ | ✅ **Built-in** |
+| Small | 466 MB | ⚡⚡⚡ | ⭐⭐⭐⭐ | 📥 Download |
+| Medium | 1.5 GB | ⚡⚡ | ⭐⭐⭐⭐⭐ | 📥 Download |
+| Large V1 | 2.9 GB | ⚡ | ⭐⭐⭐⭐⭐ | 📥 Download |
+
+---
+
+## 💬 Support & Community
+
+Join our Telegram channel for:
+- 📢 Latest updates and releases
+- 🛠️ Technical support
+- 💡 Tips and tricks
+- 🤝 Community discussions
+
+<p align="center">
+  <a href="https://t.me/Noty_215">
+    <img src="https://img.shields.io/badge/Join%20us%20on-Telegram-2CA5E0?style=for-the-badge&logo=telegram" alt="Join Telegram">
+  </a>
+</p>
+
+**Telegram Channel:** [https://t.me/Noty_215](https://t.me/Noty_215)
+
+---
+
+## 📦 Model Download Links (Optional)
+
+If you prefer to download models manually for larger models:
 
 | Model | File Name | Download Link | Size |
 |-------|-----------|---------------|------|
-| Tiny | `ggml-tiny.bin` | [Download](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin) | 39 MB |
-| Base | `ggml-base.bin` | [Download](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin) | 142 MB |
-| Small | `ggml-small.bin` | [Download](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin) | 466 MB |
-| Medium | `ggml-medium.bin` | [Download](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin) | 1.5 GB |
-| Large V1 | `ggml-large-v1.bin` | [Download](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin) | 2.9 GB |
+| Tiny | ggml-tiny.bin | https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin | 39 MB |
+| Base | ggml-base.bin | https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin | 142 MB |
+| Small | ggml-small.bin | https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin | 466 MB |
+| Medium | ggml-medium.bin | https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin | 1.5 GB |
+| Large V1 | ggml-large-v1.bin | https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin | 2.9 GB |
+
+**Note:** Tiny and Base models are already included - no download needed!
 
 ---
 
-## 🔧 Supported Formats
+## 🎯 Supported Formats
 
 | Type | Formats | Extensions |
 |------|---------|------------|
-| **Video** | MP4, MKV, AVI, WMV, MPEG | `.mp4` `.mkv` `.avi` `.wmv` `.mpeg` |
-| **Audio** | MP3, WAV, M4A, FLAC | `.mp3` `.wav` `.m4a` `.flac` |
+| **Video** | MP4, MKV, AVI, WMV, MPEG | .mp4, .mkv, .avi, .wmv, .mpeg |
+| **Audio** | MP3, WAV, M4A, FLAC | .mp3, .wav, .m4a, .flac |
 
 ---
 
 ## ⚙️ System Requirements
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **OS** | Windows 10 (64-bit) | Windows 11 |
-| **RAM** | 2 GB | 8 GB |
-| **Storage** | 500 MB + model size | 4 GB SSD |
-| **CPU** | Any modern processor | Multi-core processor |
-| **Internet** | Required for model download | High-speed connection |
+### Minimum Requirements
+- **OS**: Windows 10/11 (64-bit)
+- **RAM**: 2GB (for Tiny/Base models)
+- **Storage**: 1GB for application + models
+- **CPU**: Any modern processor with SSE2 support
+
+### Recommended Requirements
+- **RAM**: 8GB (for Large V1 model)
+- **Storage**: 4GB free space
+- **CPU**: Multi-core processor (for faster transcription)
 
 ---
 
-## 🔍 Troubleshooting
+## 🛠️ Troubleshooting
 
-### Common Issues
+### Common Issues & Solutions
 
-| Problem | Solution |
-|---------|----------|
-| **Application won't start** | • Ensure all files are in same folder<br>• Check antivirus isn't blocking<br>• Run as administrator |
-| **Model download fails** | • Check internet connection<br>• Ensure 3+ GB free disk space<br>• Try manual download from links above |
-| **Download is slow** | • Model files are large (up to 2.9GB)<br>• Try downloading during off-peak hours<br>• Use wired internet connection |
-| **No subtitles generated** | • Check audio is clear (not too quiet)<br>• Try a different model<br>• Select correct language manually |
-| **Out of memory error** | • Use Tiny or Base model<br>• Close other applications<br>• Upgrade RAM for Large model |
-| **Window won't move** | • Click and drag from title bar area<br>• Maximize then restore first |
-| **Transliteration not working** | • Ensure checkbox is checked<br>• Only works for supported scripts |
+**Q: Application doesn't start?**
+- ✅ Ensure all files are extracted from the ZIP
+- ✅ Check if Windows Defender is blocking
+- ✅ Run as administrator if needed
+- ✅ Ensure you have Java 21 or higher (embedded JRE included)
+
+**Q: Model extraction fails?**
+- ✅ Ensure sufficient disk space (at least 500MB)
+- ✅ Check write permissions in the folder
+- ✅ Try running as administrator
+
+**Q: FFmpeg not found?**
+- ✅ FFmpeg is included in the `files` folder
+- ✅ Ensure `files` folder is in the same directory as EXE
+
+**Q: Out of memory error?**
+- ✅ Use Tiny or Base model (built-in)
+- ✅ Close other applications
+- ✅ Restart the application
+
+**Q: Subtitles not accurate?**
+- ✅ Ensure clear audio quality
+- ✅ Select correct language manually
+- ✅ Try a larger model (Small, Medium, or Large V1)
 
 ---
 
 ## 📝 Version History
 
 ### v3.0.0 (Current - 2026)
-- ✅ **Topaz-like dark UI** with gradient backgrounds
-- ✅ **Custom window controls** (minimize, maximize, restore, close)
-- ✅ **Embedded Java runtime** - no Java installation required
-- ✅ **Enhanced vocal extraction** from audio
-- ✅ **Proper icon support** (window + taskbar)
-- ✅ **Glowing button animations**
-- ✅ **Window dragging support**
-- ✅ **Improved memory management**
-- ✅ **Better error handling with user-friendly messages**
+- ✅ **Java 21 Support** - Modern Java features and performance
+- ✅ **Windows 11 Modern UI** - Animated backgrounds, glowing buttons
+- ✅ **Built-in Tiny & Base Models** - No download required!
+- ✅ **WebView-based Interface** - HTML/CSS/JS with animations
+- ✅ **Telegram Channel Integration** - Direct support link
+- ✅ **Embedded Java 21** - No separate installation needed
+- ✅ **Enhanced Performance** - Faster model extraction and transcription
+- ✅ **Improved Error Handling** - Better user feedback
 
 ### v2.0.0
-- Multiple model support (Tiny to Large V1)
-- Download manager with speed display
-- Button locking during operations
+- Multiple model support
+- Download manager with progress tracking
+- Dark mode UI
 
 ### v1.0.0
-- Initial release with basic functionality
+- Initial release
+- Basic subtitle generation
 
 ---
 
@@ -198,59 +221,55 @@ Download models manually if needed (place in same folder as EXE):
 
 This project is licensed under the **GNU Lesser General Public License v3.0**.
 
-**Key Permissions:**
-- ✅ Commercial use allowed
-- ✅ Modification allowed
-- ✅ Distribution allowed
-- ✅ Private use allowed
-- ⚠️ Must disclose source for modifications
+The LGPL license allows you to:
+- ✅ Use this software commercially
+- ✅ Modify the source code
+- ✅ Distribute the software
+- ⚠️ Must disclose source code for modifications
 - ⚠️ Must include copyright notice
-- ⚠️ Must include license text
 
-For the full license text, visit: [https://www.gnu.org/licenses/lgpl-3.0.en.html](https://www.gnu.org/licenses/lgpl-3.0.en.html)
+For the full license text, visit: https://www.gnu.org/licenses/lgpl-3.0.en.html
 
 ---
 
 ## 👨‍💻 Credits
 
-| Component | Credit |
-|-----------|--------|
-| **Development** | NotY215 |
-| **AI Model** | OpenAI Whisper |
-| **Model Format** | [Whisper.cpp](https://github.com/ggerganov/whisper.cpp) by ggerganov |
-| **Media Processing** | [FFmpeg](https://ffmpeg.org) |
-| **UI Framework** | Java Swing |
-| **EXE Wrapper** | [Launch4j](http://launch4j.sourceforge.net) |
+- **Developed By**: NotY215
+- **Copyright**: © 2026 NotY215. All rights reserved.
+- **AI Model**: OpenAI Whisper
+- **Model Format**: Whisper.cpp by ggerganov
+- **Media Processing**: FFmpeg
+- **UI Framework**: JavaFX WebView with HTML/CSS/JS
+- **Community**: Telegram Channel Support
 
 ---
 
-## 📞 Support & Links
+## 📞 Contact & Support
 
-| Resource | Link |
-|----------|------|
-| **Download Latest EXE** | [GitHub Releases](https://github.com/NotY215/NotYCaptionGenAi/releases) |
-| **Report Issues** | [GitHub Issues](https://github.com/NotY215/NotYCaptionGenAi/issues) |
-| **Feature Requests** | [Submit Request](https://github.com/NotY215/NotYCaptionGenAi/issues/new) |
-
+- **Telegram Channel**: [https://t.me/Noty_215](https://t.me/Noty_215)
+- **GitHub Issues**: https://github.com/NotY215/NotYCaptionGenAi/issues
 
 ---
 
-## 📊 Statistics
+## 🙏 Acknowledgments
 
-<p align="center">
-  <img src="https://img.shields.io/github/stars/NotY215/NotYCaptionGenAi?style=social" alt="Stars">
-  <img src="https://img.shields.io/github/forks/NotY215/NotYCaptionGenAi?style=social" alt="Forks">
-  <img src="https://img.shields.io/github/downloads/NotY215/NotYCaptionGenAi/total" alt="Downloads">
-  <img src="https://img.shields.io/github/v/release/NotY215/NotYCaptionGenAi" alt="Latest Release">
-</p>
+- OpenAI for the Whisper model
+- ggerganov for Whisper.cpp implementation
+- FFmpeg team for media processing tools
+- Microsoft for Windows 11 design inspiration
+- All Telegram community members for support
+- JavaFX team for WebView technology
 
 ---
 
 <p align="center">
-  <b>🎬 NotYCaptionGenAi v3.0</b><br>
-  <i>AI-Powered Subtitle Generation Made Simple</i><br><br>
-  <b>Made with ❤️ by NotY215</b><br>
-  <sub>Copyright © 2026 NotY215. All rights reserved.</sub><br>
-  <sub>Licensed under GNU Lesser General Public License v3.0</sub><br><br>
-  <sub>⭐ If you find this useful, please star the repository on GitHub! ⭐</sub>
+  <b>Made with ❤️ by NotY215</b>
+  <br>
+  <sub>Copyright © 2026 NotY215. All rights reserved.</sub>
+  <br>
+  <sub>This software is provided under the GNU Lesser General Public License v3.0</sub>
+  <br>
+  <sub>Requires Java 21 or higher (embedded JRE included)</sub>
+  <br>
+  <sub>Join us on Telegram: https://t.me/Noty_215</sub>
 </p>
