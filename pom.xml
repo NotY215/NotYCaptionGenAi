@@ -17,28 +17,24 @@
   </properties>
 
   <dependencies>
-    <!-- JSON Processing -->
     <dependency>
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
       <version>2.10.1</version>
     </dependency>
 
-    <!-- Apache Commons IO -->
     <dependency>
       <groupId>commons-io</groupId>
       <artifactId>commons-io</artifactId>
       <version>2.11.0</version>
     </dependency>
 
-    <!-- Apache Commons Net for FTP/HTTP -->
     <dependency>
       <groupId>commons-net</groupId>
       <artifactId>commons-net</artifactId>
       <version>3.9.0</version>
     </dependency>
 
-    <!-- JLayer for MP3 Support -->
     <dependency>
       <groupId>javazoom</groupId>
       <artifactId>jlayer</artifactId>
