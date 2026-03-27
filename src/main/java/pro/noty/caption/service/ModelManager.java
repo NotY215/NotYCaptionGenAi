@@ -12,7 +12,21 @@ public class ModelManager {
 
     public static boolean checkModelExists(String modelPath) {
         File modelFile = new File(modelPath);
-        return modelFile.exists() && modelFile.length() > 0;
+
+        // Also check for alternative names
+        if (!modelFile.exists()) {
+            // Check for large model with different naming
+            if (modelPath.contains("large")) {
+                File altFile = new File(modelPath.replace("large", "large-v1"));
+                if (altFile.exists()) {
+                    System.out.println("✓ Found model as: " + altFile.getName());
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        return true;
     }
 
     public static boolean downloadModel(String modelName, String modelPath) {
@@ -24,7 +38,7 @@ public class ModelManager {
                 downloadUrl = Config.MODEL_TINY_URL;
                 break;
             case "base":
-                downloadUrl = Config.MODEL_BASE_URL_ACTUAL;
+                downloadUrl = Config.MODEL_BASE_URL;
                 break;
             case "small":
                 downloadUrl = Config.MODEL_SMALL_URL;
@@ -41,6 +55,34 @@ public class ModelManager {
 
         System.out.println("\n📥 Downloading " + modelName.toUpperCase() + " model...");
         System.out.println("🔗 URL: " + downloadUrl);
+
+        // First check if model already exists in models directory
+        File modelFile = new File(modelPath);
+        if (modelFile.exists()) {
+            System.out.println("✓ Model already exists at: " + modelPath);
+            return true;
+        }
+
+        // Check alternative location (root/resources/Models)
+        String altPath = Config.RESOURCES_DIR + "Models" + File.separator + "ggml-" + modelName + ".bin";
+        if (modelName.equals("large")) {
+            altPath = Config.RESOURCES_DIR + "Models" + File.separator + "ggml-large-v1.bin";
+        }
+        File altFile = new File(altPath);
+        if (altFile.exists()) {
+            System.out.println("✓ Found model at alternative location: " + altPath);
+            // Create a symbolic link or copy to expected location
+            try {
+                // Copy the file to the expected location
+                Files.copy(altFile.toPath(), modelFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                System.out.println("✓ Model copied to: " + modelPath);
+                return true;
+            } catch (Exception e) {
+                System.err.println("⚠️ Could not copy model: " + e.getMessage());
+                // Use the existing file directly
+                return true;
+            }
+        }
 
         HttpURLConnection connection = null;
         try {
@@ -67,7 +109,6 @@ public class ModelManager {
             System.out.println("📦 Total size: " + formatSize(fileSize));
 
             // Create directories if they don't exist
-            File modelFile = new File(modelPath);
             File parentDir = modelFile.getParentFile();
             if (parentDir != null && !parentDir.exists()) {
                 if (!parentDir.mkdirs()) {

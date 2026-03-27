@@ -30,33 +30,66 @@ public class Config {
         return basePath;
     }
 
-    // Resources directory (where we extract files to)
-    public static final String RESOURCES_DIR = getBasePath() + File.separator + "resources" + File.separator;
+    // Resources directory - try multiple possible locations
+    public static String getResourcesDir() {
+        String base = getBasePath();
 
-    // Application paths - Using your exact folder names
+        // Try multiple possible resource locations
+        String[] possiblePaths = {
+                base + File.separator + "resources",
+                base + File.separator + ".." + File.separator + "resources",
+                base + File.separator + "Jre" + File.separator + "bin" + File.separator + "resources",
+                new File("").getAbsolutePath() + File.separator + "resources"
+        };
+
+        for (String path : possiblePaths) {
+            File dir = new File(path);
+            if (dir.exists() && dir.isDirectory()) {
+                return path;
+            }
+        }
+
+        // Default to resources in current directory
+        return base + File.separator + "resources";
+    }
+
+    public static final String RESOURCES_DIR = getResourcesDir() + File.separator;
+
+    // Application paths
     public static String WHISPER_EXE_PATH;
     public static String FFMPEG_PATH;
     public static String FFPROBE_PATH;
     public static String MODELS_DIR;
 
     static {
-        // Initialize paths with your folder structure
+        // Initialize paths
         WHISPER_EXE_PATH = RESOURCES_DIR + "whisper" + File.separator + "whisper-cli.exe";
         FFMPEG_PATH = RESOURCES_DIR + "Files" + File.separator + "ffmpeg.exe";
         FFPROBE_PATH = RESOURCES_DIR + "Files" + File.separator + "ffprobe.exe";
         MODELS_DIR = RESOURCES_DIR + "Models" + File.separator;
 
-        // Extract resources from JAR if running from JAR
-        extractResourceIfNeeded("/whisper/whisper-cli.exe", WHISPER_EXE_PATH);
-        extractResourceIfNeeded("/Files/ffmpeg.exe", FFMPEG_PATH);
-        extractResourceIfNeeded("/Files/ffprobe.exe", FFPROBE_PATH);
+        System.out.println("📁 Resource Directory: " + RESOURCES_DIR);
+        System.out.println("📁 Models Directory: " + MODELS_DIR);
 
-        // Create models directory if it doesn't exist
+        // Check for existing models
         File modelsDir = new File(MODELS_DIR);
-        if (!modelsDir.exists()) {
+        if (modelsDir.exists()) {
+            File[] models = modelsDir.listFiles((dir, name) -> name.endsWith(".bin"));
+            if (models != null && models.length > 0) {
+                System.out.println("✓ Found existing models:");
+                for (File model : models) {
+                    System.out.println("   - " + model.getName() + " (" + formatSize(model.length()) + ")");
+                }
+            }
+        } else {
             modelsDir.mkdirs();
             System.out.println("✓ Created models directory: " + MODELS_DIR);
         }
+
+        // Extract resources from JAR if needed
+        extractResourceIfNeeded("/whisper/whisper-cli.exe", WHISPER_EXE_PATH);
+        extractResourceIfNeeded("/Files/ffmpeg.exe", FFMPEG_PATH);
+        extractResourceIfNeeded("/Files/ffprobe.exe", FFPROBE_PATH);
     }
 
     private static void extractResourceIfNeeded(String resourcePath, String destinationPath) {
@@ -65,32 +98,34 @@ public class Config {
             return;
         }
 
-        // Create parent directories
         File parentDir = destFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
             parentDir.mkdirs();
         }
 
-        // Extract from JAR
         try (InputStream is = Config.class.getResourceAsStream(resourcePath)) {
             if (is != null) {
                 Files.copy(is, destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 destFile.setExecutable(true);
-                System.out.println("✓ Extracted: " + resourcePath + " to " + destinationPath);
-            } else {
-                System.err.println("⚠️ Resource not found in JAR: " + resourcePath);
+                System.out.println("✓ Extracted: " + resourcePath);
             }
         } catch (Exception e) {
-            System.err.println("⚠️ Failed to extract " + resourcePath + ": " + e.getMessage());
+            // Silent fail - files might not be in JAR
         }
     }
 
-    // Updated model download URLs - Using large-V1
-    public static final String MODEL_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-";
-    public static final String MODEL_TINY_URL = MODEL_BASE_URL + "tiny.bin";
-    public static final String MODEL_BASE_URL_ACTUAL = MODEL_BASE_URL + "base.bin";
-    public static final String MODEL_SMALL_URL = MODEL_BASE_URL + "small.bin";
-    public static final String MODEL_MEDIUM_URL = MODEL_BASE_URL + "medium.bin";
+    private static String formatSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        int exp = (int) (Math.log(bytes) / Math.log(1024));
+        String pre = "KMGTPE".charAt(exp - 1) + "";
+        return String.format("%.1f %sB", bytes / Math.pow(1024, exp), pre);
+    }
+
+    // Model download URLs
+    public static final String MODEL_TINY_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin";
+    public static final String MODEL_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin";
+    public static final String MODEL_SMALL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin";
+    public static final String MODEL_MEDIUM_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin";
     public static final String MODEL_LARGE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin";
 
     // Browser links
