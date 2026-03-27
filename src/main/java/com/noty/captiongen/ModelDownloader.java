@@ -36,6 +36,7 @@ public class ModelDownloader {
 
                 File outputFile = new File(fileName);
                 File tempFile = new File(fileName + ".tmp");
+                outputFile.getParentFile().mkdirs();
 
                 in = connection.getInputStream();
                 out = new FileOutputStream(tempFile);

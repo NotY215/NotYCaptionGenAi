@@ -2,111 +2,115 @@ package com.noty.captiongen;
 
 import java.io.*;
 import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class AudioExtractor {
-    
+
+    private static final String[] FFMPEG_PATHS = {
+            "files/ffmpeg.exe",
+            "ffmpeg.exe",
+            "ffmpeg",
+            "/usr/bin/ffmpeg",
+            "/usr/local/bin/ffmpeg"
+    };
+
     public static File extractAudio(File inputFile) throws Exception {
+        LoggingUtil.info("Extracting audio from: " + inputFile.getAbsolutePath());
+
         String inputPath = inputFile.getAbsolutePath();
-        String outputPath = inputFile.getParent() + File.separator + 
-                           getFileNameWithoutExtension(inputFile) + "_temp.wav";
-        
+        String outputPath = inputFile.getParent() + File.separator +
+                getFileNameWithoutExtension(inputFile) + "_temp.wav";
+
         // If input is already WAV, just return it
         if (inputPath.toLowerCase().endsWith(".wav")) {
+            LoggingUtil.info("File is already WAV format");
             return inputFile;
         }
-        
-        // Find FFmpeg in files folder
+
+        // Find FFmpeg
         String ffmpegPath = findFFmpeg();
-        
-        System.out.println("Using FFmpeg: " + ffmpegPath);
-        System.out.println("Extracting audio from: " + inputPath);
-        System.out.println("Output to: " + outputPath);
-        
-        // Try to extract vocals using FFmpeg filters
+        LoggingUtil.info("Using FFmpeg: " + ffmpegPath);
+
+        // Build FFmpeg command
+        List<String> command = new ArrayList<>();
+        command.add(ffmpegPath);
+        command.add("-i");
+        command.add(inputPath);
+        command.add("-acodec");
+        command.add("pcm_s16le");
+        command.add("-ar");
+        command.add("16000");
+        command.add("-ac");
+        command.add("1");
+        command.add("-y");
+        command.add(outputPath);
+
+        LoggingUtil.info("Running FFmpeg command: " + String.join(" ", command));
+
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+
+        // Read output
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+                if (line.contains("Duration") || line.contains("Stream")) {
+                    LoggingUtil.info("  " + line);
+                }
+            }
+        }
+
+        boolean completed = process.waitFor(120, TimeUnit.SECONDS);
+        if (!completed) {
+            process.destroyForcibly();
+            throw new Exception("FFmpeg extraction timed out");
+        }
+
+        int exitCode = process.exitValue();
+        if (exitCode != 0) {
+            throw new Exception("FFmpeg extraction failed with exit code: " + exitCode +
+                    "\nOutput: " + output.toString());
+        }
+
         File outputFile = new File(outputPath);
-        
-        // Method 1: Try vocal isolation using ffmpeg filters
-        if (extractWithFFmpeg(ffmpegPath, inputPath, outputPath)) {
-            System.out.println("Audio extraction successful");
-            return outputFile;
+        if (!outputFile.exists() || outputFile.length() == 0) {
+            throw new Exception("Audio extraction failed: Output file is empty or missing");
         }
-        
-        throw new Exception("FFmpeg extraction failed. Please ensure ffmpeg.exe is in the files folder.");
+
+        LoggingUtil.info("Audio extracted successfully: " + outputFile.length() + " bytes");
+        return outputFile;
     }
-    
-    private static boolean extractWithFFmpeg(String ffmpegPath, String inputPath, String outputPath) {
-        try {
-            ProcessBuilder pb = new ProcessBuilder(
-                ffmpegPath,
-                "-i", inputPath,
-                "-acodec", "pcm_s16le",
-                "-ar", "16000",
-                "-ac", "1",
-                "-y",
-                outputPath
-            );
-            
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-            
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-            }
-            
-            int exitCode = process.waitFor();
-            if (exitCode == 0) {
-                File outputFile = new File(outputPath);
-                return outputFile.exists() && outputFile.length() > 0;
-            }
-            return false;
-            
-        } catch (Exception e) {
-            System.err.println("FFmpeg extraction error: " + e.getMessage());
-            return false;
-        }
-    }
-    
+
     private static String findFFmpeg() {
-        // Check in files folder first
-        File ffmpegFile = new File("files/ffmpeg.exe");
-        if (ffmpegFile.exists() && ffmpegFile.canExecute()) {
-            return ffmpegFile.getAbsolutePath();
-        }
-        
-        // Check in current directory
-        ffmpegFile = new File("ffmpeg.exe");
-        if (ffmpegFile.exists() && ffmpegFile.canExecute()) {
-            return ffmpegFile.getAbsolutePath();
-        }
-        
-        // Check in PATH
-        String[] commonPaths = {"ffmpeg", "ffmpeg.exe"};
-        for (String path : commonPaths) {
-            try {
-                ProcessBuilder pb = new ProcessBuilder(path, "-version");
-                Process process = pb.start();
-                int exitCode = process.waitFor();
-                if (exitCode == 0) {
-                    return path;
-                }
-            } catch (Exception e) {
-                // Not found
+        for (String path : FFMPEG_PATHS) {
+            File file = new File(path);
+            if (file.exists() && file.canExecute()) {
+                return path;
             }
         }
-        
+
+        // Try to find in PATH
+        try {
+            ProcessBuilder pb = new ProcessBuilder("ffmpeg", "-version");
+            Process process = pb.start();
+            boolean completed = process.waitFor(5, TimeUnit.SECONDS);
+            if (completed && process.exitValue() == 0) {
+                return "ffmpeg";
+            }
+        } catch (Exception e) {
+            // Not found
+        }
+
         return "ffmpeg";
     }
-    
+
     private static String getFileNameWithoutExtension(File file) {
         String name = file.getName();
-        int lastDot = name.lastIndexOf('.');
-        if (lastDot > 0) {
-            return name.substring(0, lastDot);
-        }
-        return name;
+        int dot = name.lastIndexOf('.');
+        return dot > 0 ? name.substring(0, dot) : name;
     }
 }

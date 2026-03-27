@@ -1,9 +1,12 @@
 package com.noty.captiongen;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.TimeUnit;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 public class PythonEmbeddedTranscriber {
 
@@ -11,301 +14,231 @@ public class PythonEmbeddedTranscriber {
     private static boolean initialized = false;
 
     public static synchronized String transcribe(File audioFile, String language, String modelPath) throws Exception {
-        System.out.println("=== Python Embedded Whisper Transcription Started ===");
-        System.out.println("Audio file: " + audioFile.getAbsolutePath());
-        System.out.println("Language: " + language);
+        LoggingUtil.info("=== Python Embedded Whisper Transcription Started ===");
 
-        // Initialize embedded Python
         if (!initialized) {
             initializeEmbeddedPython();
         }
 
-        // Extract audio to WAV if needed
-        File wavFile = audioFile;
-        if (!audioFile.getName().toLowerCase().endsWith(".wav")) {
-            System.out.println("Converting to WAV format...");
-            wavFile = AudioExtractor.extractAudio(audioFile);
-        }
-
         String languageCode = getLanguageCode(language);
-        String outputPath = wavFile.getParent() + File.separator +
-                getFileNameWithoutExtension(wavFile);
-
-        // Create Python script for transcription
-        File tempScript = createPythonScript(wavFile, languageCode, outputPath);
+        String outputBase = audioFile.getParent() + File.separator + getFileNameWithoutExtension(audioFile);
+        File tempScript = createPythonScript(audioFile, languageCode, outputBase);
 
         try {
-            // Execute Python script with embedded Python
-            ProcessBuilder pb = new ProcessBuilder(
-                    pythonPath,
-                    tempScript.getAbsolutePath()
-            );
-
+            ProcessBuilder pb = new ProcessBuilder(pythonPath, tempScript.getAbsolutePath());
             pb.redirectErrorStream(true);
+            pb.environment().put("PYTHONHOME", new File("python").getAbsolutePath());
+            pb.environment().put("PYTHONPATH", new File("python/Lib").getAbsolutePath() +
+                    File.pathSeparator + new File("python/Lib/site-packages").getAbsolutePath());
+
+            LoggingUtil.info("Starting Python transcription process...");
             Process process = pb.start();
-
-            // Read output with timeout
             StringBuilder output = new StringBuilder();
-            boolean completed = process.waitFor(300, TimeUnit.SECONDS);
 
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                    System.out.println(line);
+            // Create a thread to read output in real-time
+            Thread outputReader = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line).append("\n");
+                        if (line.contains("Loading") || line.contains("Transcribing") ||
+                                line.contains("Writing") || line.contains("Progress")) {
+                            LoggingUtil.info("  " + line);
+                        }
+                    }
+                } catch (IOException e) {
+                    // Ignore
                 }
-            }
+            });
+            outputReader.start();
+
+            boolean completed = process.waitFor(600, TimeUnit.SECONDS);
+            outputReader.join();
 
             if (!completed) {
                 process.destroyForcibly();
-                throw new Exception("Transcription timed out after 5 minutes");
+                throw new Exception("Transcription timed out after 10 minutes");
             }
 
             int exitCode = process.exitValue();
-            System.out.println("Python process exit code: " + exitCode);
+            LoggingUtil.info("Python process exit code: " + exitCode);
 
             if (exitCode != 0) {
-                throw new Exception("Python script failed:\n" + output.toString());
+                throw new Exception("Python failed with exit code " + exitCode + "\nOutput: " + output);
             }
 
-            // Read the generated SRT file
-            String srtPath = outputPath + ".srt";
-            File srtFile = new File(srtPath);
-
+            File srtFile = new File(outputBase + ".srt");
             if (srtFile.exists() && srtFile.length() > 0) {
-                String content = new String(Files.readAllBytes(srtFile.toPath()));
-                System.out.println("Success! Generated " + content.length() + " characters of subtitles");
+                String content = new String(Files.readAllBytes(srtFile.toPath()), StandardCharsets.UTF_8);
+                LoggingUtil.info("Success! Generated " + content.length() + " characters of subtitles");
                 return content;
             }
-
             throw new Exception("No SRT file generated");
-
         } finally {
-            // Clean up temp script
             tempScript.delete();
         }
     }
 
-    private static File createPythonScript(File audioFile, String languageCode, String outputPath) throws IOException {
-        File tempScript = File.createTempFile("whisper_transcribe", ".py");
-        tempScript.deleteOnExit();
-
-        String script =
-                "# -*- coding: utf-8 -*-\n" +
-                        "import sys\n" +
-                        "import os\n" +
-                        "import json\n\n" +
-                        "# Add embedded packages to path\n" +
-                        "sys.path.insert(0, os.path.join(os.path.dirname(sys.executable), 'Lib', 'site-packages'))\n" +
-                        "sys.path.insert(0, os.path.join(os.path.dirname(sys.executable), 'Lib'))\n\n" +
-                        "def format_time(seconds):\n" +
-                        "    hours = int(seconds // 3600)\n" +
-                        "    minutes = int((seconds % 3600) // 60)\n" +
-                        "    secs = int(seconds % 60)\n" +
-                        "    millis = int((seconds % 1) * 1000)\n" +
-                        "    return f'{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}'\n\n" +
-                        "try:\n" +
-                        "    import whisper\n" +
-                        "    print('Loading Whisper model...')\n" +
-                        "    model = whisper.load_model('base')\n" +
-                        "    print('Transcribing audio...')\n" +
-                        "    result = model.transcribe('" + audioFile.getAbsolutePath().replace("\\", "/") + "', language='" + languageCode + "')\n" +
-                        "    print('Writing subtitles...')\n" +
-                        "    with open('" + outputPath.replace("\\", "/") + ".srt', 'w', encoding='utf-8') as f:\n" +
-                        "        for i, segment in enumerate(result['segments']):\n" +
-                        "            start = segment['start']\n" +
-                        "            end = segment['end']\n" +
-                        "            text = segment['text'].strip()\n" +
-                        "            f.write(f'{i+1}\\n')\n" +
-                        "            f.write(f'{format_time(start)} --> {format_time(end)}\\n')\n" +
-                        "            f.write(f'{text}\\n\\n')\n" +
-                        "    print('SUCCESS')\n" +
-                        "    sys.exit(0)\n" +
-                        "except ImportError as e:\n" +
-                        "    print(f'ImportError: {e}', file=sys.stderr)\n" +
-                        "    print('Whisper package not found. Please ensure it is installed.', file=sys.stderr)\n" +
-                        "    sys.exit(1)\n" +
-                        "except Exception as e:\n" +
-                        "    print(f'Error: {e}', file=sys.stderr)\n" +
-                        "    import traceback\n" +
-                        "    traceback.print_exc()\n" +
-                        "    sys.exit(1)\n";
-
-        Files.write(tempScript.toPath(), script.getBytes(StandardCharsets.UTF_8));
-        return tempScript;
-    }
-
     private static void initializeEmbeddedPython() throws Exception {
-        System.out.println("Initializing embedded Python...");
+        LoggingUtil.info("========================================");
+        LoggingUtil.info("Initializing Embedded Python...");
+        LoggingUtil.info("========================================");
 
-        // Find embedded Python executable
-        File pythonExe = findPythonExecutable();
-        if (pythonExe == null || !pythonExe.exists()) {
-            throw new Exception("Embedded Python not found. Please ensure Python is included in the application.");
+        File pythonDir = new File("python");
+        if (!pythonDir.exists()) {
+            pythonDir.mkdirs();
+        }
+
+        File pythonExe = new File(pythonDir, "python.exe");
+        if (!pythonExe.exists() || pythonExe.length() < 100000) {
+            LoggingUtil.info("Extracting Python from JAR...");
+            extractPythonFromJar(pythonDir);
+        }
+
+        pythonExe = new File(pythonDir, "python.exe");
+        if (!pythonExe.exists() || pythonExe.length() < 100000) {
+            throw new Exception("Failed to extract Python. python.exe not found.");
         }
 
         pythonPath = pythonExe.getAbsolutePath();
-        System.out.println("Using Python: " + pythonPath);
+        LoggingUtil.info("✓ Python found at: " + pythonPath);
 
-        // Check if whisper is installed
-        if (!isWhisperInstalled()) {
-            System.out.println("Installing Whisper package...");
-            installWhisperPackage();
-        }
+        // Create necessary directories
+        new File(pythonDir, "Lib").mkdirs();
+        new File(pythonDir, "Lib/site-packages").mkdirs();
+        new File(pythonDir, "Scripts").mkdirs();
+
+        // Update python._pth file
+        updatePythonPthFile(pythonDir);
+
+        // Install Whisper packages
+        PythonInstaller.ensureWhisperInstalled();
 
         initialized = true;
-        System.out.println("Python initialized successfully");
+        LoggingUtil.info("========================================");
+        LoggingUtil.info("Python initialized successfully!");
+        LoggingUtil.info("========================================");
     }
 
-    private static File findPythonExecutable() {
-        // Check for embedded Python
-        String[] possiblePaths = {
-                "python/python.exe",
-                "python/python3.exe",
-                "./python/python.exe",
-                "./python/python3.exe",
-                "python39/python.exe",
-                "./python39/python.exe"
-        };
+    private static void extractPythonFromJar(File targetDir) {
+        int count = 0;
 
-        for (String path : possiblePaths) {
-            File file = new File(path);
-            if (file.exists()) {
-                System.out.println("Found Python at: " + file.getAbsolutePath());
-                return file;
-            }
-        }
-
-        // Also check current directory
-        File currentDir = new File(".");
-        File[] files = currentDir.listFiles();
-        if (files != null) {
-            for (File file : files) {
-                if (file.isDirectory() && file.getName().toLowerCase().contains("python")) {
-                    File pythonExe = new File(file, "python.exe");
-                    if (pythonExe.exists()) {
-                        return pythonExe;
-                    }
-                    pythonExe = new File(file, "python3.exe");
-                    if (pythonExe.exists()) {
-                        return pythonExe;
-                    }
-                }
-            }
-        }
-
-        System.out.println("Python not found in embedded locations");
-        return null;
-    }
-
-    private static boolean isWhisperInstalled() {
         try {
-            // Create a test script
-            File testScript = File.createTempFile("test_whisper", ".py");
-            testScript.deleteOnExit();
+            String jarPath = PythonEmbeddedTranscriber.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI().getPath();
 
-            String script =
-                    "import sys\n" +
-                            "try:\n" +
-                            "    import whisper\n" +
-                            "    print('OK')\n" +
-                            "    sys.exit(0)\n" +
-                            "except ImportError:\n" +
-                            "    print('NOT FOUND')\n" +
-                            "    sys.exit(1)\n";
+            if (jarPath.contains("%20")) jarPath = jarPath.replace("%20", " ");
+            if (jarPath.startsWith("file:")) jarPath = jarPath.substring(5);
 
-            Files.write(testScript.toPath(), script.getBytes(StandardCharsets.UTF_8));
+            File jarFile = new File(jarPath);
+            if (jarFile.exists() && jarFile.getName().endsWith(".jar")) {
+                LoggingUtil.info("Extracting from JAR: " + jarPath);
 
-            ProcessBuilder pb = new ProcessBuilder(pythonPath, testScript.getAbsolutePath());
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
+                try (JarFile jar = new JarFile(jarFile)) {
+                    Enumeration<JarEntry> entries = jar.entries();
 
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line);
+                    while (entries.hasMoreElements()) {
+                        JarEntry entry = entries.nextElement();
+                        String name = entry.getName();
+
+                        if (name.startsWith("Python/") && !entry.isDirectory()) {
+                            String fileName = name.substring("Python/".length());
+                            File outFile = new File(targetDir, fileName);
+
+                            if (!outFile.exists()) {
+                                outFile.getParentFile().mkdirs();
+                                try (InputStream in = jar.getInputStream(entry);
+                                     FileOutputStream out = new FileOutputStream(outFile)) {
+                                    byte[] buffer = new byte[8192];
+                                    int len;
+                                    while ((len = in.read(buffer)) > 0) {
+                                        out.write(buffer, 0, len);
+                                    }
+                                }
+                                count++;
+                                if (count % 10 == 0) LoggingUtil.info("  Extracted " + count + " files...");
+                            }
+                        }
+                    }
                 }
+                LoggingUtil.info("✓ Extracted " + count + " Python files from JAR");
             }
-
-            int exitCode = process.waitFor();
-            return exitCode == 0 && output.toString().contains("OK");
-
         } catch (Exception e) {
-            System.err.println("Whisper check failed: " + e.getMessage());
-            return false;
+            LoggingUtil.error("JAR extraction error: " + e.getMessage());
         }
     }
 
-    private static void installWhisperPackage() {
-        try {
-            // Create install script
-            File installScript = File.createTempFile("install_whisper", ".py");
-            installScript.deleteOnExit();
+    private static void updatePythonPthFile(File pythonDir) throws IOException {
+        File pthFile = new File(pythonDir, "python311._pth");
+        List<String> lines = new ArrayList<>();
+        lines.add("python311.zip");
+        lines.add(".");
+        lines.add("Lib");
+        lines.add("Lib/site-packages");
+        lines.add("import site");
+        Files.write(pthFile.toPath(), lines);
 
-            String script =
-                    "import subprocess\n" +
-                            "import sys\n" +
-                            "import os\n\n" +
-                            "def install_package(package):\n" +
-                            "    try:\n" +
-                            "        subprocess.check_call([sys.executable, '-m', 'pip', 'install', package, '--quiet', '--no-cache-dir'])\n" +
-                            "        print(f'Installed: {package}')\n" +
-                            "        return True\n" +
-                            "    except Exception as e:\n" +
-                            "        print(f'Failed to install {package}: {e}')\n" +
-                            "        return False\n\n" +
-                            "print('Installing required packages...')\n" +
-                            "packages = ['openai-whisper', 'ffmpeg-python', 'numpy', 'torch']\n" +
-                            "for pkg in packages:\n" +
-                            "    install_package(pkg)\n" +
-                            "print('Installation complete')\n";
+        File altPthFile = new File(pythonDir, "python._pth");
+        Files.write(altPthFile.toPath(), lines);
+        LoggingUtil.info("✓ Updated python._pth file");
+    }
 
-            Files.write(installScript.toPath(), script.getBytes(StandardCharsets.UTF_8));
+    private static File createPythonScript(File audioFile, String languageCode, String outputBase) throws IOException {
+        File script = File.createTempFile("whisper", ".py");
+        script.deleteOnExit();
 
-            ProcessBuilder pb = new ProcessBuilder(pythonPath, installScript.getAbsolutePath());
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
+        String audioPath = audioFile.getAbsolutePath().replace("\\", "/");
+        String outPath = outputBase.replace("\\", "/");
 
-            // Read output
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    System.out.println(line);
-                }
-            }
+        String content =
+                "import whisper\n" +
+                        "import sys\n" +
+                        "import os\n\n" +
+                        "def format_time(s):\n" +
+                        "    h = int(s // 3600)\n" +
+                        "    m = int((s % 3600) // 60)\n" +
+                        "    sec = int(s % 60)\n" +
+                        "    ms = int((s % 1) * 1000)\n" +
+                        "    return f'{h:02d}:{m:02d}:{sec:02d},{ms:03d}'\n\n" +
+                        "try:\n" +
+                        "    print('Loading Whisper model...')\n" +
+                        "    model = whisper.load_model('base')\n" +
+                        "    print('Transcribing audio...')\n" +
+                        "    result = model.transcribe(r'" + audioPath + "', language='" + languageCode + "', fp16=False)\n" +
+                        "    print('Writing subtitles...')\n" +
+                        "    with open(r'" + outPath + ".srt', 'w', encoding='utf-8') as f:\n" +
+                        "        for i, seg in enumerate(result['segments']):\n" +
+                        "            f.write(f'{i+1}\\n')\n" +
+                        "            f.write(f'{format_time(seg[\"start\"])} --> {format_time(seg[\"end\"])}\\n')\n" +
+                        "            f.write(f'{seg[\"text\"].strip()}\\n\\n')\n" +
+                        "    print('SUCCESS')\n" +
+                        "    sys.exit(0)\n" +
+                        "except Exception as e:\n" +
+                        "    print(f'Error: {e}', file=sys.stderr)\n" +
+                        "    sys.exit(1)\n";
 
-            int exitCode = process.waitFor(120, TimeUnit.SECONDS);
-            if (exitCode == 0) {
-                System.out.println("Whisper package installed successfully");
-            } else {
-                System.err.println("Failed to install Whisper package");
-            }
-
-        } catch (Exception e) {
-            System.err.println("Package installation failed: " + e.getMessage());
-        }
+        Files.write(script.toPath(), content.getBytes(StandardCharsets.UTF_8));
+        return script;
     }
 
     private static String getLanguageCode(String language) {
-        Map<String, String> languageMap = new HashMap<>();
-        languageMap.put("English", "en");
-        languageMap.put("Hindi", "hi");
-        languageMap.put("Japanese", "ja");
-        languageMap.put("Spanish", "es");
-        languageMap.put("French", "fr");
-        languageMap.put("German", "de");
-        languageMap.put("Chinese", "zh");
-        languageMap.put("Arabic", "ar");
-        languageMap.put("Russian", "ru");
-        languageMap.put("Korean", "ko");
-
-        return languageMap.getOrDefault(language, "en");
+        Map<String, String> map = new HashMap<>();
+        map.put("English", "en");
+        map.put("Hindi", "hi");
+        map.put("Japanese", "ja");
+        map.put("Spanish", "es");
+        map.put("French", "fr");
+        map.put("German", "de");
+        map.put("Chinese", "zh");
+        map.put("Arabic", "ar");
+        map.put("Russian", "ru");
+        map.put("Korean", "ko");
+        return map.getOrDefault(language, "en");
     }
 
     private static String getFileNameWithoutExtension(File file) {
         String name = file.getName();
-        int lastDot = name.lastIndexOf('.');
-        return lastDot > 0 ? name.substring(0, lastDot) : name;
+        int dot = name.lastIndexOf('.');
+        return dot > 0 ? name.substring(0, dot) : name;
     }
 }

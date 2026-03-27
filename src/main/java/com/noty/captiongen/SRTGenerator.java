@@ -6,6 +6,8 @@ import java.util.regex.*;
 public class SRTGenerator {
 
     public static String generateSRT(String transcription, int maxLettersPerLine) {
+        LoggingUtil.info("Generating SRT with max " + maxLettersPerLine + " letters per line");
+
         List<SubtitleEntry> entries = parseTranscription(transcription);
         entries = applyLetterSpacing(entries, maxLettersPerLine);
         return generateSRTFormat(entries);
@@ -24,6 +26,17 @@ public class SRTGenerator {
             entry.startTime = matcher.group(2);
             entry.endTime = matcher.group(3);
             entry.text = matcher.group(4).trim();
+            entries.add(entry);
+        }
+
+        if (entries.isEmpty()) {
+            // If no SRT format found, try to create from raw text
+            LoggingUtil.info("No SRT format detected, creating from raw text");
+            SubtitleEntry entry = new SubtitleEntry();
+            entry.index = 1;
+            entry.startTime = "00:00:00,000";
+            entry.endTime = "00:00:05,000";
+            entry.text = transcription.trim();
             entries.add(entry);
         }
 
@@ -78,6 +91,7 @@ public class SRTGenerator {
             }
         }
 
+        // Re-index
         for (int i = 0; i < result.size(); i++) {
             result.get(i).index = i + 1;
         }
