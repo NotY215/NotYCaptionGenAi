@@ -1,0 +1,44 @@
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'  // Best fat JAR plugin
+}
+
+group = 'com.noty'
+version = '3.0.2'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'commons-io:commons-io:2.11.0'
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+// Shadow JAR (Fat JAR) - puts everything at root
+shadowJar {
+    archiveBaseName.set('NotYCaptionGenAi')
+    archiveClassifier.set('')
+    archiveVersion.set(project.version.toString())
+
+    // Put all resources at the ROOT of the JAR
+    manifest {
+        attributes 'Main-Class': 'com.noty.captiongen.MainApp'
+    }
+
+    // Merge service files if needed
+    mergeServiceFiles()
+}
+
+tasks.build {
+    dependsOn shadowJar
+}
