@@ -22,9 +22,6 @@ dependencies {
     // For JSON parsing
     implementation 'com.google.code.gson:gson:2.10.1'
 
-    // For HTTP requests (model downloads)
-    implementation 'org.apache.httpcomponents:httpclient:4.5.14'
-
     testImplementation 'org.junit.jupiter:junit-jupiter:5.9.2'
 }
 
@@ -42,56 +39,115 @@ processResources {
     dependsOn copyResources
 }
 
+// Create a fat JAR with all resources
 jar {
     manifest {
         attributes(
                 'Main-Class': 'pro.noty.caption.Main',
                 'Implementation-Title': 'NotY Caption Generator AI',
-                'Implementation-Version': version
+                'Implementation-Version': version,
+                'Multi-Release': 'true'
         )
     }
 
     archiveBaseName = 'NotYCaptionGenAi'
 
+    // Include all dependencies
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
 
-    // Include resources in JAR
+    // Include all resources
     from('src/main/resources') {
         include '**/*'
     }
 
+    // Include compiled classes
+    from sourceSets.main.output
+
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+// Create a distribution ZIP
+task createDistZip(type: Zip) {
+    dependsOn jar
+    archiveFileName = 'NotYCaptionGenAi.zip'
+    destinationDirectory = file("${buildDir}/distributions")
+
+    from('build/libs') {
+        include 'NotYCaptionGenAi-1.0.0.jar'
+    }
+
+    from('src/main/resources') {
+        include 'whisper/**'
+        include 'files/**'
+        exclude 'models/**'
+    }
+
+    from('.') {
+        include 'run.bat'
+        include 'README.md'
+    }
+}
+
+// Task to create an executable distribution
+task dist {
+    dependsOn createDistZip
+    doLast {
+        println "\n✅ Distribution created at: ${buildDir}/distributions/NotYCaptionGenAi.zip"
+        println "\nTo run the application:"
+        println "1. Extract the ZIP file"
+        println "2. Run: java -jar NotYCaptionGenAi-1.0.0.jar"
+    }
 }
 
 tasks.named('test') {
     useJUnitPlatform()
 }
 
-// Task to show current directory structure
+// Task to show current structure
 task showStructure {
     doLast {
-        println "\nProject Directory: ${projectDir}"
-        println "Resources Directory: ${projectDir}/src/main/resources"
-        println "\nChecking required files:"
+        println "\n╔═══════════════════════════════════════════╗"
+        println "║     NOTY CAPTION GENERATOR AI v1.0       ║"
+        println "║     Project Structure Check              ║"
+        println "╚═══════════════════════════════════════════╝"
+
+        println "\n📁 Project Directory: ${projectDir}"
+
+        println "\n📂 Checking required files:"
+        println "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
         def whisperFile = file("${projectDir}/src/main/resources/whisper/whisper-cli.exe")
         def ffmpegFile = file("${projectDir}/src/main/resources/files/ffmpeg.exe")
         def ffprobeFile = file("${projectDir}/src/main/resources/files/ffprobe.exe")
 
-        println "whisper-cli.exe exists: ${whisperFile.exists()}"
-        println "ffmpeg.exe exists: ${ffmpegFile.exists()}"
-        println "ffprobe.exe exists: ${ffprobeFile.exists()}"
+        println "✓ whisper-cli.exe: ${whisperFile.exists() ? 'Found' : 'Missing'}"
+        println "✓ ffmpeg.exe: ${ffmpegFile.exists() ? 'Found' : 'Missing'}"
+        println "✓ ffprobe.exe: ${ffprobeFile.exists() ? 'Found' : 'Missing'}"
 
         if (!whisperFile.exists()) {
-            println "\n⚠️  Please download whisper-cli.exe and place it in:"
-            println "   ${projectDir}/src/main/resources/whisper/"
+            println "\n⚠️  Missing whisper-cli.exe"
+            println "   Download from: https://github.com/ggerganov/whisper.cpp/releases"
+            println "   Place in: ${projectDir}/src/main/resources/whisper/"
         }
 
         if (!ffmpegFile.exists()) {
-            println "\n⚠️  Please download ffmpeg.exe and place it in:"
-            println "   ${projectDir}/src/main/resources/files/"
+            println "\n⚠️  Missing ffmpeg.exe/ffprobe.exe"
+            println "   Download from: https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+            println "   Extract and copy to: ${projectDir}/src/main/resources/files/"
         }
+
+        println "\n✅ If all files are found, run: gradlew jar"
+        println "   Then: java -jar build/libs/NotYCaptionGenAi-1.0.0.jar"
+    }
+}
+
+// Task to clean everything
+task cleanAll {
+    dependsOn clean
+    doLast {
+        delete 'resources'
+        println "✅ Cleaned all build files and extracted resources"
     }
 }

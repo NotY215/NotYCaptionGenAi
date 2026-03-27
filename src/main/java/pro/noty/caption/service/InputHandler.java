@@ -3,34 +3,36 @@ package pro.noty.caption.service;
 import pro.noty.caption.model.CaptionConfig;
 import pro.noty.caption.util.FileValidator;
 import pro.noty.caption.Config;
-
-import java.util.Scanner;
+import java.io.*;
 
 public class InputHandler {
-    private static Scanner scanner = null;
+    private static final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
-    private static Scanner getScanner() {
-        if (scanner == null) {
-            scanner = new Scanner(System.in);
+    private static String readLine() {
+        try {
+            String line = reader.readLine();
+            return line != null ? line : "";
+        } catch (IOException e) {
+            return "";
         }
-        return scanner;
     }
 
     public static String getMediaPath(String[] allowedExtensions) {
-        Scanner sc = getScanner();
         while (true) {
             try {
                 System.out.print("\n📂 Provide Video/Audio Path");
                 System.out.print("\n   Allowed extensions: ");
                 System.out.print(String.join(", ", allowedExtensions));
                 System.out.print("\n➤ ");
+                System.out.flush();
 
-                String path = sc.nextLine().trim().replace("\"", "");
-
-                if (path.isEmpty()) {
+                String path = readLine();
+                if (path == null || path.trim().isEmpty()) {
                     System.out.println("❌ Path cannot be empty! Please enter a valid path.");
                     continue;
                 }
+
+                path = path.trim().replace("\"", "");
 
                 if (FileValidator.validateMediaFile(path, allowedExtensions)) {
                     return path;
@@ -39,15 +41,13 @@ public class InputHandler {
                 System.out.println("❌ Invalid file! File doesn't exist or has wrong extension.");
                 System.out.println("   Please try again.\n");
             } catch (Exception e) {
-                System.err.println("Error reading input: " + e.getMessage());
-                // Reset scanner on error
-                scanner = new Scanner(System.in);
+                System.err.println("Error: " + e.getMessage());
             }
         }
     }
 
+    // [Rest of the methods remain the same as previous version]
     public static int showMainMenu() {
-        Scanner sc = getScanner();
         while (true) {
             try {
                 System.out.println("\n┌─────────────────────────────────┐");
@@ -57,21 +57,23 @@ public class InputHandler {
                 System.out.println("│  0) Go Back (Resend video path)│");
                 System.out.println("└─────────────────────────────────┘");
                 System.out.print("➤ Choose option (0-1): ");
+                System.out.flush();
 
-                String input = sc.nextLine().trim();
+                String input = readLine();
+                if (input == null) continue;
+                input = input.trim();
+
                 if (input.matches("[01]")) {
                     return Integer.parseInt(input);
                 }
                 System.out.println("❌ Invalid input! Please enter 0 or 1.");
             } catch (Exception e) {
-                System.err.println("Error reading input: " + e.getMessage());
-                scanner = new Scanner(System.in);
+                System.err.println("Error: " + e.getMessage());
             }
         }
     }
 
     public static int selectModel() {
-        Scanner sc = getScanner();
         while (true) {
             try {
                 System.out.println("\n┌─────────────────────────────────┐");
@@ -85,21 +87,23 @@ public class InputHandler {
                 System.out.println("│  0) Back                       │");
                 System.out.println("└─────────────────────────────────┘");
                 System.out.print("➤ Choose model (0-5): ");
+                System.out.flush();
 
-                String input = sc.nextLine().trim();
+                String input = readLine();
+                if (input == null) continue;
+                input = input.trim();
+
                 if (input.matches("[0-5]")) {
                     return Integer.parseInt(input);
                 }
                 System.out.println("❌ Invalid input! Please enter 0-5.");
             } catch (Exception e) {
-                System.err.println("Error reading input: " + e.getMessage());
-                scanner = new Scanner(System.in);
+                System.err.println("Error: " + e.getMessage());
             }
         }
     }
 
     public static int handleModelDownload(String modelName, String modelSize, boolean exists) {
-        Scanner sc = getScanner();
         while (true) {
             try {
                 System.out.println("\n┌─────────────────────────────────┐");
@@ -120,21 +124,23 @@ public class InputHandler {
                 System.out.println("│  0) Back                       │");
                 System.out.println("└─────────────────────────────────┘");
                 System.out.print("➤ Choose option (0-1): ");
+                System.out.flush();
 
-                String input = sc.nextLine().trim();
+                String input = readLine();
+                if (input == null) continue;
+                input = input.trim();
+
                 if (input.matches("[01]")) {
                     return Integer.parseInt(input);
                 }
                 System.out.println("❌ Invalid input! Please enter 0 or 1.");
             } catch (Exception e) {
-                System.err.println("Error reading input: " + e.getMessage());
-                scanner = new Scanner(System.in);
+                System.err.println("Error: " + e.getMessage());
             }
         }
     }
 
     public static int choosePreference() {
-        Scanner sc = getScanner();
         while (true) {
             try {
                 System.out.println("\n┌─────────────────────────────────┐");
@@ -145,62 +151,58 @@ public class InputHandler {
                 System.out.println("│  0) Back                       │");
                 System.out.println("└─────────────────────────────────┘");
                 System.out.print("➤ Choose preference (0-2): ");
+                System.out.flush();
 
-                String input = sc.nextLine().trim();
+                String input = readLine();
+                if (input == null) continue;
+                input = input.trim();
+
                 if (input.matches("[0-2]")) {
                     return Integer.parseInt(input);
                 }
                 System.out.println("❌ Invalid input! Please enter 0, 1, or 2.");
             } catch (Exception e) {
-                System.err.println("Error reading input: " + e.getMessage());
-                scanner = new Scanner(System.in);
+                System.err.println("Error: " + e.getMessage());
             }
         }
     }
 
     public static int chooseSubtitleMode() {
-        Scanner sc = getScanner();
         while (true) {
             try {
                 System.out.println("\n┌─────────────────────────────────────────┐");
                 System.out.println("│         SUBTITLE MODE                   │");
                 System.out.println("├─────────────────────────────────────────┤");
                 System.out.println("│  1) Normal                              │");
-                System.out.println("│     (Generate in original language)     │");
-                System.out.println("│                                         │");
                 System.out.println("│  2) Translation                         │");
-                System.out.println("│     (Translate subtitle to English)     │");
-                System.out.println("│                                         │");
                 System.out.println("│  3) Transliteration                    │");
-                System.out.println("│     (Convert Japanese/Hindi to English)│");
-                System.out.println("│     ⚠️  Works only for Japanese/Hindi  │");
-                System.out.println("│                                         │");
                 System.out.println("│  0) Back                                │");
                 System.out.println("└─────────────────────────────────────────┘");
                 System.out.print("➤ Choose mode (0-3): ");
+                System.out.flush();
 
-                String input = sc.nextLine().trim();
+                String input = readLine();
+                if (input == null) continue;
+                input = input.trim();
+
                 if (input.matches("[0-3]")) {
                     int choice = Integer.parseInt(input);
                     if (choice == 3) {
-                        System.out.println("\n⚠️  Note: Transliteration works best for:");
-                        System.out.println("   • Japanese (Romaji conversion)");
-                        System.out.println("   • Hindi (Romanized Hindi)");
-                        System.out.println("   Press Enter to continue...");
-                        sc.nextLine();
+                        System.out.println("\n⚠️  Note: Transliteration works best for Japanese and Hindi");
+                        System.out.print("   Press Enter to continue...");
+                        System.out.flush();
+                        readLine();
                     }
                     return choice;
                 }
                 System.out.println("❌ Invalid input! Please enter 0, 1, 2, or 3.");
             } catch (Exception e) {
-                System.err.println("Error reading input: " + e.getMessage());
-                scanner = new Scanner(System.in);
+                System.err.println("Error: " + e.getMessage());
             }
         }
     }
 
     public static int getNumberPerLine(int preferenceChoice) {
-        Scanner sc = getScanner();
         String type = preferenceChoice == 1 ? "words" : "letters";
 
         while (true) {
@@ -212,32 +214,32 @@ public class InputHandler {
                 System.out.println("│  0) Back                       │");
                 System.out.println("└─────────────────────────────────┘");
                 System.out.printf("➤ Enter number (0-30): ");
+                System.out.flush();
 
-                String input = sc.nextLine().trim();
+                String input = readLine();
+                if (input == null) continue;
+                input = input.trim();
+
                 if (input.matches("0|([1-9]|[1-2][0-9]|30)")) {
                     return Integer.parseInt(input);
                 }
                 System.out.println("❌ Invalid input! Please enter 0-30.");
             } catch (Exception e) {
-                System.err.println("Error reading input: " + e.getMessage());
-                scanner = new Scanner(System.in);
+                System.err.println("Error: " + e.getMessage());
             }
         }
     }
 
     public static boolean confirmGeneration(CaptionConfig config) {
-        Scanner sc = getScanner();
         while (true) {
             try {
                 System.out.println("\n╔═══════════════════════════════════════════╗");
                 System.out.println("║         CONFIRM GENERATION                ║");
                 System.out.println("╠═══════════════════════════════════════════╣");
 
-                // Print config with formatting
                 String[] lines = config.toString().split("\n");
                 for (String line : lines) {
                     if (line.length() > 45) {
-                        // Wrap long lines
                         while (line.length() > 45) {
                             String part = line.substring(0, 45);
                             System.out.printf("║ %-45s ║\n", part);
@@ -254,21 +256,23 @@ public class InputHandler {
                 System.out.println("║  0) Back                                 ║");
                 System.out.println("╚═══════════════════════════════════════════╝");
                 System.out.print("➤ Are you sure? (0-1): ");
+                System.out.flush();
 
-                String input = sc.nextLine().trim();
+                String input = readLine();
+                if (input == null) continue;
+                input = input.trim();
+
                 if (input.matches("[01]")) {
                     return input.equals("1");
                 }
                 System.out.println("❌ Invalid input! Please enter 0 or 1.");
             } catch (Exception e) {
-                System.err.println("Error reading input: " + e.getMessage());
-                scanner = new Scanner(System.in);
+                System.err.println("Error: " + e.getMessage());
             }
         }
     }
 
     public static int handleNextVideo() {
-        Scanner sc = getScanner();
         while (true) {
             try {
                 System.out.println("\n┌─────────────────────────────────┐");
@@ -278,15 +282,18 @@ public class InputHandler {
                 System.out.println("│  0) Next Video                 │");
                 System.out.println("└─────────────────────────────────┘");
                 System.out.print("➤ Choose option (0-1): ");
+                System.out.flush();
 
-                String input = sc.nextLine().trim();
+                String input = readLine();
+                if (input == null) continue;
+                input = input.trim();
+
                 if (input.matches("[01]")) {
                     return Integer.parseInt(input);
                 }
                 System.out.println("❌ Invalid input! Please enter 0 or 1.");
             } catch (Exception e) {
-                System.err.println("Error reading input: " + e.getMessage());
-                scanner = new Scanner(System.in);
+                System.err.println("Error: " + e.getMessage());
             }
         }
     }

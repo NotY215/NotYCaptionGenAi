@@ -1,54 +1,85 @@
 package pro.noty.caption;
 
 import java.io.File;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 public class Config {
-    // Get the base path (where the JAR or class files are running from)
-    private static String getBasePath() {
-        try {
-            String path = Config.class.getProtectionDomain().getCodeSource().getLocation().getPath();
-            File jarFile = new File(path);
-            if (jarFile.isFile()) {
-                // Running from JAR - return the directory containing the JAR
-                return jarFile.getParentFile().getAbsolutePath();
+    // Base path for resources
+    private static String basePath = null;
+
+    public static String getBasePath() {
+        if (basePath == null) {
+            try {
+                // Get the directory where the JAR is located
+                String jarPath = Config.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+                File jarFile = new File(jarPath);
+
+                if (jarFile.isFile()) {
+                    // Running from JAR - use the directory containing the JAR
+                    basePath = jarFile.getParentFile().getAbsolutePath();
+                } else {
+                    // Running from IDE - use the project root
+                    basePath = new File("").getAbsolutePath();
+                }
+            } catch (Exception e) {
+                basePath = new File("").getAbsolutePath();
+            }
+        }
+        return basePath;
+    }
+
+    // Resources directory (where we extract files to)
+    public static final String RESOURCES_DIR = getBasePath() + File.separator + "resources" + File.separator;
+
+    // Application paths - these will be in the resources folder
+    public static String WHISPER_EXE_PATH;
+    public static String FFMPEG_PATH;
+    public static String FFPROBE_PATH;
+    public static String MODELS_DIR;
+
+    static {
+        // Initialize paths
+        WHISPER_EXE_PATH = RESOURCES_DIR + "whisper" + File.separator + "whisper-cli.exe";
+        FFMPEG_PATH = RESOURCES_DIR + "files" + File.separator + "ffmpeg.exe";
+        FFPROBE_PATH = RESOURCES_DIR + "files" + File.separator + "ffprobe.exe";
+        MODELS_DIR = RESOURCES_DIR + "models" + File.separator;
+
+        // Extract resources from JAR if running from JAR
+        extractResourceIfNeeded("/whisper/whisper-cli.exe", WHISPER_EXE_PATH);
+        extractResourceIfNeeded("/files/ffmpeg.exe", FFMPEG_PATH);
+        extractResourceIfNeeded("/files/ffprobe.exe", FFPROBE_PATH);
+
+        // Create models directory if it doesn't exist
+        File modelsDir = new File(MODELS_DIR);
+        if (!modelsDir.exists()) {
+            modelsDir.mkdirs();
+        }
+    }
+
+    private static void extractResourceIfNeeded(String resourcePath, String destinationPath) {
+        File destFile = new File(destinationPath);
+        if (destFile.exists()) {
+            return;
+        }
+
+        // Create parent directories
+        destFile.getParentFile().mkdirs();
+
+        // Extract from JAR
+        try (InputStream is = Config.class.getResourceAsStream(resourcePath)) {
+            if (is != null) {
+                Files.copy(is, destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                destFile.setExecutable(true);
+                System.out.println("✓ Extracted: " + resourcePath + " to " + destinationPath);
             } else {
-                // Running from IDE - return the project root
-                return new File("").getAbsolutePath();
+                System.err.println("⚠️ Resource not found in JAR: " + resourcePath);
             }
         } catch (Exception e) {
-            return new File("").getAbsolutePath();
+            System.err.println("⚠️ Failed to extract " + resourcePath + ": " + e.getMessage());
         }
     }
-
-    // Get the correct resources path (works both in IDE and JAR)
-    private static String getResourcesPath() {
-        String basePath = getBasePath();
-
-        // Try multiple possible locations
-        String[] possiblePaths = {
-                basePath + File.separator + "src" + File.separator + "main" + File.separator + "resources",
-                basePath + File.separator + "resources",
-                basePath + File.separator + "build" + File.separator + "resources" + File.separator + "main",
-                new File("").getAbsolutePath() + File.separator + "src" + File.separator + "main" + File.separator + "resources"
-        };
-
-        for (String path : possiblePaths) {
-            File dir = new File(path);
-            if (dir.exists() && dir.isDirectory()) {
-                return path;
-            }
-        }
-
-        // Default to the first option
-        return possiblePaths[0];
-    }
-
-    // Application paths
-    public static final String RESOURCES_DIR = getResourcesPath() + File.separator;
-    public static final String WHISPER_EXE_PATH = RESOURCES_DIR + "whisper" + File.separator + "whisper-cli.exe";
-    public static final String FFMPEG_PATH = RESOURCES_DIR + "files" + File.separator + "ffmpeg.exe";
-    public static final String FFPROBE_PATH = RESOURCES_DIR + "files" + File.separator + "ffprobe.exe";
-    public static final String MODELS_DIR = RESOURCES_DIR + "models" + File.separator;
 
     // Download URLs for Whisper models
     public static final String MODEL_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-";

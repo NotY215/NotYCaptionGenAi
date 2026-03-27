@@ -1,10 +1,10 @@
 package pro.noty.caption.service;
 
-import pro.noty.caption.Config;
 import pro.noty.caption.util.ProgressBar;
 
 import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 
 public class ModelManager {
@@ -15,17 +15,19 @@ public class ModelManager {
     }
 
     public static boolean downloadModel(String modelName, String modelPath) {
-        String downloadUrl = Config.MODEL_BASE_URL + modelName + ".bin";
+        String downloadUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-" + modelName + ".bin";
 
         System.out.println("\n📥 Downloading " + modelName.toUpperCase() + " model...");
         System.out.println("🔗 URL: " + downloadUrl);
 
+        HttpURLConnection connection = null;
         try {
-            URL url = new URL(downloadUrl);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0");
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(30000);
+            URL url = URI.create(downloadUrl).toURL();
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            connection.setConnectTimeout(30000);
+            connection.setReadTimeout(60000);
+            connection.setRequestMethod("GET");
             connection.connect();
 
             int responseCode = connection.getResponseCode();
@@ -44,8 +46,12 @@ public class ModelManager {
 
             // Create directories if they don't exist
             File modelFile = new File(modelPath);
-            if (!modelFile.getParentFile().exists()) {
-                modelFile.getParentFile().mkdirs();
+            File parentDir = modelFile.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                if (!parentDir.mkdirs()) {
+                    System.err.println("❌ Failed to create directory: " + parentDir);
+                    return false;
+                }
             }
 
             try (InputStream inputStream = connection.getInputStream();
@@ -62,7 +68,7 @@ public class ModelManager {
                     totalBytesRead += bytesRead;
 
                     int progress = (int) ((totalBytesRead * 100) / fileSize);
-                    if (progress != lastProgress) {
+                    if (progress != lastProgress && progress % 5 == 0) {
                         ProgressBar.showProgress(progress, 100);
                         lastProgress = progress;
                     }
@@ -72,17 +78,22 @@ public class ModelManager {
             // Verify file was downloaded successfully
             if (modelFile.exists() && modelFile.length() == fileSize) {
                 System.out.println("\n✅ Model downloaded successfully!");
-                Thread.sleep(1500);
                 return true;
             } else {
                 System.err.println("\n❌ Downloaded file size mismatch. Download may be corrupted.");
-                modelFile.delete(); // Delete corrupted file
+                if (modelFile.exists()) {
+                    modelFile.delete();
+                }
                 return false;
             }
 
         } catch (Exception e) {
             System.err.println("\n❌ Download failed: " + e.getMessage());
             return false;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
     }
 

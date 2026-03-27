@@ -9,3 +9,6 @@
 /target
 /.idea/src/main/resources/Models/
 /.idea
+/.gradle
+/gradle
+/resources
