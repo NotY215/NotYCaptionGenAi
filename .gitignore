@@ -7,4 +7,5 @@
 /build-exe.bat
 /create-distribution.bat
 /target
-/.ideasrc/main/resources/Models/
+/.idea/src/main/resources/Models/
+/.idea
