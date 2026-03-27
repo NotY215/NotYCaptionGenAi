@@ -225,7 +225,17 @@ Your caption has been generated successfully!
 | Large | 2.9 GB | ⚡ | ⭐⭐⭐⭐⭐ | Maximum accuracy, professional use |
 
 ---
+## Model Download Links
 
+| Model | Size | Download URL |
+|-------|------|--------------|
+| Tiny | 75 MB | https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin |
+| Base | 150 MB | https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin |
+| Small | 500 MB | https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin |
+| Medium | 1.5 GB | https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin |
+| Large | 2.9 GB | https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin |
+
+---
 ## 🌐 Subtitle Modes Explained
 
 ### 1. **Normal Mode**

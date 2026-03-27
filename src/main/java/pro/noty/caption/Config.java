@@ -40,16 +40,16 @@ public class Config {
     public static String MODELS_DIR;
 
     static {
-        // Initialize paths with your folder structure (Files with capital F, Models with capital M)
+        // Initialize paths with your folder structure
         WHISPER_EXE_PATH = RESOURCES_DIR + "whisper" + File.separator + "whisper-cli.exe";
-        FFMPEG_PATH = RESOURCES_DIR + "Files" + File.separator + "ffmpeg.exe";      // Capital F
-        FFPROBE_PATH = RESOURCES_DIR + "Files" + File.separator + "ffprobe.exe";    // Capital F
-        MODELS_DIR = RESOURCES_DIR + "Models" + File.separator;                     // Capital M
+        FFMPEG_PATH = RESOURCES_DIR + "Files" + File.separator + "ffmpeg.exe";
+        FFPROBE_PATH = RESOURCES_DIR + "Files" + File.separator + "ffprobe.exe";
+        MODELS_DIR = RESOURCES_DIR + "Models" + File.separator;
 
         // Extract resources from JAR if running from JAR
         extractResourceIfNeeded("/whisper/whisper-cli.exe", WHISPER_EXE_PATH);
-        extractResourceIfNeeded("/Files/ffmpeg.exe", FFMPEG_PATH);                  // Capital F in path
-        extractResourceIfNeeded("/Files/ffprobe.exe", FFPROBE_PATH);                // Capital F in path
+        extractResourceIfNeeded("/Files/ffmpeg.exe", FFMPEG_PATH);
+        extractResourceIfNeeded("/Files/ffprobe.exe", FFPROBE_PATH);
 
         // Create models directory if it doesn't exist
         File modelsDir = new File(MODELS_DIR);
@@ -79,15 +79,19 @@ public class Config {
                 System.out.println("✓ Extracted: " + resourcePath + " to " + destinationPath);
             } else {
                 System.err.println("⚠️ Resource not found in JAR: " + resourcePath);
-                System.err.println("   Expected location in JAR: " + resourcePath);
             }
         } catch (Exception e) {
             System.err.println("⚠️ Failed to extract " + resourcePath + ": " + e.getMessage());
         }
     }
 
-    // Download URLs for Whisper models
+    // Updated model download URLs - Using large-V1
     public static final String MODEL_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-";
+    public static final String MODEL_TINY_URL = MODEL_BASE_URL + "tiny.bin";
+    public static final String MODEL_BASE_URL_ACTUAL = MODEL_BASE_URL + "base.bin";
+    public static final String MODEL_SMALL_URL = MODEL_BASE_URL + "small.bin";
+    public static final String MODEL_MEDIUM_URL = MODEL_BASE_URL + "medium.bin";
+    public static final String MODEL_LARGE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin";
 
     // Browser links
     public static final String TELEGRAM_LINK = "https://t.me/NotY215";

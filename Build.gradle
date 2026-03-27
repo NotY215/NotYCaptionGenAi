@@ -142,6 +142,13 @@ task showStructure {
         println "   Then: java -jar build/libs/NotYCaptionGenAi-1.0.0.jar"
     }
 }
+def modelUrls = [
+        tiny: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
+        base: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
+        small: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+        medium: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
+        large: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin'
+]
 
 // Task to clean everything
 task cleanAll {

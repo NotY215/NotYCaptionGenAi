@@ -1,6 +1,7 @@
 package pro.noty.caption.service;
 
 import pro.noty.caption.util.ProgressBar;
+import pro.noty.caption.Config;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -15,7 +16,28 @@ public class ModelManager {
     }
 
     public static boolean downloadModel(String modelName, String modelPath) {
-        String downloadUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-" + modelName + ".bin";
+        String downloadUrl;
+
+        // Use the correct URL based on model name
+        switch (modelName) {
+            case "tiny":
+                downloadUrl = Config.MODEL_TINY_URL;
+                break;
+            case "base":
+                downloadUrl = Config.MODEL_BASE_URL_ACTUAL;
+                break;
+            case "small":
+                downloadUrl = Config.MODEL_SMALL_URL;
+                break;
+            case "medium":
+                downloadUrl = Config.MODEL_MEDIUM_URL;
+                break;
+            case "large":
+                downloadUrl = Config.MODEL_LARGE_URL;
+                break;
+            default:
+                downloadUrl = Config.MODEL_BASE_URL + modelName + ".bin";
+        }
 
         System.out.println("\n📥 Downloading " + modelName.toUpperCase() + " model...");
         System.out.println("🔗 URL: " + downloadUrl);
