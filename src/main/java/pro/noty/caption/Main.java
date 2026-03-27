@@ -4,9 +4,18 @@ import pro.noty.caption.model.CaptionConfig;
 import pro.noty.caption.service.*;
 import pro.noty.caption.util.ConsoleUtils;
 import java.io.File;
+import java.util.Scanner;
 
 public class Main {
     private static final String[] ALLOWED_EXTENSIONS = {".mp4", ".avi", ".mkv", ".mov", ".mp3", ".wav", ".m4a", ".flac", ".webm", ".m4v", ".mpg", ".mpeg"};
+    private static Scanner scanner = null;
+
+    private static Scanner getScanner() {
+        if (scanner == null) {
+            scanner = new Scanner(System.in);
+        }
+        return scanner;
+    }
 
     public static void main(String[] args) {
         ConsoleUtils.clearScreen();
@@ -27,26 +36,18 @@ public class Main {
             System.out.println("   " + Config.WHISPER_EXE_PATH);
             System.out.println("   " + Config.FFMPEG_PATH);
             System.out.println("   " + Config.FFPROBE_PATH);
-            System.out.println("\n💡 Tip: Make sure your folder structure looks like this:");
-            System.out.println("   NotYCaptionGenAi/");
-            System.out.println("   ├── src/");
-            System.out.println("   │   └── main/");
-            System.out.println("   │       ├── java/");
-            System.out.println("   │       └── resources/");
-            System.out.println("   │           ├── whisper/");
-            System.out.println("   │           │   └── whisper-cli.exe");
-            System.out.println("   │           ├── files/");
-            System.out.println("   │           │   ├── ffmpeg.exe");
-            System.out.println("   │           │   └── ffprobe.exe");
-            System.out.println("   │           └── models/");
-            System.out.println("   │               ├── ggml-tiny.bin");
-            System.out.println("   │               └── ggml-base.bin");
+            System.out.println("\n💡 Tip: Your current structure:");
+            System.out.println("   " + Config.RESOURCES_DIR);
+            System.out.println("   ├── whisper/");
+            System.out.println("   │   └── whisper-cli.exe");
+            System.out.println("   ├── Files/        ← Note: Capital F");
+            System.out.println("   │   ├── ffmpeg.exe");
+            System.out.println("   │   └── ffprobe.exe");
+            System.out.println("   └── Models/       ← Note: Capital M");
+            System.out.println("       ├── ggml-tiny.bin");
+            System.out.println("       └── ggml-base.bin");
             System.out.println("\nPress Enter to exit...");
-            try {
-                System.in.read();
-            } catch (Exception e) {
-                // Ignore
-            }
+            getScanner().nextLine();
             return;
         }
 
@@ -57,7 +58,11 @@ public class Main {
         while (continueApp) {
             try {
                 // Step a: Get video/audio path
+                System.out.println("\n💡 Tip: You can drag and drop a file here, then press Enter");
+                System.out.println("   Or type the full path (e.g., C:\\Videos\\test.mp4)");
                 String mediaPath = InputHandler.getMediaPath(ALLOWED_EXTENSIONS);
+
+                System.out.println("\n✅ Selected file: " + mediaPath);
 
                 while (true) {
                     // Step b: Main menu
@@ -88,15 +93,12 @@ public class Main {
 
                     if (downloadChoice == 1 && !modelExists) {
                         // Download model
+                        System.out.println("\n📥 Downloading model... This may take a while.");
                         boolean downloaded = ModelManager.downloadModel(modelName, modelPath);
                         if (!downloaded) {
                             System.out.println("\n❌ Failed to download model. Please check your internet connection.");
                             System.out.print("Press Enter to continue...");
-                            try {
-                                System.in.read();
-                            } catch (Exception e) {
-                                // Ignore
-                            }
+                            getScanner().nextLine();
                             continue;
                         }
                     }
@@ -107,7 +109,7 @@ public class Main {
                         continue;
                     }
 
-                    // Step e2: Choose subtitle mode (Normal/Translation/Transliteration)
+                    // Step e2: Choose subtitle mode
                     int modeChoice = InputHandler.chooseSubtitleMode();
                     if (modeChoice == 0) {
                         continue;
@@ -133,12 +135,14 @@ public class Main {
                     }
 
                     // Generate captions
+                    System.out.println("\n🎬 Generating captions... This may take several minutes.");
                     CaptionGenerator generator = new CaptionGenerator();
                     boolean success = generator.generateCaptions(config);
 
                     if (success) {
                         System.out.println("\n✅ Thanks For using NotY Caption Generator AI!");
                         System.out.println("Your caption has been generated successfully!");
+                        System.out.println("📄 Output file: " + config.getOutputPath());
 
                         // Open browser links
                         BrowserOpener.openLinks();
@@ -164,13 +168,13 @@ public class Main {
             } catch (Exception e) {
                 System.err.println("Error: " + e.getMessage());
                 e.printStackTrace();
-                System.out.print("\nPress Enter to continue...");
-                try {
-                    System.in.read();
-                } catch (Exception ex) {
-                    // Ignore
-                }
+                System.out.println("\nPress Enter to continue...");
+                getScanner().nextLine();
             }
+        }
+
+        if (scanner != null) {
+            scanner.close();
         }
     }
 
@@ -182,6 +186,8 @@ public class Main {
         if (!resourcesDir.exists()) {
             System.err.println("❌ Resources directory not found: " + Config.RESOURCES_DIR);
             allGood = false;
+        } else {
+            System.out.println("✓ Resources directory found");
         }
 
         // Check whisper-cli.exe
@@ -211,11 +217,22 @@ public class Main {
             System.out.println("✓ Found: " + ffprobe.getName());
         }
 
-        // Create models directory if it doesn't exist
+        // Check models directory
         File modelsDir = new File(Config.MODELS_DIR);
         if (!modelsDir.exists()) {
+            System.err.println("⚠️ Models directory not found, will create: " + Config.MODELS_DIR);
             modelsDir.mkdirs();
-            System.out.println("✓ Created models directory: " + Config.MODELS_DIR);
+        } else {
+            System.out.println("✓ Models directory found");
+
+            // List existing models
+            File[] models = modelsDir.listFiles((dir, name) -> name.endsWith(".bin"));
+            if (models != null && models.length > 0) {
+                System.out.println("   Existing models:");
+                for (File model : models) {
+                    System.out.println("   - " + model.getName());
+                }
+            }
         }
 
         return allGood;

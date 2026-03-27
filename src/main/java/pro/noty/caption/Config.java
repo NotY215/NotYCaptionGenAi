@@ -12,9 +12,9 @@ public class Config {
     public static String getBasePath() {
         if (basePath == null) {
             try {
-                // Get the directory where the JAR is located
-                String jarPath = Config.class.getProtectionDomain().getCodeSource().getLocation().getPath();
-                File jarFile = new File(jarPath);
+                // Get the directory where the JAR or class files are running from
+                String path = Config.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+                File jarFile = new File(path);
 
                 if (jarFile.isFile()) {
                     // Running from JAR - use the directory containing the JAR
@@ -33,28 +33,29 @@ public class Config {
     // Resources directory (where we extract files to)
     public static final String RESOURCES_DIR = getBasePath() + File.separator + "resources" + File.separator;
 
-    // Application paths - these will be in the resources folder
+    // Application paths - Using your exact folder names
     public static String WHISPER_EXE_PATH;
     public static String FFMPEG_PATH;
     public static String FFPROBE_PATH;
     public static String MODELS_DIR;
 
     static {
-        // Initialize paths
+        // Initialize paths with your folder structure (Files with capital F, Models with capital M)
         WHISPER_EXE_PATH = RESOURCES_DIR + "whisper" + File.separator + "whisper-cli.exe";
-        FFMPEG_PATH = RESOURCES_DIR + "files" + File.separator + "ffmpeg.exe";
-        FFPROBE_PATH = RESOURCES_DIR + "files" + File.separator + "ffprobe.exe";
-        MODELS_DIR = RESOURCES_DIR + "models" + File.separator;
+        FFMPEG_PATH = RESOURCES_DIR + "Files" + File.separator + "ffmpeg.exe";      // Capital F
+        FFPROBE_PATH = RESOURCES_DIR + "Files" + File.separator + "ffprobe.exe";    // Capital F
+        MODELS_DIR = RESOURCES_DIR + "Models" + File.separator;                     // Capital M
 
         // Extract resources from JAR if running from JAR
         extractResourceIfNeeded("/whisper/whisper-cli.exe", WHISPER_EXE_PATH);
-        extractResourceIfNeeded("/files/ffmpeg.exe", FFMPEG_PATH);
-        extractResourceIfNeeded("/files/ffprobe.exe", FFPROBE_PATH);
+        extractResourceIfNeeded("/Files/ffmpeg.exe", FFMPEG_PATH);                  // Capital F in path
+        extractResourceIfNeeded("/Files/ffprobe.exe", FFPROBE_PATH);                // Capital F in path
 
         // Create models directory if it doesn't exist
         File modelsDir = new File(MODELS_DIR);
         if (!modelsDir.exists()) {
             modelsDir.mkdirs();
+            System.out.println("✓ Created models directory: " + MODELS_DIR);
         }
     }
 
@@ -65,7 +66,10 @@ public class Config {
         }
 
         // Create parent directories
-        destFile.getParentFile().mkdirs();
+        File parentDir = destFile.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            parentDir.mkdirs();
+        }
 
         // Extract from JAR
         try (InputStream is = Config.class.getResourceAsStream(resourcePath)) {
@@ -75,6 +79,7 @@ public class Config {
                 System.out.println("✓ Extracted: " + resourcePath + " to " + destinationPath);
             } else {
                 System.err.println("⚠️ Resource not found in JAR: " + resourcePath);
+                System.err.println("   Expected location in JAR: " + resourcePath);
             }
         } catch (Exception e) {
             System.err.println("⚠️ Failed to extract " + resourcePath + ": " + e.getMessage());
