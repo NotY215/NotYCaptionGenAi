@@ -4,9 +4,11 @@ import pro.noty.caption.model.CaptionConfig;
 import pro.noty.caption.service.*;
 import pro.noty.caption.util.ConsoleUtils;
 import java.io.File;
+import java.util.Scanner;
 
 public class Main {
     private static final String[] ALLOWED_EXTENSIONS = {".mp4", ".avi", ".mkv", ".mov", ".mp3", ".wav", ".m4a", ".flac", ".webm", ".m4v", ".mpg", ".mpeg"};
+    private static Scanner globalScanner = new Scanner(System.in);
 
     public static void main(String[] args) {
         ConsoleUtils.clearScreen();
@@ -43,7 +45,7 @@ public class Main {
             System.out.println("   │               └── ggml-base.bin");
             System.out.println("\nPress Enter to exit...");
             try {
-                System.in.read();
+                globalScanner.nextLine();
             } catch (Exception e) {
                 // Ignore
             }
@@ -92,7 +94,7 @@ public class Main {
                         if (!downloaded) {
                             System.out.println("\n❌ Failed to download model. Please check your internet connection.");
                             System.out.println("Press Enter to continue...");
-                            System.in.read();
+                            globalScanner.nextLine();
                             continue;
                         }
                     }
@@ -162,11 +164,16 @@ public class Main {
                 e.printStackTrace();
                 System.out.println("\nPress Enter to continue...");
                 try {
-                    System.in.read();
+                    globalScanner.nextLine();
                 } catch (Exception ex) {
                     // Ignore
                 }
             }
+        }
+
+        // Close scanner
+        if (globalScanner != null) {
+            globalScanner.close();
         }
     }
 
