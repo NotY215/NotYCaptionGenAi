@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/NotY215/NotYCaptionGenAi/main/resources/app.ico" alt="NotYCaptionGenAi Logo" width="128">
+  <img src="https://raw.githubusercontent.com/NotY215/NotYCaptionGenAi/main/src/main/resources/app.ico" alt="NotYCaptionGenAi Logo" width="128">
 </p>
 
 <h1 align="center">🎬 NotYCaptionGenAi</h1>
