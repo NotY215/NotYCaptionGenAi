@@ -32,6 +32,16 @@ application {
     mainClass = 'pro.noty.caption.Main'
 }
 
+// Copy resources to build directory
+task copyResources(type: Copy) {
+    from 'src/main/resources'
+    into 'build/resources/main'
+}
+
+processResources {
+    dependsOn copyResources
+}
+
 jar {
     manifest {
         attributes(
@@ -47,9 +57,41 @@ jar {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
 
+    // Include resources in JAR
+    from('src/main/resources') {
+        include '**/*'
+    }
+
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// Task to show current directory structure
+task showStructure {
+    doLast {
+        println "\nProject Directory: ${projectDir}"
+        println "Resources Directory: ${projectDir}/src/main/resources"
+        println "\nChecking required files:"
+
+        def whisperFile = file("${projectDir}/src/main/resources/whisper/whisper-cli.exe")
+        def ffmpegFile = file("${projectDir}/src/main/resources/files/ffmpeg.exe")
+        def ffprobeFile = file("${projectDir}/src/main/resources/files/ffprobe.exe")
+
+        println "whisper-cli.exe exists: ${whisperFile.exists()}"
+        println "ffmpeg.exe exists: ${ffmpegFile.exists()}"
+        println "ffprobe.exe exists: ${ffprobeFile.exists()}"
+
+        if (!whisperFile.exists()) {
+            println "\n⚠️  Please download whisper-cli.exe and place it in:"
+            println "   ${projectDir}/src/main/resources/whisper/"
+        }
+
+        if (!ffmpegFile.exists()) {
+            println "\n⚠️  Please download ffmpeg.exe and place it in:"
+            println "   ${projectDir}/src/main/resources/files/"
+        }
+    }
 }
