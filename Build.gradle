@@ -1,15 +1,14 @@
 plugins {
     id 'java'
     id 'application'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
-group = 'com.noty'
-version = '3.0.2'
+group = 'pro.noty'
+version = '1.0.0'
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 repositories {
@@ -17,100 +16,40 @@ repositories {
 }
 
 dependencies {
+    // For better console handling
+    implementation 'org.fusesource.jansi:jansi:2.4.1'
+
+    // For JSON parsing
     implementation 'com.google.code.gson:gson:2.10.1'
-    implementation 'commons-io:commons-io:2.11.0'
+
+    // For HTTP requests (model downloads)
+    implementation 'org.apache.httpcomponents:httpclient:4.5.14'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.2'
 }
 
 application {
-    mainClass = 'com.noty.captiongen.MainApp'
+    mainClass = 'pro.noty.caption.Main'
 }
 
-tasks.withType(JavaCompile) {
-    options.encoding = 'UTF-8'
-    options.compilerArgs << '-Xlint:deprecation'
-}
-
-// Disable the default jar task
-tasks.jar {
-    enabled = false
-}
-
-// Configure shadowJar
-shadowJar {
-    archiveBaseName.set('NotYCaptionGenAi')
-    archiveClassifier.set('')
-    archiveVersion.set(project.version.toString())
-    
+jar {
     manifest {
-        attributes 'Main-Class': 'com.noty.captiongen.MainApp'
+        attributes(
+                'Main-Class': 'pro.noty.caption.Main',
+                'Implementation-Title': 'NotY Caption Generator AI',
+                'Implementation-Version': version
+        )
     }
-    
-    mergeServiceFiles()
-    
-    // Include all resources
-    from(sourceSets.main.resources) {
-        into('/')
+
+    archiveBaseName = 'NotYCaptionGenAi'
+
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
-    
-    // Exclude signature files
-    exclude 'META-INF/*.SF'
-    exclude 'META-INF/*.DSA'
-    exclude 'META-INF/*.RSA'
-    
-    // Minimize the JAR (optional)
-    minimize()
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
-// Make the build task depend on shadowJar
-tasks.build {
-    dependsOn shadowJar
+tasks.named('test') {
+    useJUnitPlatform()
 }
-
-// Configure distribution tasks to use shadowJar
-tasks.distTar {
-    dependsOn shadowJar
-    enabled = false
-}
-
-tasks.distZip {
-    dependsOn shadowJar
-    enabled = false
-}
-
-tasks.startScripts {
-    dependsOn shadowJar
-    enabled = false
-}
-
-// Clean task
-tasks.clean {
-    delete 'build'
-    delete 'logs'
-    delete 'temp'
-}
-
-// Task to run the console app
-task runConsole(type: JavaExec) {
-    dependsOn shadowJar
-    mainClass = 'com.noty.captiongen.MainApp'
-    classpath = sourceSets.main.runtimeClasspath
-    standardInput = System.in
-}
-
-// Task to create distribution
-task createDist(type: Copy) {
-    dependsOn shadowJar
-    from 'build/libs'
-    into 'dist'
-    include '*.jar'
-    
-    doLast {
-        println "========================================"
-        println "Distribution created in dist folder"
-        println "Run with: java -jar dist/NotYCaptionGenAi-${project.version}.jar"
-        println "========================================"
-    }
-}
-
-// Make shadowJar the default
-defaultTasks 'shadowJar'
