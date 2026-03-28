@@ -33,3 +33,4 @@ app.log
 *.tmp
 *.temp
 extract_temp/
+temp_installer

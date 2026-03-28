@@ -1,150 +1,234 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Setup script for building all components
-NotY Caption Generator AI v4.2
-Copyright © 2026 NotY215
+Setup script for building all components with optimized compression
+NotY Caption Generator AI v4.3
+Copyright (c) 2026 NotY215
 """
 
 import os
 import sys
 import subprocess
 import shutil
+import struct
+import zlib
 from pathlib import Path
+
+def compress_directory(src_dir, output_file):
+    """Compress directory with maximum compression and file metadata"""
+    print(f"  Compressing {src_dir}...")
+    
+    # Collect all files
+    files = []
+    total_size = 0
+    
+    for root, dirs, files_in_dir in os.walk(src_dir):
+        for file in files_in_dir:
+            file_path = Path(root) / file
+            rel_path = file_path.relative_to(src_dir)
+            files.append((str(rel_path), file_path.stat().st_size))
+            total_size += file_path.stat().st_size
+    
+    print(f"    Found {len(files)} files, total size: {total_size / 1024 / 1024:.2f} MB")
+    
+    # Create file list header
+    header = '\n'.join([f"{f}|{s}" for f, s in files])
+    header_bytes = header.encode('utf-8')
+    
+    # Create compressed data
+    compressor = zlib.compressobj(zlib.Z_BEST_COMPRESSION)
+    compressed_chunks = []
+    
+    # Add header
+    compressed_chunks.append(compressor.compress(header_bytes))
+    
+    # Add file contents
+    for rel_path, size in files:
+        file_path = src_dir / rel_path
+        with open(file_path, 'rb') as f:
+            while True:
+                chunk = f.read(1024 * 1024)  # 1MB chunks
+                if not chunk:
+                    break
+                compressed_chunks.append(compressor.compress(chunk))
+    
+    compressed_chunks.append(compressor.flush())
+    
+    # Combine all chunks
+    compressed_data = b''.join(compressed_chunks)
+    
+    # Write compressed file with size header
+    with open(output_file, 'wb') as f:
+        f.write(struct.pack('Q', len(compressed_data)))
+        f.write(compressed_data)
+    
+    compressed_size = len(compressed_data) + 8
+    print(f"    Compressed size: {compressed_size / 1024 / 1024:.2f} MB")
+    print(f"    Compression ratio: {(1 - compressed_size / total_size) * 100:.1f}%")
+    
+    return compressed_size
 
 def build_all():
     """Build all components"""
     print("=" * 60)
-    print("Building NotY Caption Generator AI - Complete Package v4.2")
-    print("Copyright © 2026 NotY215")
+    print("Building NotY Caption Generator AI - Complete Package v4.3")
+    print("Copyright (c) 2026 NotY215")
     print("=" * 60)
     
     base_dir = Path(__file__).parent.parent
     builder_dir = Path(__file__).parent
     dist_dir = base_dir / "dist"
-    installer_dir = dist_dir / "NotYCaptionGenAi_Installer"
+    temp_installer_dir = base_dir / "temp_installer"
     
-    # Clean dist directory
+    # Clean all directories
+    print("\n[Cleanup] Removing old directories...")
     if dist_dir.exists():
-        print("\nCleaning old dist directory...")
         shutil.rmtree(dist_dir)
+    if temp_installer_dir.exists():
+        shutil.rmtree(temp_installer_dir)
     
-    # Create dist directory
+    # Create directories
     dist_dir.mkdir(parents=True, exist_ok=True)
+    temp_installer_dir.mkdir(parents=True, exist_ok=True)
     
-    # Build main executable
+    # Step 1: Build main executable
     print("\n[1/3] Building main executable...")
-    subprocess.check_call([sys.executable, str(builder_dir / "build_exe.py")])
+    try:
+        result = subprocess.run(
+            [sys.executable, str(builder_dir / "build_exe.py")],
+            capture_output=True,
+            text=True,
+            cwd=str(base_dir)
+        )
+        print(result.stdout)
+        if result.returncode != 0:
+            print(result.stderr)
+            sys.exit(1)
+    except Exception as e:
+        print(f"[ERROR] Failed to build main executable: {e}")
+        sys.exit(1)
     
-    # Create installer directory
-    print("\n[2/3] Creating installer package...")
-    installer_dir.mkdir(parents=True, exist_ok=True)
+    # Check if main executable was created
+    main_exe = dist_dir / "NotYCaptionGenAI.exe"
+    if not main_exe.exists():
+        print(f"\n[ERROR] Main executable not found at: {main_exe}")
+        sys.exit(1)
     
-    # Copy installer files
-    print("  - Copying installer scripts...")
-    shutil.copy2(str(builder_dir / "installer.py"), str(installer_dir / "installer.py"))
-    shutil.copy2(str(builder_dir / "uninstaller.py"), str(installer_dir / "uninstaller.py"))
+    print(f"[OK] Main executable found: {main_exe}")
+    print(f"   Size: {main_exe.stat().st_size / 1024 / 1024:.2f} MB")
     
-    # Copy resources
-    print("  - Copying resources...")
-    resources_src = base_dir / "resources"
-    resources_dest = installer_dir / "resources"
-    
-    if resources_dest.exists():
-        shutil.rmtree(resources_dest)
-    shutil.copytree(resources_src, resources_dest)
+    # Step 2: Prepare installer package with maximum compression
+    print("\n[2/3] Preparing installer package...")
     
     # Copy main executable
     print("  - Copying main executable...")
-    exe_src = base_dir / "dist" / "NotYCaptionGenAI.exe"
-    if exe_src.exists():
-        shutil.copy2(exe_src, installer_dir / "NotYCaptionGenAI.exe")
-    else:
-        print("  - ERROR: Main executable not found!")
-        sys.exit(1)
+    shutil.copy2(main_exe, temp_installer_dir / "NotYCaptionGenAI.exe")
     
-    # Build installer executable
+    # Copy installer scripts
+    print("  - Copying installer scripts...")
+    shutil.copy2(str(builder_dir / "installer.py"), str(temp_installer_dir / "installer.py"))
+    shutil.copy2(str(builder_dir / "uninstaller.py"), str(temp_installer_dir / "uninstaller.py"))
+    
+    # Compress resources
+    resources_src = base_dir / "resources"
+    data_bin = temp_installer_dir / "data.bin"
+    
+    if resources_src.exists():
+        print("  - Compressing resources...")
+        compress_directory(resources_src, data_bin)
+    else:
+        print("  [WARNING] Resources not found")
+    
+    # Step 3: Build installer executable
     print("\n[3/3] Building installer executable...")
     try:
         import PyInstaller
     except ImportError:
+        print("Installing PyInstaller...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
     
-    # Change to installer directory for building
+    # Change to temp installer directory for building
     original_dir = os.getcwd()
-    os.chdir(installer_dir)
+    os.chdir(temp_installer_dir)
     
-    # Build installer
+    # Build installer without UPX
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--name=NotYCaptionGenAI_Installer_v4.2",
+        "--name=NotYCaptionGenAI_Installer_v4.3",
         "--onefile",
-        f"--icon={resources_dest / 'logo.ico'}",
-        f"--add-data={resources_dest}{os.pathsep}resources",
+        "--noconfirm",
+        f"--add-data={temp_installer_dir / 'NotYCaptionGenAI.exe'}{os.pathsep}.",
+        f"--add-data={temp_installer_dir / 'installer.py'}{os.pathsep}.",
+        f"--add-data={temp_installer_dir / 'uninstaller.py'}{os.pathsep}.",
         "--hidden-import=tkinter",
-        "--hidden-import=colorama",
         "--hidden-import=threading",
+        "--hidden-import=zlib",
+        "--hidden-import=struct",
         "--noconsole",
         "installer.py"
     ]
     
+    # Add data.bin if it exists
+    if data_bin.exists():
+        cmd.append(f"--add-data={data_bin}{os.pathsep}.")
+    
     try:
         subprocess.check_call(cmd)
-    except Exception as e:
-        print(f"  - Error building installer: {e}")
+        print("  [OK] Installer built successfully")
+    except subprocess.CalledProcessError as e:
+        print(f"  [ERROR] Error building installer: {e}")
         os.chdir(original_dir)
         sys.exit(1)
     
-    # Move installer to dist directory
-    installer_exe = installer_dir / "dist" / "NotYCaptionGenAI_Installer_v4.2.exe"
-    if installer_exe.exists():
-        final_installer = dist_dir / "NotYCaptionGenAI_Installer_v4.2.exe"
-        shutil.move(str(installer_exe), str(final_installer))
-        print(f"\n  ✅ Installer created: {final_installer}")
+    # Find the built installer
+    installer_exe = None
+    possible_paths = [
+        temp_installer_dir / "dist" / "NotYCaptionGenAI_Installer_v4.3.exe",
+        temp_installer_dir / "NotYCaptionGenAI_Installer_v4.3.exe",
+    ]
+    
+    for path in possible_paths:
+        if path.exists():
+            installer_exe = path
+            break
+    
+    if installer_exe:
+        final_installer = dist_dir / "NotYCaptionGenAI_Installer_v4.3.exe"
+        shutil.copy2(installer_exe, final_installer)
+        print(f"\n  [OK] Installer created: {final_installer}")
+        print(f"     Size: {final_installer.stat().st_size / 1024 / 1024:.2f} MB")
     else:
-        print("  - ERROR: Installer executable not created!")
+        print("  [ERROR] Installer executable not created!")
+        os.chdir(original_dir)
+        sys.exit(1)
     
     # Return to original directory
     os.chdir(original_dir)
     
-    # Clean up build directories
+    # Clean up temp directory
     print("\n[Cleanup] Removing temporary files...")
+    shutil.rmtree(temp_installer_dir, ignore_errors=True)
     
-    # Clean installer build files
-    installer_build = installer_dir / "build"
-    installer_dist = installer_dir / "dist"
-    installer_spec = installer_dir / "NotYCaptionGenAI_Installer_v4.2.spec"
-    
-    shutil.rmtree(installer_build, ignore_errors=True)
-    shutil.rmtree(installer_dist, ignore_errors=True)
-    if installer_spec.exists():
-        installer_spec.unlink()
-    
-    # Clean main build files
-    main_build = builder_dir / "build"
-    main_dist = builder_dir / "dist"
-    main_spec = builder_dir / "NotYCaptionGenAI.spec"
-    
-    shutil.rmtree(main_build, ignore_errors=True)
-    shutil.rmtree(main_dist, ignore_errors=True)
-    if main_spec.exists():
-        main_spec.unlink()
-    
-    # Remove installer directory
-    shutil.rmtree(installer_dir, ignore_errors=True)
-    
-    # Move installer to root
-    final_installer = dist_dir / "NotYCaptionGenAI_Installer_v4.2.exe"
-    root_installer = base_dir / "NotYCaptionGenAI_Installer_v4.2.exe"
+    # Copy installer to root
+    root_installer = base_dir / "NotYCaptionGenAI_Installer_v4.3.exe"
+    final_installer = dist_dir / "NotYCaptionGenAI_Installer_v4.3.exe"
     
     if final_installer.exists():
         shutil.copy2(final_installer, root_installer)
-        print(f"\n✅ Installer copied to: {root_installer}")
+        print(f"\n[OK] Installer copied to: {root_installer}")
+    
+    # Clean build directories
+    build_dir = base_dir / "build"
+    if build_dir.exists():
+        shutil.rmtree(build_dir, ignore_errors=True)
     
     print("\n" + "=" * 60)
-    print("✅ Build complete!")
+    print("[OK] Build complete!")
     print(f"Installer: {root_installer}")
-    print("Version: 4.2")
-    print("Copyright © 2026 NotY215")
+    print(f"Version: 4.3")
+    if root_installer.exists():
+        print(f"Size: {root_installer.stat().st_size / 1024 / 1024:.2f} MB")
+    print(f"Copyright (c) 2026 NotY215")
     print("=" * 60)
 
 if __name__ == "__main__":
