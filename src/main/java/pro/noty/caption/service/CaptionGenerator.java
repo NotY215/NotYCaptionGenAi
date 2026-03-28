@@ -12,12 +12,12 @@ import java.util.HashMap;
 
 public class CaptionGenerator {
 
-    // Simple transliteration maps for Japanese and Hindi
+    // Transliteration maps
     private static final Map<String, String> JAPANESE_ROMAJI = new HashMap<>();
     private static final Map<String, String> HINDI_ROMAN = new HashMap<>();
 
     static {
-        // Basic Japanese Hiragana to Romaji
+        // Japanese Hiragana to Romaji
         String[][] japaneseMap = {
                 {"あ", "a"}, {"い", "i"}, {"う", "u"}, {"え", "e"}, {"お", "o"},
                 {"か", "ka"}, {"き", "ki"}, {"く", "ku"}, {"け", "ke"}, {"こ", "ko"},
@@ -35,7 +35,7 @@ public class CaptionGenerator {
             JAPANESE_ROMAJI.put(pair[0], pair[1]);
         }
 
-        // Basic Hindi to Romanized Hindi
+        // Hindi to Romanized Hindi
         String[][] hindiMap = {
                 {"अ", "a"}, {"आ", "aa"}, {"इ", "i"}, {"ई", "ee"}, {"उ", "u"}, {"ऊ", "oo"},
                 {"ए", "e"}, {"ऐ", "ai"}, {"ओ", "o"}, {"औ", "au"},
@@ -59,6 +59,20 @@ public class CaptionGenerator {
         System.out.println("📝 This may take a while depending on media length...\n");
 
         try {
+            // Check if model file exists
+            File modelFile = new File(config.getModelPath());
+            if (!modelFile.exists()) {
+                System.err.println("❌ Model file not found: " + config.getModelPath());
+                return false;
+            }
+
+            // Check if whisper executable exists
+            File whisperExe = new File(Config.WHISPER_EXE_PATH);
+            if (!whisperExe.exists()) {
+                System.err.println("❌ Whisper executable not found: " + Config.WHISPER_EXE_PATH);
+                return false;
+            }
+
             // Build whisper command
             List<String> command = new ArrayList<>();
             command.add(Config.WHISPER_EXE_PATH);
@@ -78,15 +92,16 @@ public class CaptionGenerator {
             command.add("-p");
             command.add("4"); // Processors
 
-            // Add language options based on mode
-            if (config.getMode() == Config.MODE_TRANSLATION) {
+            // Add language option
+            if (!config.getLanguageCode().equals("auto")) {
                 command.add("-l");
-                command.add("auto");
+                command.add(config.getLanguageCode());
+            }
+
+            // Add mode-specific options
+            if (config.getMode() == Config.MODE_TRANSLATION) {
                 command.add("-tr");
                 command.add("en");
-            } else if (config.getMode() == Config.MODE_TRANSLITERATION) {
-                command.add("-l");
-                command.add("auto");
             }
 
             // Output format
@@ -102,10 +117,9 @@ public class CaptionGenerator {
             pb.redirectErrorStream(true);
             Process process = pb.start();
 
-            // Read output with progress simulation
+            // Read output with progress
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             String line;
-            int progress = 0;
 
             while ((line = reader.readLine()) != null) {
                 // Parse progress from whisper output
@@ -116,12 +130,10 @@ public class CaptionGenerator {
                         int percent = (int) Double.parseDouble(progressStr);
                         ProgressBar.showProgress(percent, 100);
                     } catch (Exception e) {
-                        progress++;
-                        ProgressBar.showProgress(progress % 100, 100);
+                        System.out.println(line);
                     }
                 } else if (line.contains("Processing") || line.contains("Segment")) {
-                    progress++;
-                    ProgressBar.showProgress(progress % 100, 100);
+                    System.out.println(line);
                 } else if (!line.isEmpty()) {
                     System.out.println(line);
                 }
@@ -133,11 +145,9 @@ public class CaptionGenerator {
                 // Verify SRT file was created
                 File srtFile = new File(config.getOutputPath());
                 if (!srtFile.exists()) {
-                    // Try alternative naming (whisper adds .srt automatically)
                     String altPath = config.getOutputPath().replace(".srt", "") + ".srt";
                     srtFile = new File(altPath);
                     if (srtFile.exists()) {
-                        // Rename to our expected path
                         srtFile.renameTo(new File(config.getOutputPath()));
                     }
                 }
@@ -180,7 +190,7 @@ public class CaptionGenerator {
         List<String> processedLines = new ArrayList<>();
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
-            if (i % 4 == 2 && !line.trim().isEmpty()) { // Subtitle text line
+            if (i % 4 == 2 && !line.trim().isEmpty()) {
                 line = applyTransliteration(line);
                 // Apply word/letter limit
                 if (config.getLineType().equals("words")) {
@@ -192,7 +202,7 @@ public class CaptionGenerator {
             processedLines.add(line);
         }
 
-        // Write back with UTF-8 encoding
+        // Write back
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(srtFile), "UTF-8"))) {
             for (String line : processedLines) {
                 writer.write(line);
@@ -204,7 +214,6 @@ public class CaptionGenerator {
     }
 
     private String applyTransliteration(String text) {
-        // Detect if text contains Japanese or Hindi characters
         boolean hasJapanese = text.matches(".*[\\u3040-\\u309F\\u30A0-\\u30FF\\u4E00-\\u9FAF].*");
         boolean hasHindi = text.matches(".*[\\u0900-\\u097F].*");
 
@@ -214,7 +223,7 @@ public class CaptionGenerator {
             return transliterateHindi(text);
         }
 
-        return text; // Return as-is if no supported script detected
+        return text;
     }
 
     private String transliterateJapanese(String text) {
@@ -253,7 +262,7 @@ public class CaptionGenerator {
         List<String> processedLines = new ArrayList<>();
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
-            if (i % 4 == 2) { // Subtitle text line
+            if (i % 4 == 2) {
                 if (config.getLineType().equals("words")) {
                     line = limitWordsPerLine(line, config.getNumberPerLine());
                 } else {
@@ -263,7 +272,7 @@ public class CaptionGenerator {
             processedLines.add(line);
         }
 
-        // Write back with UTF-8 encoding
+        // Write back
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(srtFile), "UTF-8"))) {
             for (String line : processedLines) {
                 writer.write(line);

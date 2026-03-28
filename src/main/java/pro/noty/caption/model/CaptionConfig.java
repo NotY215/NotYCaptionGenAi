@@ -11,20 +11,35 @@ public class CaptionConfig {
     private String outputPath;
     private int mode;
     private String modeName;
+    private String languageCode;
+    private String languageName;
 
     public CaptionConfig(String mediaPath, String modelPath, String modelName,
                          String lineType, int numberPerLine, int mode) {
+        this(mediaPath, modelPath, modelName, lineType, numberPerLine, mode, "auto", "Auto Detect");
+    }
+
+    public CaptionConfig(String mediaPath, String modelPath, String modelName,
+                         String lineType, int numberPerLine, int mode,
+                         String languageCode, String languageName) {
         this.mediaPath = mediaPath;
         this.modelPath = modelPath;
         this.modelName = modelName;
         this.lineType = lineType;
         this.numberPerLine = numberPerLine;
         this.mode = mode;
+        this.languageCode = languageCode;
+        this.languageName = languageName;
+
+        // Fix model path for large model
+        if (modelName.equals("large")) {
+            this.modelPath = modelPath.replace("large.bin", "large-v1.bin");
+        }
 
         // Set mode name
         switch (mode) {
             case Config.MODE_NORMAL:
-                this.modeName = "Normal (Original Language Script)";
+                this.modeName = "Normal (" + languageName + ")";
                 break;
             case Config.MODE_TRANSLATION:
                 this.modeName = "Translation to English";
@@ -46,6 +61,8 @@ public class CaptionConfig {
             suffix = "_en";
         } else if (mode == Config.MODE_TRANSLITERATION) {
             suffix = "_translit";
+        } else if (!languageCode.equals("auto")) {
+            suffix = "_" + languageCode;
         }
 
         this.outputPath = baseName + suffix + ".srt";
@@ -60,17 +77,20 @@ public class CaptionConfig {
     public String getOutputPath() { return outputPath; }
     public int getMode() { return mode; }
     public String getModeName() { return modeName; }
+    public String getLanguageCode() { return languageCode; }
+    public String getLanguageName() { return languageName; }
 
     @Override
     public String toString() {
         return String.format(
                 "\n📁 Media File: %s\n" +
                         "🤖 Model: %s\n" +
+                        "🌐 Language: %s\n" +
                         "🎯 Subtitle Mode: %s\n" +
                         "📝 Line Type: %s\n" +
                         "🔢 %s per line: %d\n" +
                         "💾 Output: %s",
-                mediaPath, modelName.toUpperCase(), modeName, lineType,
+                mediaPath, modelName.toUpperCase(), languageName, modeName, lineType,
                 lineType.substring(0, 1).toUpperCase() + lineType.substring(1),
                 numberPerLine, outputPath
         );

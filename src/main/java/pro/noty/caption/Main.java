@@ -9,6 +9,12 @@ import java.util.Scanner;
 public class Main {
     private static final String[] ALLOWED_EXTENSIONS = {".mp4", ".avi", ".mkv", ".mov", ".mp3", ".wav", ".m4a", ".flac", ".webm", ".m4v", ".mpg", ".mpeg"};
     private static Scanner scanner = null;
+    private static int selectedLanguage = 0;
+    private static String languageCode = "auto";
+    private static String languageName = "Auto Detect";
+    private static int selectedModel = 0;
+    private static String selectedModelName = "";
+    private static String selectedModelPath = "";
 
     private static Scanner getScanner() {
         if (scanner == null) {
@@ -25,27 +31,14 @@ public class Main {
         System.out.println("╚═══════════════════════════════════════════╝");
         System.out.println();
 
-        // Show current paths for debugging
+        // Show current paths
         System.out.println("📁 Resource Directory: " + Config.RESOURCES_DIR);
+        System.out.println("📁 Models Directory: " + Config.MODELS_DIR);
         System.out.println("🔧 Checking required files...\n");
 
         // Check if required executables exist
         if (!checkRequiredFiles()) {
             System.out.println("\n❌ Required files are missing! Please check the installation.");
-            System.out.println("\n📝 Expected file locations:");
-            System.out.println("   " + Config.WHISPER_EXE_PATH);
-            System.out.println("   " + Config.FFMPEG_PATH);
-            System.out.println("   " + Config.FFPROBE_PATH);
-            System.out.println("\n💡 Tip: Your current structure:");
-            System.out.println("   " + Config.RESOURCES_DIR);
-            System.out.println("   ├── whisper/");
-            System.out.println("   │   └── whisper-cli.exe");
-            System.out.println("   ├── Files/        ← Note: Capital F");
-            System.out.println("   │   ├── ffmpeg.exe");
-            System.out.println("   │   └── ffprobe.exe");
-            System.out.println("   └── Models/       ← Note: Capital M");
-            System.out.println("       ├── ggml-tiny.bin");
-            System.out.println("       └── ggml-base.bin");
             System.out.println("\nPress Enter to exit...");
             getScanner().nextLine();
             return;
@@ -64,69 +57,92 @@ public class Main {
 
                 System.out.println("\n✅ Selected file: " + mediaPath);
 
+                // Reset selections for new video
+                selectedModel = 0;
+                selectedLanguage = 0;
+                languageCode = "auto";
+                languageName = "Auto Detect";
+
                 while (true) {
-                    // Step b: Main menu
-                    int choice = InputHandler.showMainMenu();
+                    // Step b: Main menu - only show options that haven't been selected
+                    int choice = InputHandler.showMainMenu(selectedModel > 0, selectedLanguage > 0);
 
                     if (choice == 0) {
                         // Go back to path selection
                         break;
-                    }
+                    } else if (choice == 1 && selectedModel == 0) {
+                        // Select model
+                        selectedModel = InputHandler.selectModel();
+                        if (selectedModel > 0) {
+                            selectedModelName = getModelName(selectedModel);
+                            String modelSize = getModelSize(selectedModel);
+                            selectedModelPath = Config.MODELS_DIR + "ggml-" + selectedModelName + ".bin";
 
-                    // Step c: Model selection
-                    int modelChoice = InputHandler.selectModel();
-                    if (modelChoice == 0) {
-                        continue;
-                    }
+                            if (selectedModelName.equals("large")) {
+                                selectedModelPath = Config.MODELS_DIR + "ggml-large-v1.bin";
+                            }
 
-                    String modelName = getModelName(modelChoice);
-                    String modelSize = getModelSize(modelChoice);
-                    String modelPath = Config.MODELS_DIR + "ggml-" + modelName + ".bin";
-
-                    // Step d: Download or continue
-                    boolean modelExists = ModelManager.checkModelExists(modelPath);
-                    int downloadChoice = InputHandler.handleModelDownload(modelName, modelSize, modelExists);
-
-                    if (downloadChoice == 0) {
-                        continue;
-                    }
-
-                    if (downloadChoice == 1 && !modelExists) {
-                        // Download model
-                        System.out.println("\n📥 Downloading model... This may take a while.");
-                        boolean downloaded = ModelManager.downloadModel(modelName, modelPath);
-                        if (!downloaded) {
-                            System.out.println("\n❌ Failed to download model. Please check your internet connection.");
-                            System.out.print("Press Enter to continue...");
-                            getScanner().nextLine();
-                            continue;
+                            // Check if model exists
+                            boolean modelExists = ModelManager.checkModelExists(selectedModelPath);
+                            if (!modelExists) {
+                                System.out.println("\n📥 Model not found. Downloading...");
+                                boolean downloaded = ModelManager.downloadModel(selectedModelName, selectedModelPath);
+                                if (!downloaded) {
+                                    System.out.println("\n❌ Failed to download model. Please check your internet connection.");
+                                    selectedModel = 0;
+                                    continue;
+                                }
+                            }
+                            System.out.println("\n✅ Model selected: " + selectedModelName.toUpperCase());
                         }
+                        continue;
+                    } else if (choice == 2 && selectedLanguage == 0) {
+                        // Select language
+                        selectedLanguage = InputHandler.selectLanguage();
+                        if (selectedLanguage > 0) {
+                            languageCode = InputHandler.getLanguageCode(selectedLanguage);
+                            languageName = InputHandler.getLanguageName(selectedLanguage);
+                            System.out.println("\n✅ Language selected: " + languageName);
+                        }
+                        continue;
                     }
 
-                    // Step e: Choose word or letter preference
+                    // If we get here, both model and language are selected
+                    if (selectedModel == 0) {
+                        System.out.println("\n⚠️ Please select a model first!");
+                        continue;
+                    }
+                    if (selectedLanguage == 0) {
+                        System.out.println("\n⚠️ Please select a language first!");
+                        continue;
+                    }
+
+                    // Step c: Choose word or letter preference
                     int preferenceChoice = InputHandler.choosePreference();
                     if (preferenceChoice == 0) {
                         continue;
                     }
 
-                    // Step e2: Choose subtitle mode
+                    // Step d: Choose subtitle mode
                     int modeChoice = InputHandler.chooseSubtitleMode();
                     if (modeChoice == 0) {
                         continue;
                     }
 
-                    // Step f: Number per line
+                    // Step e: Number per line
                     int numberPerLine = InputHandler.getNumberPerLine(preferenceChoice);
                     if (numberPerLine == 0) {
                         continue;
                     }
 
-                    // Step g: Confirm and generate
+                    // Step f: Confirm and generate
                     CaptionConfig config = new CaptionConfig(
-                            mediaPath, modelPath, modelName,
+                            mediaPath, selectedModelPath, selectedModelName,
                             preferenceChoice == 1 ? "words" : "letters",
                             numberPerLine,
-                            modeChoice
+                            modeChoice,
+                            languageCode,
+                            languageName
                     );
 
                     boolean confirmed = InputHandler.confirmGeneration(config);
@@ -147,7 +163,7 @@ public class Main {
                         // Open browser links
                         BrowserOpener.openLinks();
 
-                        // Step h: Next video or quit
+                        // Step g: Next video or quit
                         int nextChoice = InputHandler.handleNextVideo();
                         if (nextChoice == 1) {
                             continueApp = false;
@@ -181,7 +197,6 @@ public class Main {
     private static boolean checkRequiredFiles() {
         boolean allGood = true;
 
-        // Check if resources directory exists
         File resourcesDir = new File(Config.RESOURCES_DIR);
         if (!resourcesDir.exists()) {
             System.err.println("❌ Resources directory not found: " + Config.RESOURCES_DIR);
@@ -190,7 +205,6 @@ public class Main {
             System.out.println("✓ Resources directory found");
         }
 
-        // Check whisper-cli.exe
         File whisper = new File(Config.WHISPER_EXE_PATH);
         if (!whisper.exists()) {
             System.err.println("❌ Missing: " + Config.WHISPER_EXE_PATH);
@@ -199,7 +213,14 @@ public class Main {
             System.out.println("✓ Found: " + whisper.getName());
         }
 
-        // Check ffmpeg.exe
+        File whisperDll = new File(Config.WHISPER_DLL_PATH);
+        if (!whisperDll.exists()) {
+            System.err.println("⚠️ Missing: " + Config.WHISPER_DLL_PATH + " (required for whisper-cli.exe)");
+            allGood = false;
+        } else {
+            System.out.println("✓ Found: " + whisperDll.getName());
+        }
+
         File ffmpeg = new File(Config.FFMPEG_PATH);
         if (!ffmpeg.exists()) {
             System.err.println("❌ Missing: " + Config.FFMPEG_PATH);
@@ -208,7 +229,6 @@ public class Main {
             System.out.println("✓ Found: " + ffmpeg.getName());
         }
 
-        // Check ffprobe.exe
         File ffprobe = new File(Config.FFPROBE_PATH);
         if (!ffprobe.exists()) {
             System.err.println("❌ Missing: " + Config.FFPROBE_PATH);
@@ -217,15 +237,12 @@ public class Main {
             System.out.println("✓ Found: " + ffprobe.getName());
         }
 
-        // Check models directory
         File modelsDir = new File(Config.MODELS_DIR);
         if (!modelsDir.exists()) {
-            System.err.println("⚠️ Models directory not found, will create: " + Config.MODELS_DIR);
             modelsDir.mkdirs();
+            System.out.println("✓ Created models directory: " + Config.MODELS_DIR);
         } else {
             System.out.println("✓ Models directory found");
-
-            // List existing models
             File[] models = modelsDir.listFiles((dir, name) -> name.endsWith(".bin"));
             if (models != null && models.length > 0) {
                 System.out.println("   Existing models:");

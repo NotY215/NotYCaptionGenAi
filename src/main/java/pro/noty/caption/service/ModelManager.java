@@ -2,8 +2,8 @@ package pro.noty.caption.service;
 
 import pro.noty.caption.util.ProgressBar;
 import pro.noty.caption.Config;
+import java.io.File;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -14,20 +14,34 @@ public class ModelManager {
     public static boolean checkModelExists(String modelPath) {
         File modelFile = new File(modelPath);
 
-        // Also check for alternative names
-        if (!modelFile.exists()) {
-            // Check for large model with different naming
-            if (modelPath.contains("large")) {
-                File altFile = new File(modelPath.replace("large", "large-v1"));
-                if (altFile.exists()) {
-                    System.out.println("✓ Found model as: " + altFile.getName());
-                    return true;
-                }
-            }
-            return false;
+        // Check for exact path first
+        if (modelFile.exists()) {
+            return true;
         }
 
-        return true;
+        // Check for alternative names
+        if (modelPath.contains("large")) {
+            // Try large-v1
+            File altFile = new File(modelPath.replace("large.bin", "large-v1.bin"));
+            if (altFile.exists()) {
+                System.out.println("✓ Found model as: " + altFile.getName());
+                return true;
+            }
+            // Try large-v2
+            altFile = new File(modelPath.replace("large.bin", "large-v2.bin"));
+            if (altFile.exists()) {
+                System.out.println("✓ Found model as: " + altFile.getName());
+                return true;
+            }
+            // Try large-v3
+            altFile = new File(modelPath.replace("large.bin", "large-v3.bin"));
+            if (altFile.exists()) {
+                System.out.println("✓ Found model as: " + altFile.getName());
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static boolean downloadModel(String modelName, String modelPath) {
@@ -49,6 +63,8 @@ public class ModelManager {
                 break;
             case "large":
                 downloadUrl = Config.MODEL_LARGE_URL;
+                // Update model path to use -v1
+                modelPath = modelPath.replace("large.bin", "large-v1.bin");
                 break;
             default:
                 downloadUrl = Config.MODEL_BASE_URL + modelName + ".bin";
@@ -57,7 +73,7 @@ public class ModelManager {
         System.out.println("\n📥 Downloading " + modelName.toUpperCase() + " model...");
         System.out.println("🔗 URL: " + downloadUrl);
 
-        // First check if model already exists in models directory
+        // First check if model already exists
         File modelFile = new File(modelPath);
         if (modelFile.exists()) {
             System.out.println("✓ Model already exists at: " + modelPath);
@@ -65,9 +81,11 @@ public class ModelManager {
         }
 
         // Check alternative location (root/resources/Models)
-        String altPath = Config.RESOURCES_DIR + "Models" + File.separator + "ggml-" + modelName + ".bin";
+        String altPath = Config.MODELS_DIR + "ggml-" + modelName;
         if (modelName.equals("large")) {
-            altPath = Config.RESOURCES_DIR + "Models" + File.separator + "ggml-large-v1.bin";
+            altPath = Config.MODELS_DIR + "ggml-large-v1.bin";
+        } else {
+            altPath += ".bin";
         }
         File altFile = new File(altPath);
         if (altFile.exists()) {
@@ -80,7 +98,8 @@ public class ModelManager {
                 return true;
             } catch (Exception e) {
                 System.err.println("⚠️ Could not copy model: " + e.getMessage());
-                // Use the existing file directly
+                // Use the existing file directly by updating the path
+                modelPath = altPath;
                 return true;
             }
         }
