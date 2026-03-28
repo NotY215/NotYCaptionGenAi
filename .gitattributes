@@ -17,3 +17,5 @@ dist/ -text
 build/ -text
 __pycache__/ -text
 *.pyc -text
+*.pt filter=lfs diff=lfs merge=lfs -text
+models/*.pt filter=lfs diff=lfs merge=lfs -text
