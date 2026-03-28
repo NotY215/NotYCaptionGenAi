@@ -63,17 +63,31 @@ public class Main {
                 languageCode = "auto";
                 languageName = "Auto Detect";
 
+                boolean modelSelected = false;
+                boolean languageSelected = false;
+
                 while (true) {
                     // Step b: Main menu - only show options that haven't been selected
-                    int choice = InputHandler.showMainMenu(selectedModel > 0, selectedLanguage > 0);
+                    int choice = InputHandler.showMainMenu(modelSelected, languageSelected);
 
                     if (choice == 0) {
                         // Go back to path selection
-                        break;
-                    } else if (choice == 1 && selectedModel == 0) {
+                        if (languageSelected) {
+                            // If language was selected, reset it and go back to language selection
+                            languageSelected = false;
+                            selectedLanguage = 0;
+                            languageCode = "auto";
+                            languageName = "Auto Detect";
+                            continue;
+                        } else {
+                            // Go back to video path selection
+                            break;
+                        }
+                    } else if (choice == 1 && !modelSelected) {
                         // Select model
-                        selectedModel = InputHandler.selectModel();
-                        if (selectedModel > 0) {
+                        int modelChoice = InputHandler.selectModel();
+                        if (modelChoice > 0) {
+                            selectedModel = modelChoice;
                             selectedModelName = getModelName(selectedModel);
                             String modelSize = getModelSize(selectedModel);
                             selectedModelPath = Config.MODELS_DIR + "ggml-" + selectedModelName + ".bin";
@@ -89,30 +103,32 @@ public class Main {
                                 boolean downloaded = ModelManager.downloadModel(selectedModelName, selectedModelPath);
                                 if (!downloaded) {
                                     System.out.println("\n❌ Failed to download model. Please check your internet connection.");
-                                    selectedModel = 0;
                                     continue;
                                 }
                             }
+                            modelSelected = true;
                             System.out.println("\n✅ Model selected: " + selectedModelName.toUpperCase());
                         }
                         continue;
-                    } else if (choice == 2 && selectedLanguage == 0) {
+                    } else if (choice == 2 && !languageSelected) {
                         // Select language
-                        selectedLanguage = InputHandler.selectLanguage();
-                        if (selectedLanguage > 0) {
+                        int languageChoice = InputHandler.selectLanguage();
+                        if (languageChoice > 0) {
+                            selectedLanguage = languageChoice;
                             languageCode = InputHandler.getLanguageCode(selectedLanguage);
                             languageName = InputHandler.getLanguageName(selectedLanguage);
+                            languageSelected = true;
                             System.out.println("\n✅ Language selected: " + languageName);
                         }
                         continue;
                     }
 
                     // If we get here, both model and language are selected
-                    if (selectedModel == 0) {
+                    if (!modelSelected) {
                         System.out.println("\n⚠️ Please select a model first!");
                         continue;
                     }
-                    if (selectedLanguage == 0) {
+                    if (!languageSelected) {
                         System.out.println("\n⚠️ Please select a language first!");
                         continue;
                     }
