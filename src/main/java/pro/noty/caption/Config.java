@@ -29,21 +29,28 @@ public class Config {
 
     public static String getResourcesDir() {
         String base = getBasePath();
+
+        // Look for resources in Jre\lib\resources first
         String[] possiblePaths = {
+                base + File.separator + ".." + File.separator + "lib" + File.separator + "resources",
+                base + File.separator + "lib" + File.separator + "resources",
                 base + File.separator + "resources",
                 base + File.separator + ".." + File.separator + "resources",
-                base + File.separator + "Jre" + File.separator + "bin" + File.separator + "resources",
                 new File("").getAbsolutePath() + File.separator + "resources"
         };
 
         for (String path : possiblePaths) {
             File dir = new File(path);
             if (dir.exists() && dir.isDirectory()) {
+                System.out.println("📁 Found resources at: " + path);
                 return path;
             }
         }
 
-        return base + File.separator + "resources";
+        // Default to Jre\lib\resources
+        String defaultPath = base + File.separator + ".." + File.separator + "lib" + File.separator + "resources";
+        System.out.println("📁 Using default resources path: " + defaultPath);
+        return defaultPath;
     }
 
     public static final String RESOURCES_DIR = getResourcesDir() + File.separator;
@@ -64,43 +71,47 @@ public class Config {
         System.out.println("📁 Resource Directory: " + RESOURCES_DIR);
         System.out.println("📁 Models Directory: " + MODELS_DIR);
 
-        // Extract all resources
-        extractResourceIfNeeded("/whisper/whisper-cli.exe", WHISPER_EXE_PATH);
-        extractResourceIfNeeded("/whisper/whisper.dll", WHISPER_DLL_PATH);
-        extractResourceIfNeeded("/Files/ffmpeg.exe", FFMPEG_PATH);
-        extractResourceIfNeeded("/Files/ffprobe.exe", FFPROBE_PATH);
-
+        // Create directories if they don't exist
+        File whisperDir = new File(RESOURCES_DIR + "whisper");
+        File filesDir = new File(RESOURCES_DIR + "Files");
         File modelsDir = new File(MODELS_DIR);
-        if (!modelsDir.exists()) {
-            modelsDir.mkdirs();
-            System.out.println("✓ Created models directory: " + MODELS_DIR);
+
+        if (!whisperDir.exists()) whisperDir.mkdirs();
+        if (!filesDir.exists()) filesDir.mkdirs();
+        if (!modelsDir.exists()) modelsDir.mkdirs();
+
+        // Check if files exist
+        checkAndLogFile(WHISPER_EXE_PATH, "whisper-cli.exe");
+        checkAndLogFile(WHISPER_DLL_PATH, "whisper.dll");
+        checkAndLogFile(FFMPEG_PATH, "ffmpeg.exe");
+        checkAndLogFile(FFPROBE_PATH, "ffprobe.exe");
+
+        // List existing models
+        File[] models = modelsDir.listFiles((dir, name) -> name.endsWith(".bin"));
+        if (models != null && models.length > 0) {
+            System.out.println("✓ Found existing models:");
+            for (File model : models) {
+                System.out.println("   - " + model.getName() + " (" + formatSize(model.length()) + ")");
+            }
+        } else {
+            System.out.println("⚠️ No models found. They will be downloaded when needed.");
         }
     }
 
-    private static void extractResourceIfNeeded(String resourcePath, String destinationPath) {
-        File destFile = new File(destinationPath);
-        if (destFile.exists()) {
-            return;
+    private static void checkAndLogFile(String path, String name) {
+        File file = new File(path);
+        if (file.exists()) {
+            System.out.println("✓ Found: " + name);
+        } else {
+            System.out.println("⚠️ Missing: " + name + " at " + path);
         }
+    }
 
-        File parentDir = destFile.getParentFile();
-        if (parentDir != null && !parentDir.exists()) {
-            parentDir.mkdirs();
-        }
-
-        try (InputStream is = Config.class.getResourceAsStream(resourcePath)) {
-            if (is != null) {
-                Files.copy(is, destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                if (destinationPath.endsWith(".exe")) {
-                    destFile.setExecutable(true);
-                }
-                System.out.println("✓ Extracted: " + resourcePath);
-            } else {
-                System.err.println("⚠️ Resource not found in JAR: " + resourcePath);
-            }
-        } catch (Exception e) {
-            // Silent fail
-        }
+    private static String formatSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        int exp = (int) (Math.log(bytes) / Math.log(1024));
+        String pre = "KMGTPE".charAt(exp - 1) + "";
+        return String.format("%.1f %sB", bytes / Math.pow(1024, exp), pre);
     }
 
     // Model download URLs
