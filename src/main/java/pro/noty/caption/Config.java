@@ -1,45 +1,29 @@
 package pro.noty.caption;
 
 import java.io.File;
+import java.nio.file.Files;
 
 public class Config {
-    // Base path for resources
-    private static String basePath = null;
-
-    public static String getBasePath() {
-        if (basePath == null) {
-            try {
-                String path = Config.class.getProtectionDomain().getCodeSource().getLocation().getPath();
-                File jarFile = new File(path);
-
-                if (jarFile.isFile()) {
-                    basePath = jarFile.getParentFile().getAbsolutePath();
-                } else {
-                    basePath = new File("").getAbsolutePath();
-                }
-            } catch (Exception e) {
-                basePath = new File("").getAbsolutePath();
-            }
-        }
-        return basePath;
-    }
-
-    // Resources are always in Jre\lib\resources relative to the JAR location
-    public static String getResourcesDir() {
-        String base = getBasePath();
-        // JAR is in Jre\bin\App.jar, so resources are in Jre\lib\resources
-        String resourcesPath = base + File.separator + ".." + File.separator + "lib" + File.separator + "resources";
-
-        // Normalize the path
+    // Get the directory where App.jar is located
+    private static String getJarDirectory() {
         try {
-            File resourcesDir = new File(resourcesPath);
-            return resourcesDir.getCanonicalPath();
+            String path = Config.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+            File jarFile = new File(path);
+
+            if (jarFile.isFile()) {
+                // Running from JAR - return the directory containing the JAR
+                return jarFile.getParentFile().getAbsolutePath();
+            } else {
+                // Running from IDE - return the project root
+                return new File("").getAbsolutePath();
+            }
         } catch (Exception e) {
-            return resourcesPath;
+            return new File("").getAbsolutePath();
         }
     }
 
-    public static final String RESOURCES_DIR = getResourcesDir() + File.separator;
+    // Resources are in the "resources" folder next to App.jar
+    public static final String RESOURCES_DIR = getJarDirectory() + File.separator + "resources" + File.separator;
 
     public static String WHISPER_EXE_PATH;
     public static String WHISPER_DLL_PATH;
@@ -54,6 +38,7 @@ public class Config {
         FFPROBE_PATH = RESOURCES_DIR + "Files" + File.separator + "ffprobe.exe";
         MODELS_DIR = RESOURCES_DIR + "Models" + File.separator;
 
+        System.out.println("📁 Jar Directory: " + getJarDirectory());
         System.out.println("📁 Resource Directory: " + RESOURCES_DIR);
         System.out.println("📁 Models Directory: " + MODELS_DIR);
 
