@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-NotY Caption Generator AI Installer
+NotY Caption Generator AI Installer v4.2
+Copyright © 2026 NotY215
 """
 
 import os
@@ -15,11 +16,11 @@ import threading
 class InstallerGUI:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("NotY Caption Generator AI Installer")
-        self.root.geometry("700x650")
+        self.root.title("NotY Caption Generator AI Installer v4.2")
+        self.root.geometry("750x700")
         self.root.resizable(False, False)
         
-        # Set window icon
+        # Set window icon and taskbar icon
         try:
             if getattr(sys, 'frozen', False):
                 base_dir = Path(sys.executable).parent
@@ -28,12 +29,17 @@ class InstallerGUI:
             
             icon_path = base_dir / "resources" / "logo.ico"
             if icon_path.exists():
+                # Set both window icon and taskbar icon
                 self.root.iconbitmap(str(icon_path))
                 self.root.iconbitmap(default=str(icon_path))
-        except:
-            pass
+                
+                # For Windows taskbar - set after window is created
+                self.root.after(100, lambda: self.root.iconbitmap(str(icon_path)))
+        except Exception as e:
+            print(f"Icon loading warning: {e}")
         
-        # Dynamic installation path - user can choose
+        # Dynamic installation path - user can choose, will append NotYCaptionGenAI
+        self.install_base = tk.StringVar(value="C:\\")
         self.install_path = tk.StringVar(value="C:\\NotYCaptionGenAI")
         self.create_shortcut = tk.BooleanVar(value=True)
         self.create_desktop = tk.BooleanVar(value=True)
@@ -50,17 +56,17 @@ class InstallerGUI:
     def setup_ui(self):
         """Setup the installer UI with scrolling"""
         # Main container with scrolling
-        main_canvas = tk.Canvas(self.root, highlightthickness=0)
+        main_canvas = tk.Canvas(self.root, highlightthickness=0, bg='white')
         main_canvas.pack(side="left", fill="both", expand=True)
         
         # Add scrollbar
         scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=main_canvas.yview)
         scrollbar.pack(side="right", fill="y")
-        main_canvas.configure(yscrollcommand=scrollbar.set)
+        main_canvas.configure(yscrollcommand=scrollbar.set, bg='white')
         
         # Frame inside canvas
         main_frame = ttk.Frame(main_canvas)
-        main_canvas.create_window((0, 0), window=main_frame, anchor="nw", width=680)
+        main_canvas.create_window((0, 0), window=main_frame, anchor="nw", width=730)
         
         # Configure scrolling
         def on_frame_configure(event):
@@ -82,7 +88,10 @@ class InstallerGUI:
         try:
             logo_path = self.base_dir / "resources" / "logo.ico"
             if logo_path.exists():
+                # Use PIL to resize if available, otherwise use as is
                 logo_img = tk.PhotoImage(file=str(logo_path))
+                # Resize if needed
+                logo_img = logo_img.subsample(2, 2)  # Reduce size
                 logo_label = ttk.Label(header_frame, image=logo_img)
                 logo_label.image = logo_img
                 logo_label.pack(side="left", padx=10)
@@ -96,14 +105,14 @@ class InstallerGUI:
         title_label = ttk.Label(
             title_frame,
             text="NotY Caption Generator AI",
-            font=("Segoe UI", 20, "bold")
+            font=("Segoe UI", 22, "bold")
         )
         title_label.pack(anchor="w")
         
         version_label = ttk.Label(
             title_frame,
-            text="Version 1.0 | Copyright © 2026 NotY215 | LGPL-3.0",
-            font=("Segoe UI", 8),
+            text="Version 4.2 | Copyright © 2026 NotY215 | LGPL-3.0",
+            font=("Segoe UI", 9),
             foreground="gray"
         )
         version_label.pack(anchor="w")
@@ -111,22 +120,28 @@ class InstallerGUI:
         # Separator
         ttk.Separator(main_frame, orient="horizontal").pack(fill="x", padx=20, pady=10)
         
-        # Installation path (user selectable)
+        # Installation path (user selectable, will create NotYCaptionGenAI subfolder)
         path_frame = ttk.LabelFrame(main_frame, text="Installation Location", padding=15)
         path_frame.pack(fill="x", padx=20, pady=10)
         
-        ttk.Label(path_frame, text="Choose installation directory:", font=("Segoe UI", 10)).grid(
-            row=0, column=0, sticky="w", padx=5, pady=5)
+        ttk.Label(path_frame, text="Select installation folder (will create NotYCaptionGenAI subfolder):", 
+                 font=("Segoe UI", 10)).grid(row=0, column=0, columnspan=2, sticky="w", padx=5, pady=5)
         
-        path_entry = ttk.Entry(path_frame, textvariable=self.install_path, width=45)
-        path_entry.grid(row=1, column=0, padx=5, pady=5)
+        ttk.Label(path_frame, text="Base Directory:", font=("Segoe UI", 9)).grid(row=1, column=0, sticky="w", padx=5, pady=5)
         
-        browse_btn = ttk.Button(path_frame, text="Browse...", command=self.browse_install_path)
-        browse_btn.grid(row=1, column=1, padx=5, pady=5)
+        base_entry = ttk.Entry(path_frame, textvariable=self.install_base, width=50)
+        base_entry.grid(row=1, column=1, padx=5, pady=5)
         
-        ttk.Label(path_frame, text="The application will be installed in this folder (will create NotYCaptionGenAI subfolder)", 
-                 font=("Segoe UI", 8), foreground="gray").grid(
-            row=2, column=0, columnspan=2, sticky="w", padx=5, pady=2)
+        browse_btn = ttk.Button(path_frame, text="Browse...", command=self.browse_install_base)
+        browse_btn.grid(row=1, column=2, padx=5, pady=5)
+        
+        ttk.Label(path_frame, text="Full installation path:", font=("Segoe UI", 9)).grid(row=2, column=0, sticky="w", padx=5, pady=5)
+        
+        path_display = ttk.Entry(path_frame, textvariable=self.install_path, width=50, state="readonly")
+        path_display.grid(row=2, column=1, columnspan=2, padx=5, pady=5)
+        
+        ttk.Label(path_frame, text="The application will be installed to: [Selected Path]\\NotYCaptionGenAI", 
+                 font=("Segoe UI", 8), foreground="gray").grid(row=3, column=0, columnspan=3, sticky="w", padx=5, pady=2)
         
         # Options
         options_frame = ttk.LabelFrame(main_frame, text="Installation Options", padding=15)
@@ -155,7 +170,7 @@ class InstallerGUI:
         info_frame.pack(fill="x", padx=20, pady=10)
         
         info_text = """This will install:
-• NotYCaptionGenAI.exe (main application)
+• NotYCaptionGenAI.exe (main application v4.2)
 • Whisper.cpp binaries (speech recognition)
 • FFmpeg binaries (audio processing)
 • Required models (optional, will be downloaded on first use)
@@ -163,14 +178,14 @@ class InstallerGUI:
 Total size: ~50 MB (without models)
 Models will be downloaded separately when needed (75 MB to 2.9 GB)"""
         
-        info_label = ttk.Label(info_frame, text=info_text, justify="left", wraplength=620)
+        info_label = ttk.Label(info_frame, text=info_text, justify="left", wraplength=670)
         info_label.pack(anchor="w")
         
         # License info
         license_frame = ttk.LabelFrame(main_frame, text="License", padding=15)
         license_frame.pack(fill="x", padx=20, pady=10)
         
-        license_text = """NotY Caption Generator AI
+        license_text = """NotY Caption Generator AI v4.2
 Copyright © 2026 NotY215
 
 This program is free software: you can redistribute it and/or modify
@@ -183,7 +198,7 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU Lesser General Public License for more details."""
         
-        license_label = ttk.Label(license_frame, text=license_text, justify="left", wraplength=620, font=("Segoe UI", 8))
+        license_label = ttk.Label(license_frame, text=license_text, justify="left", wraplength=670, font=("Segoe UI", 8))
         license_label.pack(anchor="w")
         
         # System Requirements
@@ -195,14 +210,14 @@ GNU Lesser General Public License for more details."""
 • 500 MB free disk space (without models)
 • Internet connection for model downloads"""
         
-        sys_label = ttk.Label(sys_frame, text=sys_text, justify="left", wraplength=620)
+        sys_label = ttk.Label(sys_frame, text=sys_text, justify="left", wraplength=670)
         sys_label.pack(anchor="w")
         
         # Progress bar
         self.progress_frame = ttk.Frame(main_frame)
         self.progress_frame.pack(fill="x", padx=20, pady=10)
         
-        self.progress = ttk.Progressbar(self.progress_frame, mode="indeterminate", length=620)
+        self.progress = ttk.Progressbar(self.progress_frame, mode="indeterminate", length=670)
         self.progress.pack(pady=5)
         
         self.status_label = ttk.Label(self.progress_frame, text="Ready to install", anchor="center")
@@ -218,14 +233,26 @@ GNU Lesser General Public License for more details."""
         self.cancel_btn = ttk.Button(button_frame, text="Cancel", command=self.root.quit, width=15)
         self.cancel_btn.pack(side="right", padx=5)
         
-    def browse_install_path(self):
-        """Browse for installation path"""
-        path = filedialog.askdirectory(title="Select Installation Directory")
+    def update_install_path(self):
+        """Update full install path based on base directory"""
+        base = self.install_base.get().strip()
+        if base:
+            # Remove trailing backslash
+            base = base.rstrip('\\')
+            self.install_path.set(f"{base}\\NotYCaptionGenAI")
+        else:
+            self.install_path.set("C:\\NotYCaptionGenAI")
+        
+    def browse_install_base(self):
+        """Browse for base installation directory"""
+        path = filedialog.askdirectory(title="Select Installation Base Directory")
         if path:
-            self.install_path.set(path)
+            self.install_base.set(path)
+            self.update_install_path()
             
     def start_install(self):
         """Start the installation process"""
+        self.update_install_path()
         self.install_btn.config(state="disabled")
         self.cancel_btn.config(state="disabled")
         threading.Thread(target=self.install, daemon=True).start()
@@ -239,7 +266,7 @@ GNU Lesser General Public License for more details."""
     def install(self):
         """Perform the installation"""
         try:
-            install_dir = Path(self.install_path.get()) / "NotYCaptionGenAI"
+            install_dir = Path(self.install_path.get())
             
             self.update_status("Creating installation directory...")
             install_dir.mkdir(parents=True, exist_ok=True)
@@ -303,7 +330,7 @@ GNU Lesser General Public License for more details."""
             
             messagebox.showinfo(
                 "Installation Complete", 
-                f"NotY Caption Generator AI has been installed to:\n{install_dir}\n\n"
+                f"NotY Caption Generator AI v4.2 has been installed to:\n{install_dir}\n\n"
                 f"✓ Start Menu shortcut: {'Created' if self.create_shortcut.get() else 'Skipped'}\n"
                 f"✓ Desktop shortcut: {'Created' if self.create_desktop.get() else 'Skipped'}\n"
                 f"✓ Send To menu: {'Added' if self.register_sendto.get() else 'Skipped'}\n\n"
@@ -322,11 +349,11 @@ GNU Lesser General Public License for more details."""
     def create_uninstaller(self, install_dir):
         """Create uninstaller script"""
         uninstaller_content = f'''@echo off
-title NotY Caption Generator AI Uninstaller
+title NotY Caption Generator AI Uninstaller v4.2
 color 0C
 echo ╔═══════════════════════════════════════════╗
 echo ║  NotY Caption Generator AI Uninstaller    ║
-echo ║  Copyright © 2026 NotY215                 ║
+echo ║  Version 4.2 | Copyright © 2026 NotY215  ║
 echo ║  Licensed under LGPL-3.0                 ║
 echo ╚═══════════════════════════════════════════╝
 echo.
@@ -388,7 +415,7 @@ $Shortcut.Save()
         reg_script = f'''
 New-Item -Path "HKCU:\\Software\\NotYCaptionGenAi" -Force | Out-Null
 Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "InstallPath" -Value "{install_dir}"
-Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "Version" -Value "1.0"
+Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "Version" -Value "4.2"
 Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "DisplayName" -Value "NotY Caption Generator AI"
 Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "Publisher" -Value "NotY215"
 Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "Copyright" -Value "Copyright © 2026 NotY215"

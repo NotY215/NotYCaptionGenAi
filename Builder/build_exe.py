@@ -12,7 +12,7 @@ from pathlib import Path
 def build_exe():
     """Build the main executable using PyInstaller"""
     print("=" * 60)
-    print("Building NotY Caption Generator AI Executable")
+    print("Building NotY Caption Generator AI Executable v4.2")
     print("=" * 60)
     
     # Get paths
@@ -41,7 +41,7 @@ def build_exe():
     # Build the executable
     print("\nBuilding main executable...")
     
-    # Build command
+    # Build command with proper icon embedding
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--name=NotYCaptionGenAI",
@@ -68,11 +68,18 @@ def build_exe():
     
     exe_source = dist_dir / "NotYCaptionGenAI.exe"
     if exe_source.exists():
+        # Copy the executable
         shutil.copy2(exe_source, base_dist_dir / "NotYCaptionGenAI.exe")
         print(f"\n✅ Main executable built successfully: {base_dist_dir / 'NotYCaptionGenAI.exe'}")
     else:
         print("\n❌ Failed to build executable!")
-        sys.exit(1)
+        # Check for alternative location
+        alt_exe = dist_dir / "NotYCaptionGenAI" / "NotYCaptionGenAI.exe"
+        if alt_exe.exists():
+            shutil.copy2(alt_exe, base_dist_dir / "NotYCaptionGenAI.exe")
+            print(f"\n✅ Main executable found at alternative location: {base_dist_dir / 'NotYCaptionGenAI.exe'}")
+        else:
+            sys.exit(1)
     
     # Clean up build files
     shutil.rmtree(dist_dir, ignore_errors=True)

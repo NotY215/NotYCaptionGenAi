@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
 Setup script for building all components
+NotY Caption Generator AI v4.2
+Copyright © 2026 NotY215
 """
 
 import os
@@ -12,7 +14,8 @@ from pathlib import Path
 def build_all():
     """Build all components"""
     print("=" * 60)
-    print("Building NotY Caption Generator AI - Complete Package")
+    print("Building NotY Caption Generator AI - Complete Package v4.2")
+    print("Copyright © 2026 NotY215")
     print("=" * 60)
     
     base_dir = Path(__file__).parent.parent
@@ -73,7 +76,7 @@ def build_all():
     # Build installer
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--name=NotYCaptionGenAI_Installer",
+        "--name=NotYCaptionGenAI_Installer_v4.2",
         "--onefile",
         f"--icon={resources_dest / 'logo.ico'}",
         f"--add-data={resources_dest}{os.pathsep}resources",
@@ -92,9 +95,9 @@ def build_all():
         sys.exit(1)
     
     # Move installer to dist directory
-    installer_exe = installer_dir / "dist" / "NotYCaptionGenAI_Installer.exe"
+    installer_exe = installer_dir / "dist" / "NotYCaptionGenAI_Installer_v4.2.exe"
     if installer_exe.exists():
-        final_installer = dist_dir / "NotYCaptionGenAI_Installer.exe"
+        final_installer = dist_dir / "NotYCaptionGenAI_Installer_v4.2.exe"
         shutil.move(str(installer_exe), str(final_installer))
         print(f"\n  ✅ Installer created: {final_installer}")
     else:
@@ -109,7 +112,7 @@ def build_all():
     # Clean installer build files
     installer_build = installer_dir / "build"
     installer_dist = installer_dir / "dist"
-    installer_spec = installer_dir / "NotYCaptionGenAI_Installer.spec"
+    installer_spec = installer_dir / "NotYCaptionGenAI_Installer_v4.2.spec"
     
     shutil.rmtree(installer_build, ignore_errors=True)
     shutil.rmtree(installer_dist, ignore_errors=True)
@@ -129,9 +132,9 @@ def build_all():
     # Remove installer directory
     shutil.rmtree(installer_dir, ignore_errors=True)
     
-    # Move installer to root and rename
-    final_installer = dist_dir / "NotYCaptionGenAI_Installer.exe"
-    root_installer = base_dir / "NotYCaptionGenAI_Installer.exe"
+    # Move installer to root
+    final_installer = dist_dir / "NotYCaptionGenAI_Installer_v4.2.exe"
+    root_installer = base_dir / "NotYCaptionGenAI_Installer_v4.2.exe"
     
     if final_installer.exists():
         shutil.copy2(final_installer, root_installer)
@@ -140,6 +143,8 @@ def build_all():
     print("\n" + "=" * 60)
     print("✅ Build complete!")
     print(f"Installer: {root_installer}")
+    print("Version: 4.2")
+    print("Copyright © 2026 NotY215")
     print("=" * 60)
 
 if __name__ == "__main__":

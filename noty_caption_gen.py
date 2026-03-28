@@ -24,7 +24,7 @@ import queue
 
 # Application metadata
 APP_NAME = "NotY Caption Generator AI"
-APP_VERSION = "1.0"
+APP_VERSION = "4.2"
 APP_AUTHOR = "NotY215"
 APP_YEAR = "2026"
 APP_LICENSE = "LGPL-3.0"
