@@ -1,9 +1,6 @@
 package pro.noty.caption;
 
 import java.io.File;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 
 public class Config {
     // Base path for resources
@@ -27,30 +24,19 @@ public class Config {
         return basePath;
     }
 
+    // Resources are always in Jre\lib\resources relative to the JAR location
     public static String getResourcesDir() {
         String base = getBasePath();
+        // JAR is in Jre\bin\App.jar, so resources are in Jre\lib\resources
+        String resourcesPath = base + File.separator + ".." + File.separator + "lib" + File.separator + "resources";
 
-        // Look for resources in Jre\lib\resources first
-        String[] possiblePaths = {
-                base + File.separator + ".." + File.separator + "lib" + File.separator + "resources",
-                base + File.separator + "lib" + File.separator + "resources",
-                base + File.separator + "resources",
-                base + File.separator + ".." + File.separator + "resources",
-                new File("").getAbsolutePath() + File.separator + "resources"
-        };
-
-        for (String path : possiblePaths) {
-            File dir = new File(path);
-            if (dir.exists() && dir.isDirectory()) {
-                System.out.println("📁 Found resources at: " + path);
-                return path;
-            }
+        // Normalize the path
+        try {
+            File resourcesDir = new File(resourcesPath);
+            return resourcesDir.getCanonicalPath();
+        } catch (Exception e) {
+            return resourcesPath;
         }
-
-        // Default to Jre\lib\resources
-        String defaultPath = base + File.separator + ".." + File.separator + "lib" + File.separator + "resources";
-        System.out.println("📁 Using default resources path: " + defaultPath);
-        return defaultPath;
     }
 
     public static final String RESOURCES_DIR = getResourcesDir() + File.separator;
@@ -72,21 +58,18 @@ public class Config {
         System.out.println("📁 Models Directory: " + MODELS_DIR);
 
         // Create directories if they don't exist
-        File whisperDir = new File(RESOURCES_DIR + "whisper");
-        File filesDir = new File(RESOURCES_DIR + "Files");
+        new File(RESOURCES_DIR + "whisper").mkdirs();
+        new File(RESOURCES_DIR + "Files").mkdirs();
+        new File(MODELS_DIR).mkdirs();
+
+        // Check files
+        checkFile(WHISPER_EXE_PATH, "whisper-cli.exe");
+        checkFile(WHISPER_DLL_PATH, "whisper.dll");
+        checkFile(FFMPEG_PATH, "ffmpeg.exe");
+        checkFile(FFPROBE_PATH, "ffprobe.exe");
+
+        // List models
         File modelsDir = new File(MODELS_DIR);
-
-        if (!whisperDir.exists()) whisperDir.mkdirs();
-        if (!filesDir.exists()) filesDir.mkdirs();
-        if (!modelsDir.exists()) modelsDir.mkdirs();
-
-        // Check if files exist
-        checkAndLogFile(WHISPER_EXE_PATH, "whisper-cli.exe");
-        checkAndLogFile(WHISPER_DLL_PATH, "whisper.dll");
-        checkAndLogFile(FFMPEG_PATH, "ffmpeg.exe");
-        checkAndLogFile(FFPROBE_PATH, "ffprobe.exe");
-
-        // List existing models
         File[] models = modelsDir.listFiles((dir, name) -> name.endsWith(".bin"));
         if (models != null && models.length > 0) {
             System.out.println("✓ Found existing models:");
@@ -98,12 +81,12 @@ public class Config {
         }
     }
 
-    private static void checkAndLogFile(String path, String name) {
+    private static void checkFile(String path, String name) {
         File file = new File(path);
         if (file.exists()) {
             System.out.println("✓ Found: " + name);
         } else {
-            System.out.println("⚠️ Missing: " + name + " at " + path);
+            System.err.println("⚠️ Missing: " + name + " at " + path);
         }
     }
 
