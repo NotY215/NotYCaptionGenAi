@@ -33,43 +33,62 @@
 - 💾 **SRT Format**: Standard subtitle format compatible with all media players
 - 🚀 **Portable**: Single EXE file with bundled dependencies - no installation required
 - 💬 **Automatic Links**: Opens Telegram and YouTube channels after completion
+- 🐍 **Python Version**: Also available as a Python script for cross-platform use
 
 ---
 
 ## 🚀 Download & Installation
 
-### Download
+### Download Options
 
-**Download the latest EXE from:**  
-🔗 **[https://github.com/NotY215/NotYCaptionGenAi/releases/latest](https://github.com/NotY215/NotYCaptionGenAi/releases/latest)**
+**Option 1: Windows EXE (Recommended)**
+🔗 **[Download NotYCaptionGenAi.exe](https://github.com/NotY215/NotYCaptionGenAi/releases/latest)**
+
+**Option 2: Python Script (Cross-Platform)**
+🔗 **[Download Python Version](https://github.com/NotY215/NotYCaptionGenAi/archive/refs/heads/main.zip)**
 
 ### Installation
 
+**Windows EXE Version:**
 1. **Download the EXE**: Get `NotYCaptionGenAi.exe` from the releases page
 2. **Run the Application**: Double-click to launch - that's it!
 3. **First-time Setup**:
-   - The app automatically extracts all required files (FFmpeg, Whisper)
+   - The app automatically extracts all required files
    - Models download automatically when selected
    - No manual configuration needed
+
+**Python Version:**
+1. **Install Python 3.7+** from [python.org](https://python.org)
+2. **Extract the files** to any folder
+3. **Run** `run.bat` (Windows) or `run.sh` (Linux/Mac)
+4. **First run** installs required dependencies automatically
 
 ---
 
 ## 📖 Usage Guide
 
+### Quick Start
+
+```bash
+# Windows EXE
+Double-click NotYCaptionGenAi.exe
+
+# Python Version
+python noty_caption_gen.py
+```
+
 ### Step-by-Step Instructions
 
 **1. Launch the Application**
-```
-Double-click NotYCaptionGenAi.exe
-```
-
-**2. Enter Video/Audio File Path**
 ```
 ╔═══════════════════════════════════════════╗
 ║     NOTY CAPTION GENERATOR AI v1.0       ║
 ║     Powered by Whisper.cpp               ║
 ╚═══════════════════════════════════════════╝
+```
 
+**2. Enter Video/Audio File Path**
+```
 📂 Provide Video/Audio Path
 Allowed extensions: .mp4, .avi, .mkv, .mov, .mp3, .wav, .m4a, .flac, .webm
 ➤ C:\Videos\myvideo.mp4
@@ -225,7 +244,8 @@ Your caption has been generated successfully!
 | Large | 2.9 GB | ⚡ | ⭐⭐⭐⭐⭐ | Maximum accuracy, professional use |
 
 ---
-## Model Download Links
+
+## 🌐 Model Download Links
 
 | Model | Size | Download URL |
 |-------|------|--------------|
@@ -236,22 +256,25 @@ Your caption has been generated successfully!
 | Large | 2.9 GB | https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin |
 
 ---
+
 ## 🌐 Subtitle Modes Explained
 
 ### 1. **Normal Mode**
 - Generates subtitles in the original language script
 - Preserves native characters (Devanagari, Kanji, etc.)
 - Best for viewers who understand the original language
+- Example: Japanese text stays in Japanese characters
 
 ### 2. **Translation Mode**
 - Automatically translates subtitles to English
 - Uses Whisper's built-in translation capability
 - Perfect for international audiences
+- Example: Japanese audio → English subtitles
 
 ### 3. **Transliteration Mode**
 - Converts Japanese and Hindi scripts to English/Romanized text
-- Japanese: Kanji/Kana → Romaji
-- Hindi: Devanagari → Romanized Hindi
+- Japanese: Kanji/Kana → Romaji (e.g., "こんにちは" → "konnichiwa")
+- Hindi: Devanagari → Romanized Hindi (e.g., "नमस्ते" → "namaste")
 - Ideal for learners or viewers who prefer Latin script
 
 ---
@@ -274,7 +297,7 @@ All SRT files are saved in the same folder as your source media file.
 
 | Type | Formats |
 |------|---------|
-| **Video** | MP4, AVI, MKV, MOV, WEBM, MPG, MPEG, WMV |
+| **Video** | MP4, AVI, MKV, MOV, WEBM, MPG, MPEG, M4V |
 | **Audio** | MP3, WAV, M4A, FLAC |
 
 ---
@@ -282,16 +305,20 @@ All SRT files are saved in the same folder as your source media file.
 ## ⚙️ System Requirements
 
 ### Minimum Requirements
-- **OS**: Windows 10/11 (64-bit)
-- **RAM**: 2GB (for Tiny/Base models)
-- **Storage**: 500MB for application + models
-- **CPU**: Any modern processor (Intel Core i3 or equivalent)
+| Component | Requirement |
+|-----------|-------------|
+| **OS** | Windows 10/11 (64-bit) or Linux/Mac (Python version) |
+| **RAM** | 2GB (for Tiny/Base models) |
+| **Storage** | 500MB for application + models |
+| **CPU** | Any modern processor (Intel Core i3 or equivalent) |
 
 ### Recommended Requirements
-- **RAM**: 8GB (for Medium/Large models)
-- **Storage**: 4GB free space
-- **CPU**: Intel Core i5/i7 or AMD Ryzen 5/7
-- **GPU**: Optional - no GPU required
+| Component | Requirement |
+|-----------|-------------|
+| **RAM** | 8GB (for Medium/Large models) |
+| **Storage** | 4GB free space |
+| **CPU** | Intel Core i5/i7 or AMD Ryzen 5/7 |
+| **GPU** | Optional - no GPU required |
 
 ---
 
@@ -316,6 +343,7 @@ All SRT files are saved in the same folder as your source media file.
 - ✅ Ensure sufficient disk space (at least 2x model size)
 - ✅ Try again - downloads resume automatically
 - ✅ Disable firewall temporarily if needed
+- ✅ Download models manually from the links above
 
 **Q: Slow transcription?**
 - ✅ Use Tiny or Base model for faster processing
@@ -341,6 +369,31 @@ All SRT files are saved in the same folder as your source media file.
 - ✅ Run as administrator
 - ✅ Check antivirus - may quarantine required files
 
+**Q: Python version not working?**
+- ✅ Ensure Python 3.7+ is installed
+- ✅ Run `pip install -r requirements.txt`
+- ✅ Check that colorama is installed
+- ✅ Run from command prompt to see error messages
+
+---
+
+## 📊 Performance Tips
+
+### For Best Results:
+1. **Use high-quality audio** - Clear speech improves accuracy dramatically
+2. **Choose the right model**:
+   - Tiny/Base: Quick previews, short videos
+   - Small/Medium: General use, good balance
+   - Large: Professional use, maximum accuracy
+3. **Optimize for speed**:
+   - Use SSD storage for faster processing
+   - Close unnecessary applications
+   - Process shorter segments
+4. **Language-specific tips**:
+   - English: Works well with all models
+   - Japanese/Hindi: Use transliteration for Latin script output
+   - Other languages: Use Normal or Translation mode
+
 ---
 
 ## 💬 Support & Community
@@ -352,7 +405,7 @@ Join our Telegram channel for:
 - 🤝 Community discussions
 
 <p align="center">
-<a href="https://t.me/Noty_215">
+<a href="https://t.me/NotY215">
 <img src="https://img.shields.io/badge/Join%20us%20on-Telegram-2CA5E0?style=for-the-badge&logo=telegram" alt="Join Telegram">
 </a>
 <a href="https://www.youtube.com/@NotY215">
@@ -360,7 +413,7 @@ Join our Telegram channel for:
 </a>
 </p>
 
-**Telegram Channel:** [https://t.me/Noty_215](https://t.me/Noty_215)  
+**Telegram Channel:** [https://t.me/NotY215](https://t.me/NotY215)  
 **YouTube Channel:** [https://www.youtube.com/@NotY215](https://www.youtube.com/@NotY215)
 
 ---
@@ -386,13 +439,13 @@ For the full license text, visit: https://www.gnu.org/licenses/lgpl-3.0.en.html
 - **AI Model**: OpenAI Whisper
 - **Model Format**: Whisper.cpp by ggerganov
 - **Media Processing**: FFmpeg
-- **Dependencies**: Python (bundled), PyTorch (bundled)
+- **Python Version**: Pure Python implementation with colorama
 
 ---
 
 ## 📞 Contact
 
-- **Telegram**: https://t.me/Noty_215
+- **Telegram**: https://t.me/NotY215
 - **YouTube**: https://www.youtube.com/@NotY215
 - **GitHub**: https://github.com/NotY215/NotYCaptionGenAi
 
@@ -400,14 +453,62 @@ For the full license text, visit: https://www.gnu.org/licenses/lgpl-3.0.en.html
 
 ## 🆕 What's New in Version 3.0
 
-- ✨ Added Translation Mode - Translate subtitles to English automatically
-- ✨ Added Transliteration Mode - Convert Japanese/Hindi to Romanized text
-- ✨ Added Small model option (500 MB)
-- ✨ Improved progress bar with download speed display
-- ✨ Better error handling and user feedback
-- ✨ UTF-8 encoding support for all languages
-- ✨ Faster model downloads with resume capability
-- ✨ Enhanced command-line interface with better formatting
+### Added Features:
+- ✨ **Translation Mode** - Translate subtitles to English automatically
+- ✨ **Transliteration Mode** - Convert Japanese/Hindi to Romanized text
+- ✨ **Small model option** (500 MB) for better balance
+- ✨ **Language selection** - Choose from 5 languages (English, Hindi, Japanese, Chinese, Urdu)
+- ✨ **Improved progress bar** with download speed display
+- ✨ **Python version** for cross-platform compatibility
+
+### Improvements:
+- 🔧 Better error handling and user feedback
+- 🔧 UTF-8 encoding support for all languages
+- 🔧 Faster model downloads with resume capability
+- 🔧 Enhanced command-line interface with better formatting
+- 🔧 Model preservation - existing models are never deleted
+- 🔧 Smart resource extraction and management
+
+### Bug Fixes:
+- 🐛 Fixed model path issues for large models
+- 🐛 Fixed resource extraction on first run
+- 🐛 Fixed input validation for all options
+- 🐛 Fixed progress bar display on Windows
+- 🐛 Fixed file path handling with spaces
+
+---
+
+## 🗺️ Roadmap
+
+### Future Plans:
+- [ ] GPU acceleration support
+- [ ] Batch processing for multiple files
+- [ ] GUI version with drag-and-drop
+- [ ] Cloud model storage
+- [ ] More language support
+- [ ] Custom vocabulary support
+- [ ] Real-time transcription
+- [ ] Subtitle editing interface
+- [ ] Export to multiple formats (ASS, VTT, etc.)
+- [ ] Audio extraction from video
+
+---
+
+## ⭐ Star History
+
+If you find this project useful, please consider giving it a star on GitHub! It helps others discover the project and motivates further development.
+
+<p align="center">
+<a href="https://github.com/NotY215/NotYCaptionGenAi/stargazers">
+<img src="https://img.shields.io/github/stars/NotY215/NotYCaptionGenAi?style=social" alt="GitHub stars">
+</a>
+<a href="https://github.com/NotY215/NotYCaptionGenAi/network/members">
+<img src="https://img.shields.io/github/forks/NotY215/NotYCaptionGenAi?style=social" alt="GitHub forks">
+</a>
+<a href="https://github.com/NotY215/NotYCaptionGenAi/watchers">
+<img src="https://img.shields.io/github/watchers/NotY215/NotYCaptionGenAi?style=social" alt="GitHub watchers">
+</a>
+</p>
 
 ---
 
@@ -419,4 +520,8 @@ For the full license text, visit: https://www.gnu.org/licenses/lgpl-3.0.en.html
 <sub>This software is provided under the GNU Lesser General Public License v3.0</sub>
 <br>
 <sub>No installation required - just download and run!</sub>
+<br>
+<br>
+<sub>🌟 If you like this project, don't forget to star it on GitHub! 🌟</sub>
 </p>
+

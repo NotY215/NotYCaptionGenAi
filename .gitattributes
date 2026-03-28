@@ -1,1 +1,19 @@
-src/main/resources/Models/*.bin filter=lfs diff=lfs merge=lfs -text
+# LFS for large binary files
+resources/Models/*.bin filter=lfs diff=lfs merge=lfs -text
+resources/Files/*.exe filter=lfs diff=lfs merge=lfs -text
+resources/whisper/*.exe filter=lfs diff=lfs merge=lfs -text
+resources/whisper/*.dll filter=lfs diff=lfs merge=lfs -text
+*.exe filter=lfs diff=lfs merge=lfs -text
+*.dll filter=lfs diff=lfs merge=lfs -text
+*.bin filter=lfs diff=lfs merge=lfs -text
+# Text files
+*.py diff=python
+*.md diff=markdown
+*.txt diff=text
+*.bat diff=text
+*.ico filter=lfs diff=lfs merge=lfs -text
+# Exclude build directories
+dist/ -text
+build/ -text
+__pycache__/ -text
+*.pyc -text

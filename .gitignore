@@ -1,14 +1,35 @@
-/build
-/whisper.cpp
-/.vscode
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Build directories
+dist/
+build/
+*.egg-info/
+*.spec
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
 *.log
-*.pyc
-/launch4j-config.xml
-/build-exe.bat
-/create-distribution.bat
-/target
-/.idea/src/main/resources/Models/
-/.idea
-/.gradle
-/gradle
-/resources
+app.log
+
+# Temp files
+*.tmp
+*.temp
+extract_temp/
