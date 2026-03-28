@@ -265,6 +265,80 @@ class NotYCaptionGenerator:
             self.print_info("Make sure you have an internet connection for first-time download")
             return False
             
+    def format_subtitle_text(self, text: str, line_type: str, number_per_line: int) -> str:
+        """Format subtitle text with proper line breaks"""
+        if not text:
+            return text
+            
+        # First, split the text into sentences or phrases
+        # Handle different line types
+        if line_type == "words":
+            return self.limit_words_per_line(text, number_per_line)
+        else:
+            return self.limit_letters_per_line(text, number_per_line)
+    
+    def limit_words_per_line(self, text: str, max_words: int) -> str:
+        """Split text into lines with max_words per line"""
+        if max_words <= 0:
+            return text
+            
+        # Split into words
+        words = text.split()
+        
+        if len(words) <= max_words:
+            return text
+        
+        # Build lines with max_words per line
+        lines = []
+        for i in range(0, len(words), max_words):
+            line_words = words[i:i + max_words]
+            lines.append(' '.join(line_words))
+        
+        return '\n'.join(lines)
+    
+    def limit_letters_per_line(self, text: str, max_letters: int) -> str:
+        """Split text into lines with max_letters per line"""
+        if max_letters <= 0:
+            return text
+            
+        if len(text) <= max_letters:
+            return text
+        
+        lines = []
+        current_line = ""
+        current_length = 0
+        
+        # Split by spaces to preserve words
+        words = text.split()
+        
+        for word in words:
+            word_length = len(word)
+            
+            # If adding this word would exceed the limit
+            if current_length + word_length + (1 if current_line else 0) > max_letters:
+                if current_line:
+                    lines.append(current_line)
+                    current_line = word
+                    current_length = word_length
+                else:
+                    # Word itself is longer than max_letters, force break
+                    lines.append(word)
+                    current_line = ""
+                    current_length = 0
+            else:
+                if current_line:
+                    current_line += " " + word
+                    current_length += word_length + 1
+                else:
+                    current_line = word
+                    current_length = word_length
+        
+        # Add the last line
+        if current_line:
+            lines.append(current_line)
+        
+        return '\n'.join(lines)
+        
     def generate_captions(self, media_path: Path, model_name: str, line_type: str, 
                           number_per_line: int, mode: int, language_code: str) -> bool:
         try:
@@ -281,12 +355,13 @@ class NotYCaptionGenerator:
                 
             language = language_code if language_code != "auto" else None
             
-            # Transcribe
+            # Transcribe with word timestamps for better accuracy
             result = self.model.transcribe(
                 str(media_path),
                 task=task,
                 language=language,
-                verbose=False
+                verbose=False,
+                word_timestamps=True
             )
             
             # Generate output path
@@ -309,10 +384,7 @@ class NotYCaptionGenerator:
                         text = self.transliterate(text, language_code)
                     
                     # Apply line limit
-                    if line_type == "words":
-                        text = self.limit_words_per_line(text, number_per_line)
-                    else:
-                        text = self.limit_letters_per_line(text, number_per_line)
+                    text = self.format_subtitle_text(text, line_type, number_per_line)
                     
                     f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
                     
@@ -366,38 +438,6 @@ class NotYCaptionGenerator:
             for k, v in hindi_map.items():
                 text = text.replace(k, v)
         return text
-        
-    def limit_words_per_line(self, text: str, max_words: int) -> str:
-        words = text.split()
-        if len(words) <= max_words:
-            return text
-            
-        result = []
-        for i in range(0, len(words), max_words):
-            result.append(' '.join(words[i:i+max_words]))
-        return '\n'.join(result)
-        
-    def limit_letters_per_line(self, text: str, max_letters: int) -> str:
-        if len(text) <= max_letters:
-            return text
-            
-        result = []
-        current_line = []
-        current_length = 0
-        
-        for word in text.split():
-            if current_length + len(word) + 1 > max_letters and current_line:
-                result.append(' '.join(current_line))
-                current_line = [word]
-                current_length = len(word)
-            else:
-                current_line.append(word)
-                current_length += len(word) + 1
-                
-        if current_line:
-            result.append(' '.join(current_line))
-            
-        return '\n'.join(result)
         
     def open_browser_links(self):
         """Open Telegram and YouTube links"""

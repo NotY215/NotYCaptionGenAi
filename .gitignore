@@ -34,3 +34,4 @@ app.log
 *.temp
 extract_temp/
 temp_installer
+/models
