@@ -12,7 +12,7 @@ public class Config {
             // Get the location of the JAR file
             String path = Config.class.getProtectionDomain().getCodeSource().getLocation().getPath();
 
-            // Decode URL encoding (spaces become %20, etc.)
+            // Decode URL encoding
             path = URLDecoder.decode(path, StandardCharsets.UTF_8.name());
 
             // Remove "file:" prefix if present
@@ -27,24 +27,11 @@ public class Config {
 
             File jarFile = new File(path);
 
-            // Get the parent directory (where the JAR is located)
+            // Get the parent directory
             String jarDir = jarFile.getParentFile().getAbsolutePath();
 
-            // Make sure we're not pointing to a temp directory
-            if (jarDir.contains("temp") || jarDir.contains("Temp") || jarDir.contains("extract")) {
-                // Try to get the original JAR location from the classpath
-                String classpath = System.getProperty("java.class.path");
-                String[] paths = classpath.split(File.pathSeparator);
-                for (String cp : paths) {
-                    if (cp.endsWith(".jar") && cp.contains("App.jar")) {
-                        File altJar = new File(cp);
-                        if (altJar.exists()) {
-                            jarDir = altJar.getParentFile().getAbsolutePath();
-                            break;
-                        }
-                    }
-                }
-            }
+            System.out.println("DEBUG: JAR path from CodeSource: " + path);
+            System.out.println("DEBUG: JAR directory: " + jarDir);
 
             return jarDir;
         } catch (Exception e) {
@@ -69,40 +56,62 @@ public class Config {
         FFPROBE_PATH = RESOURCES_DIR + "Files" + File.separator + "ffprobe.exe";
         MODELS_DIR = RESOURCES_DIR + "Models" + File.separator;
 
-        System.out.println("📁 Jar Directory: " + getJarDirectory());
-        System.out.println("📁 Resource Directory: " + RESOURCES_DIR);
-        System.out.println("📁 Models Directory: " + MODELS_DIR);
+        System.out.println("DEBUG: Resources Directory: " + RESOURCES_DIR);
+        System.out.println("DEBUG: Whisper Path: " + WHISPER_EXE_PATH);
+        System.out.println("DEBUG: FFmpeg Path: " + FFMPEG_PATH);
+        System.out.println("DEBUG: Models Directory: " + MODELS_DIR);
 
         // Create directories if they don't exist
         new File(RESOURCES_DIR + "whisper").mkdirs();
         new File(RESOURCES_DIR + "Files").mkdirs();
         new File(MODELS_DIR).mkdirs();
 
-        // Check files
-        checkFile(WHISPER_EXE_PATH, "whisper-cli.exe");
-        checkFile(WHISPER_DLL_PATH, "whisper.dll");
-        checkFile(FFMPEG_PATH, "ffmpeg.exe");
-        checkFile(FFPROBE_PATH, "ffprobe.exe");
+        // Check files with absolute paths
+        File whisperExe = new File(WHISPER_EXE_PATH);
+        File whisperDll = new File(WHISPER_DLL_PATH);
+        File ffmpeg = new File(FFMPEG_PATH);
+        File ffprobe = new File(FFPROBE_PATH);
+
+        System.out.println("\n🔍 File Check:");
+        System.out.println("  whisper-cli.exe exists: " + whisperExe.exists() + " - " + WHISPER_EXE_PATH);
+        System.out.println("  whisper.dll exists: " + whisperDll.exists() + " - " + WHISPER_DLL_PATH);
+        System.out.println("  ffmpeg.exe exists: " + ffmpeg.exists() + " - " + FFMPEG_PATH);
+        System.out.println("  ffprobe.exe exists: " + ffprobe.exists() + " - " + FFPROBE_PATH);
+
+        if (whisperExe.exists()) {
+            System.out.println("✓ Found: whisper-cli.exe");
+        } else {
+            System.err.println("⚠️ Missing: whisper-cli.exe at " + WHISPER_EXE_PATH);
+        }
+
+        if (whisperDll.exists()) {
+            System.out.println("✓ Found: whisper.dll");
+        } else {
+            System.err.println("⚠️ Missing: whisper.dll at " + WHISPER_DLL_PATH);
+        }
+
+        if (ffmpeg.exists()) {
+            System.out.println("✓ Found: ffmpeg.exe");
+        } else {
+            System.err.println("⚠️ Missing: ffmpeg.exe at " + FFMPEG_PATH);
+        }
+
+        if (ffprobe.exists()) {
+            System.out.println("✓ Found: ffprobe.exe");
+        } else {
+            System.err.println("⚠️ Missing: ffprobe.exe at " + FFPROBE_PATH);
+        }
 
         // List models
         File modelsDir = new File(MODELS_DIR);
         File[] models = modelsDir.listFiles((dir, name) -> name.endsWith(".bin"));
         if (models != null && models.length > 0) {
-            System.out.println("✓ Found existing models:");
+            System.out.println("\n✓ Found existing models:");
             for (File model : models) {
                 System.out.println("   - " + model.getName() + " (" + formatSize(model.length()) + ")");
             }
         } else {
-            System.out.println("⚠️ No models found. They will be downloaded when needed.");
-        }
-    }
-
-    private static void checkFile(String path, String name) {
-        File file = new File(path);
-        if (file.exists()) {
-            System.out.println("✓ Found: " + name);
-        } else {
-            System.err.println("⚠️ Missing: " + name + " at " + path);
+            System.out.println("\n⚠️ No models found. They will be downloaded when needed.");
         }
     }
 
