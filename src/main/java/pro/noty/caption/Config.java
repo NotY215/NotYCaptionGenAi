@@ -1,23 +1,54 @@
 package pro.noty.caption;
 
 import java.io.File;
-import java.nio.file.Files;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 
 public class Config {
-    // Get the directory where App.jar is located
+
+    // Get the actual directory where App.jar is located
     private static String getJarDirectory() {
         try {
+            // Get the location of the JAR file
             String path = Config.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+
+            // Decode URL encoding (spaces become %20, etc.)
+            path = URLDecoder.decode(path, StandardCharsets.UTF_8.name());
+
+            // Remove "file:" prefix if present
+            if (path.startsWith("file:")) {
+                path = path.substring(5);
+            }
+
+            // Remove leading slash on Windows
+            if (path.startsWith("/") && System.getProperty("os.name").contains("Windows")) {
+                path = path.substring(1);
+            }
+
             File jarFile = new File(path);
 
-            if (jarFile.isFile()) {
-                // Running from JAR - return the directory containing the JAR
-                return jarFile.getParentFile().getAbsolutePath();
-            } else {
-                // Running from IDE - return the project root
-                return new File("").getAbsolutePath();
+            // Get the parent directory (where the JAR is located)
+            String jarDir = jarFile.getParentFile().getAbsolutePath();
+
+            // Make sure we're not pointing to a temp directory
+            if (jarDir.contains("temp") || jarDir.contains("Temp") || jarDir.contains("extract")) {
+                // Try to get the original JAR location from the classpath
+                String classpath = System.getProperty("java.class.path");
+                String[] paths = classpath.split(File.pathSeparator);
+                for (String cp : paths) {
+                    if (cp.endsWith(".jar") && cp.contains("App.jar")) {
+                        File altJar = new File(cp);
+                        if (altJar.exists()) {
+                            jarDir = altJar.getParentFile().getAbsolutePath();
+                            break;
+                        }
+                    }
+                }
             }
+
+            return jarDir;
         } catch (Exception e) {
+            System.err.println("Error getting JAR directory: " + e.getMessage());
             return new File("").getAbsolutePath();
         }
     }
