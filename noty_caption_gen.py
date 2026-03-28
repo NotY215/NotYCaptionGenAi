@@ -36,7 +36,7 @@ APP_VERSION = "4.3"
 APP_AUTHOR = "NotY215"
 APP_YEAR = "2026"
 APP_LICENSE = "LGPL-3.0"
-APP_TELEGRAM = "https://t.me/NotY215"
+APP_TELEGRAM = "https://t.me/Noty_215"
 APP_YOUTUBE = "https://www.youtube.com/@NotY215"
 
 # ANSI color codes
