@@ -14,14 +14,12 @@ from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 import threading
 import time
-import struct
-import zlib
 
 class InstallerGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("NotY Caption Generator AI Installer v4.3")
-        self.root.geometry("650x650")
+        self.root.geometry("650x600")
         self.root.resizable(False, False)
         
         if getattr(sys, 'frozen', False):
@@ -31,12 +29,13 @@ class InstallerGUI:
         
         # Set icon
         try:
-            icon_path = self.installer_dir / "logo.ico"
+            icon_path = self.installer_dir / "resources" / "logo.ico"
             if icon_path.exists():
                 self.root.iconbitmap(str(icon_path))
         except:
             pass
         
+        # Variables - use simple Python variables instead of tkinter variables
         self.install_base = tk.StringVar(value="C:\\")
         self.install_path = tk.StringVar(value="C:\\NotYCaptionGenAI")
         self.create_shortcut = tk.BooleanVar(value=True)
@@ -85,9 +84,12 @@ class InstallerGUI:
         options_frame = ttk.LabelFrame(main_frame, text="Installation Options", padding=10)
         options_frame.pack(fill="x", pady=10)
         
-        ttk.Checkbutton(options_frame, text="Create Start Menu shortcut", variable=self.create_shortcut).pack(anchor="w", pady=2)
-        ttk.Checkbutton(options_frame, text="Create Desktop shortcut", variable=self.create_desktop).pack(anchor="w", pady=2)
-        ttk.Checkbutton(options_frame, text="Add to 'Send To' menu", variable=self.register_sendto).pack(anchor="w", pady=2)
+        self.cb1 = ttk.Checkbutton(options_frame, text="Create Start Menu shortcut", variable=self.create_shortcut)
+        self.cb1.pack(anchor="w", pady=2)
+        self.cb2 = ttk.Checkbutton(options_frame, text="Create Desktop shortcut", variable=self.create_desktop)
+        self.cb2.pack(anchor="w", pady=2)
+        self.cb3 = ttk.Checkbutton(options_frame, text="Add to 'Send To' menu", variable=self.register_sendto)
+        self.cb3.pack(anchor="w", pady=2)
         
         self.progress = ttk.Progressbar(main_frame, mode="determinate", length=500)
         self.progress.pack(pady=10)
@@ -137,35 +139,26 @@ class InstallerGUI:
             # Copy main executable
             exe_file = self.installer_dir / "NotYCaptionGenAI.exe"
             if exe_file.exists():
-                self.update_progress(10, "Copying executable...")
+                self.update_progress(20, "Copying executable...")
                 shutil.copy2(exe_file, install_dir / "NotYCaptionGenAI.exe")
             
-            # Extract models if they exist in compressed form
-            models_bin = self.installer_dir / "models.bin"
-            if models_bin.exists():
-                self.update_progress(20, "Extracting models...")
-                self.extract_data(models_bin, install_dir / "models")
-            else:
-                # Copy models folder if it exists
-                models_dir = self.installer_dir / "models"
-                if models_dir.exists():
-                    self.update_progress(20, "Copying models...")
-                    shutil.copytree(models_dir, install_dir / "models")
-                else:
-                    # Create empty models directory
-                    self.update_progress(20, "Creating models directory...")
-                    (install_dir / "models").mkdir(parents=True, exist_ok=True)
+            # Copy resources
+            resources_dir = self.installer_dir / "resources"
+            if resources_dir.exists():
+                self.update_progress(40, "Copying resources...")
+                dest_resources = install_dir / "resources"
+                if dest_resources.exists():
+                    shutil.rmtree(dest_resources)
+                shutil.copytree(resources_dir, dest_resources)
             
-            # Copy files (FFmpeg)
-            files_bin = self.installer_dir / "files.bin"
-            if files_bin.exists():
-                self.update_progress(50, "Extracting FFmpeg files...")
-                self.extract_data(files_bin, install_dir / "files")
-            else:
-                files_dir = self.installer_dir / "files"
-                if files_dir.exists():
-                    self.update_progress(50, "Copying FFmpeg files...")
-                    shutil.copytree(files_dir, install_dir / "files")
+            # Copy models if they exist
+            models_dir = self.installer_dir / "models"
+            if models_dir.exists():
+                self.update_progress(60, "Copying models...")
+                dest_models = install_dir / "models"
+                if dest_models.exists():
+                    shutil.rmtree(dest_models)
+                shutil.copytree(models_dir, dest_models)
             
             # Create uninstaller
             self.update_progress(85, "Creating uninstaller...")
@@ -195,37 +188,6 @@ class InstallerGUI:
             messagebox.showerror("Installation Failed", str(e))
             self.install_btn.config(state="normal")
             
-    def extract_data(self, data_file, dest_dir):
-        with open(data_file, 'rb') as f:
-            compressed_size = struct.unpack('Q', f.read(8))[0]
-            compressed_data = f.read(compressed_size)
-            decompressed_data = zlib.decompress(compressed_data)
-            
-            decompressed_str = decompressed_data.decode('utf-8')
-            parts = decompressed_str.split('\n')
-            
-            file_list = []
-            idx = 0
-            for line in parts:
-                if '|' in line:
-                    file_path, size = line.split('|')
-                    file_list.append((file_path, int(size)))
-                    idx = decompressed_str.find('\n', idx) + 1
-                else:
-                    break
-            
-            data_start = idx
-            total = len(file_list)
-            for i, (file_path, size) in enumerate(file_list):
-                full_path = dest_dir / file_path
-                full_path.parent.mkdir(parents=True, exist_ok=True)
-                file_data = decompressed_data[data_start:data_start + size]
-                with open(full_path, 'wb') as out:
-                    out.write(file_data)
-                data_start += size
-                progress = 20 + int((i + 1) / total * 60)
-                self.update_progress(progress, f"Extracting {file_path}")
-                
     def create_uninstaller(self, install_dir):
         uninstaller_content = f'''@echo off
 echo ============================================================

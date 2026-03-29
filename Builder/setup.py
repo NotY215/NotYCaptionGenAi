@@ -9,63 +9,7 @@ import os
 import sys
 import subprocess
 import shutil
-import struct
-import zlib
 from pathlib import Path
-
-def compress_directory(src_dir, output_file):
-    """Compress directory with maximum compression"""
-    if not src_dir.exists() or not any(src_dir.iterdir()):
-        print(f"  Skipping {src_dir} - empty or not found")
-        return None
-    
-    print(f"  Compressing {src_dir}...")
-    
-    files = []
-    total_size = 0
-    
-    for root, dirs, files_in_dir in os.walk(src_dir):
-        for file in files_in_dir:
-            file_path = Path(root) / file
-            rel_path = file_path.relative_to(src_dir)
-            files.append((str(rel_path), file_path.stat().st_size))
-            total_size += file_path.stat().st_size
-    
-    if not files:
-        print(f"    No files found in {src_dir}")
-        return None
-    
-    print(f"    Found {len(files)} files, total size: {total_size / 1024 / 1024:.2f} MB")
-    
-    # Create header
-    header = '\n'.join([f"{f}|{s}" for f, s in files])
-    header_bytes = header.encode('utf-8')
-    
-    # Compress
-    compressor = zlib.compressobj(zlib.Z_BEST_COMPRESSION)
-    compressed_chunks = [compressor.compress(header_bytes)]
-    
-    for rel_path, size in files:
-        file_path = src_dir / rel_path
-        with open(file_path, 'rb') as f:
-            while True:
-                chunk = f.read(1024 * 1024)
-                if not chunk:
-                    break
-                compressed_chunks.append(compressor.compress(chunk))
-    
-    compressed_chunks.append(compressor.flush())
-    compressed_data = b''.join(compressed_chunks)
-    
-    with open(output_file, 'wb') as f:
-        f.write(struct.pack('Q', len(compressed_data)))
-        f.write(compressed_data)
-    
-    compressed_size = len(compressed_data) + 8
-    print(f"    Compressed size: {compressed_size / 1024 / 1024:.2f} MB")
-    print(f"    Compression ratio: {(1 - compressed_size / total_size) * 100:.1f}%")
-    
-    return compressed_size
 
 def build_all():
     print("=" * 60)
@@ -76,19 +20,14 @@ def build_all():
     base_dir = Path(__file__).parent.parent
     builder_dir = Path(__file__).parent
     dist_dir = base_dir / "dist"
-    temp_installer = base_dir / "temp_installer"
     
     # Clean
     if dist_dir.exists():
         shutil.rmtree(dist_dir)
-    if temp_installer.exists():
-        shutil.rmtree(temp_installer)
-    
     dist_dir.mkdir(parents=True, exist_ok=True)
-    temp_installer.mkdir(parents=True, exist_ok=True)
     
     # Step 1: Build main executable
-    print("\n[1/3] Building main executable...")
+    print("\n[1/2] Building main executable...")
     try:
         subprocess.check_call([sys.executable, str(builder_dir / "build_exe.py")])
     except subprocess.CalledProcessError as e:
@@ -100,68 +39,54 @@ def build_all():
         print("\n❌ Main executable not found!")
         sys.exit(1)
     
-    # Step 2: Prepare installer files
-    print("\n[2/3] Preparing installer files...")
+    print(f"✅ Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
     
-    # Copy main executable
-    shutil.copy2(main_exe, temp_installer / "NotYCaptionGenAI.exe")
+    # Step 2: Build installer
+    print("\n[2/2] Building installer...")
     
-    # Copy icon
+    # Create spec for installer - simpler, no compression
+    installer_py = str(builder_dir / "installer.py").replace('\\', '/')
+    main_exe_path = str(main_exe).replace('\\', '/')
+    
+    # Copy resources to temp
+    temp_dir = base_dir / "temp_resources"
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Copy resources
     resources_dir = base_dir / "resources"
-    logo_icon = resources_dir / "logo.ico"
-    if logo_icon.exists():
-        shutil.copy2(logo_icon, temp_installer / "logo.ico")
+    if resources_dir.exists():
+        shutil.copytree(resources_dir, temp_dir / "resources")
     
-    # Compress models directory
+    # Copy models if they exist
     models_dir = base_dir / "models"
     if models_dir.exists() and any(models_dir.iterdir()):
-        compress_directory(models_dir, temp_installer / "models.bin")
-    else:
-        print("  No models found to compress")
+        shutil.copytree(models_dir, temp_dir / "models")
     
-    # Compress files directory (FFmpeg)
-    files_dir = resources_dir / "Files"
-    if files_dir.exists() and any(files_dir.iterdir()):
-        compress_directory(files_dir, temp_installer / "files.bin")
-    else:
-        print("  No files found to compress")
-    
-    # Step 3: Build installer
-    print("\n[3/3] Building installer executable...")
-    
-    # Create spec for installer
-    installer_py = str(builder_dir / "installer.py").replace('\\', '/')
-    main_exe_path = str(temp_installer / "NotYCaptionGenAI.exe").replace('\\', '/')
-    logo_path = str(temp_installer / "logo.ico").replace('\\', '/')
-    
-    datas = [f"(r'{main_exe_path}', '.'), (r'{logo_path}', '.')"]
-    
-    if (temp_installer / "models.bin").exists():
-        models_path = str(temp_installer / "models.bin").replace('\\', '/')
-        datas.append(f"(r'{models_path}', '.')")
-    
-    if (temp_installer / "files.bin").exists():
-        files_path = str(temp_installer / "files.bin").replace('\\', '/')
-        datas.append(f"(r'{files_path}', '.')")
-    
-    datas_str = ",\n        ".join(datas)
-    
-    installer_spec = f'''# -*- mode: python ; coding: utf-8 -*-
+    # Create spec file
+    spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
     [r'{installer_py}'],
     pathex=[],
     binaries=[],
     datas=[
-        {datas_str}
+        (r'{main_exe_path}', '.'),
+        (r'{temp_dir / "resources"}', 'resources'),
     ],
-    hiddenimports=['tkinter', 'threading', 'zlib', 'struct'],
+    hiddenimports=['tkinter', 'threading', 'struct', 'zlib'],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
 )
+
+# Add models if they exist
+models_dir = r'{temp_dir / "models"}'
+if os.path.exists(models_dir):
+    a.datas += Tree(models_dir, prefix='models')
 
 pyz = PYZ(a.pure)
 
@@ -184,13 +109,13 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=r'{logo_path}'
+    icon=r'{temp_dir / "resources/logo.ico"}'
 )
 '''
     
     spec_path = builder_dir / "Installer.spec"
     with open(spec_path, 'w', encoding='utf-8') as f:
-        f.write(installer_spec)
+        f.write(spec_content)
     
     # Build installer
     cmd = [
@@ -210,10 +135,10 @@ exe = EXE(
     
     # Clean up
     spec_path.unlink(missing_ok=True)
-    shutil.rmtree(temp_installer, ignore_errors=True)
+    shutil.rmtree(temp_dir, ignore_errors=True)
     shutil.rmtree(builder_dir / "build_installer", ignore_errors=True)
     
-    # Find the installer
+    # Copy installer to root
     installer_exe = dist_dir / "NotYCaptionGenAI_Installer_v4.3.exe"
     if installer_exe.exists():
         final_installer = base_dir / "NotYCaptionGenAI_Installer_v4.3.exe"
