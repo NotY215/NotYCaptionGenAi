@@ -3,3 +3,4 @@ torch>=2.0.0
 torchaudio>=2.0.0
 numpy>=1.24.0
 colorama>=0.4.6
+pyinstaller>=6.0.0
