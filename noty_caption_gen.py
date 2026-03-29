@@ -13,17 +13,48 @@ import webbrowser
 import time
 import platform
 import argparse
-import turtle
-import threading
+import subprocess
+import importlib.util
 from pathlib import Path
 from typing import List, Tuple, Optional
 
 # Fix Windows console encoding
 if platform.system() == "Windows":
-    import sys
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
+
+# Check and install dependencies
+def check_and_install_dependencies():
+    """Check if required packages are installed, install if missing"""
+    required_packages = {
+        'whisper': 'openai-whisper',
+        'torch': 'torch',
+        'numpy': 'numpy',
+        'colorama': 'colorama'
+    }
+    
+    missing_packages = []
+    for module, package in required_packages.items():
+        if importlib.util.find_spec(module) is None:
+            missing_packages.append(package)
+    
+    if missing_packages:
+        print(f"{Colors.YELLOW}⚠ Missing required packages: {', '.join(missing_packages)}{Colors.RESET}")
+        print(f"{Colors.CYAN}ℹ Installing dependencies...{Colors.RESET}")
+        
+        for package in missing_packages:
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+                print(f"{Colors.GREEN}✓ Installed: {package}{Colors.RESET}")
+            except Exception as e:
+                print(f"{Colors.RED}✗ Failed to install {package}: {e}{Colors.RESET}")
+                return False
+        
+        print(f"{Colors.GREEN}✓ All dependencies installed!{Colors.RESET}")
+        return True
+    
+    return True
 
 # Try to import whisper
 try:
@@ -44,11 +75,21 @@ APP_YOUTUBE = "https://www.youtube.com/@NotY215"
 # ANSI color codes
 class Colors:
     RESET = '\033[0m'
-    RED = '\033[31m'
-    GREEN = '\033[32m'
-    YELLOW = '\033[33m'
-    CYAN = '\033[36m'
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    PURPLE = '\033[95m'
+    CYAN = '\033[96m'
+    WHITE = '\033[97m'
     BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    BG_RED = '\033[41m'
+    BG_GREEN = '\033[42m'
+    BG_YELLOW = '\033[43m'
+    BG_BLUE = '\033[44m'
+    BG_PURPLE = '\033[45m'
+    BG_CYAN = '\033[46m'
 
 if platform.system() == "Windows":
     try:
@@ -56,75 +97,70 @@ if platform.system() == "Windows":
         colorama.init()
     except ImportError:
         Colors.RESET = ''
-        Colors.GREEN = ''
         Colors.RED = ''
+        Colors.GREEN = ''
         Colors.YELLOW = ''
         Colors.CYAN = ''
         Colors.BOLD = ''
 
-# Draw logo with turtle
-def draw_logo():
-    """Draw the app icon using turtle"""
-    try:
-        screen = turtle.Screen()
-        screen.setup(400, 400)
-        screen.bgcolor("black")
-        screen.title("NotY Caption Generator AI")
-        
-        t = turtle.Turtle()
-        t.speed(10)
-        t.pensize(3)
-        
-        # Draw "N"
-        t.penup()
-        t.goto(-100, 50)
-        t.pendown()
-        t.color("#00ff00")
-        t.left(90)
-        t.forward(100)
-        t.right(90)
-        t.forward(50)
-        t.right(90)
-        t.forward(100)
-        
-        # Draw "Y"
-        t.penup()
-        t.goto(-30, 50)
-        t.pendown()
-        t.left(90)
-        t.forward(100)
-        t.right(135)
-        t.forward(70)
-        t.left(90)
-        t.forward(70)
-        
-        # Draw Circle
-        t.penup()
-        t.goto(20, 0)
-        t.pendown()
-        t.color("#ff6600")
-        t.circle(40)
-        
-        # Draw Waves
-        t.penup()
-        t.goto(80, -30)
-        t.pendown()
-        t.color("#00ccff")
-        for _ in range(3):
-            t.circle(15, 180)
-            t.circle(5, 180)
-        
-        # Draw Text
-        t.penup()
-        t.goto(-150, -120)
-        t.pendown()
-        t.color("#ffffff")
-        t.write("NotY Caption AI", font=("Arial", 14, "bold"))
-        
-        t.hideturtle()
-        screen.mainloop()
-    except Exception as e:
-        pass  # Silent fail if turtle fails
+def draw_turtle_logo():
+    """Draw a colorful turtle logo in console"""
+    turtle_art = f"""
+{Colors.BG_GREEN}{Colors.BLACK}{Colors.BOLD}
+                    ╔═══════════════════════════════════════════════════╗
+                    ║                    🐢 NOTY AI 🐢                   ║
+                    ║         The Fastest Subtitle Generator           ║
+                    ║            Copyright (c) 2026 NotY215            ║
+                    ╚═══════════════════════════════════════════════════╝
+{Colors.RESET}
+
+{Colors.CYAN}    ╔═══════════════════════════════════════════════════════════════════╗
+    ║                           TURTLE POWER!                            ║
+    ╚═══════════════════════════════════════════════════════════════════╝{Colors.RESET}
+
+{Colors.GREEN}          ▄▄▄▄▄▄▄▄▄▄▄  {Colors.YELLOW}▄▄▄▄▄▄▄▄▄▄▄  {Colors.RED}▄▄▄▄▄▄▄▄▄▄▄  {Colors.BLUE}▄▄▄▄▄▄▄▄▄▄▄{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}          ▀▀▀▀▀▀▀▀▀▀▀  {Colors.YELLOW}▀▀▀▀▀▀▀▀▀▀▀  {Colors.RED}▀▀▀▀▀▀▀▀▀▀▀  {Colors.BLUE}▀▀▀▀▀▀▀▀▀▀▀{Colors.RESET}
+{Colors.RESET}
+{Colors.PURPLE}              ╔══════════════════════════════════════════╗
+              ║     🚀 AI-POWERED SUBTITLE GENERATION 🚀      ║
+              ╚══════════════════════════════════════════════╝{Colors.RESET}
+"""
+    print(turtle_art)
+
+# Whisper models with correct OpenAI URLs
+WHISPER_MODELS = {
+    "tiny": {
+        "size": "75 MB",
+        "desc": "Fastest",
+        "url": "https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt"
+    },
+    "base": {
+        "size": "150 MB",
+        "desc": "Balanced",
+        "url": "https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt"
+    },
+    "small": {
+        "size": "500 MB",
+        "desc": "Good",
+        "url": "https://openaipublic.azureedge.net/main/whisper/models/9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794/small.pt"
+    },
+    "medium": {
+        "size": "1.5 GB",
+        "desc": "Accurate",
+        "url": "https://openaipublic.azureedge.net/main/whisper/models/345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674b08dcb1/medium.pt"
+    },
+    "large-v3": {
+        "size": "2.9 GB",
+        "desc": "Best",
+        "url": "https://openaipublic.azureedge.net/main/whisper/models/e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb/large-v3.pt"
+    }
+}
 
 class NotYCaptionGenerator:
     def __init__(self, media_path: str = None):
@@ -139,42 +175,13 @@ class NotYCaptionGenerator:
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.files_dir.mkdir(parents=True, exist_ok=True)
         
-        # Whisper models with correct OpenAI URLs
-        self.WHISPER_MODELS = {
-            "tiny": {
-                "size": "75 MB",
-                "desc": "Fastest",
-                "url": "https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt"
-            },
-            "base": {
-                "size": "150 MB",
-                "desc": "Balanced",
-                "url": "https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt"
-            },
-            "small": {
-                "size": "500 MB",
-                "desc": "Good",
-                "url": "https://openaipublic.azureedge.net/main/whisper/models/9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794/small.pt"
-            },
-            "medium": {
-                "size": "1.5 GB",
-                "desc": "Accurate",
-                "url": "https://openaipublic.azureedge.net/main/whisper/models/345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674b08dcb1/medium.pt"
-            },
-            "large-v3": {
-                "size": "2.9 GB",
-                "desc": "Best",
-                "url": "https://openaipublic.azureedge.net/main/whisper/models/e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb/large-v3.pt"
-            }
-        }
-        
         # Models list for display
         self.models = [
-            ("tiny", self.WHISPER_MODELS["tiny"]["size"], self.WHISPER_MODELS["tiny"]["desc"]),
-            ("base", self.WHISPER_MODELS["base"]["size"], self.WHISPER_MODELS["base"]["desc"]),
-            ("small", self.WHISPER_MODELS["small"]["size"], self.WHISPER_MODELS["small"]["desc"]),
-            ("medium", self.WHISPER_MODELS["medium"]["size"], self.WHISPER_MODELS["medium"]["desc"]),
-            ("large-v3", self.WHISPER_MODELS["large-v3"]["size"], self.WHISPER_MODELS["large-v3"]["desc"])
+            ("tiny", WHISPER_MODELS["tiny"]["size"], WHISPER_MODELS["tiny"]["desc"]),
+            ("base", WHISPER_MODELS["base"]["size"], WHISPER_MODELS["base"]["desc"]),
+            ("small", WHISPER_MODELS["small"]["size"], WHISPER_MODELS["small"]["desc"]),
+            ("medium", WHISPER_MODELS["medium"]["size"], WHISPER_MODELS["medium"]["desc"]),
+            ("large-v3", WHISPER_MODELS["large-v3"]["size"], WHISPER_MODELS["large-v3"]["desc"])
         ]
         
         # Language options
@@ -199,14 +206,14 @@ class NotYCaptionGenerator:
     def print_header(self, title: str = None):
         if title is None:
             title = f"{APP_NAME} v{APP_VERSION}"
-        width = 60
+        draw_turtle_logo()
         print(f"{Colors.CYAN}{Colors.BOLD}")
-        print("╔" + "═" * (width - 2) + "╗")
-        print("║" + title.center(width - 2) + "║")
-        print("║" + f"Copyright (c) {APP_YEAR} {APP_AUTHOR}".center(width - 2) + "║")
-        print("║" + f"License: {APP_LICENSE}".center(width - 2) + "║")
-        print("║" + "Powered by OpenAI Whisper (.pt models)".center(width - 2) + "║")
-        print("╚" + "═" * (width - 2) + "╝")
+        print("╔" + "═" * 58 + "╗")
+        print("║" + title.center(58) + "║")
+        print("║" + f"Copyright (c) {APP_YEAR} {APP_AUTHOR}".center(58) + "║")
+        print("║" + f"License: {APP_LICENSE}".center(58) + "║")
+        print("║" + "Powered by OpenAI Whisper (.pt models)".center(58) + "║")
+        print("╚" + "═" * 58 + "╝")
         print(f"{Colors.RESET}")
         
     def print_success(self, message: str):
@@ -308,18 +315,50 @@ class NotYCaptionGenerator:
             return path
             
     def check_whisper_available(self) -> bool:
+        global WHISPER_AVAILABLE
         if not WHISPER_AVAILABLE:
             self.print_error("OpenAI Whisper not installed!")
-            self.print_info("Install it with: pip install openai-whisper torch")
-            return False
+            self.print_info("Installing dependencies automatically...")
+            
+            if check_and_install_dependencies():
+                # Reload whisper module
+                import importlib
+                try:
+                    global whisper
+                    whisper = importlib.import_module('whisper')
+                    WHISPER_AVAILABLE = True
+                    self.print_success("Dependencies installed successfully!")
+                    return True
+                except ImportError:
+                    self.print_error("Failed to load Whisper after installation")
+                    return False
+            else:
+                return False
         return True
         
     def check_model_exists(self, model_name: str) -> bool:
         model_path = self.models_dir / f"{model_name}.pt"
-        return model_path.exists()
+        if model_path.exists():
+            return True
+        # Check for existing model files
+        for f in self.models_dir.glob("*.pt"):
+            if f.stem == model_name or model_name in f.stem:
+                return True
+        return False
+        
+    def get_model_path(self, model_name: str) -> Path:
+        # Check for exact match
+        exact_path = self.models_dir / f"{model_name}.pt"
+        if exact_path.exists():
+            return exact_path
+        # Check for partial match
+        for f in self.models_dir.glob("*.pt"):
+            if model_name in f.stem:
+                return f
+        return self.models_dir / f"{model_name}.pt"
         
     def load_model(self, model_name: str):
-        model_info = self.WHISPER_MODELS[model_name]
+        model_info = WHISPER_MODELS[model_name]
         self.print_info(f"Loading {model_name.upper()} model (.pt format)...")
         self.print_info(f"Size: {model_info['size']}")
         try:
@@ -444,15 +483,17 @@ class NotYCaptionGenerator:
             self.print_warning(f"Could not open browser: {e}")
             
     def run(self):
-        # Show turtle logo in a separate thread
-        logo_thread = threading.Thread(target=draw_logo, daemon=True)
-        logo_thread.start()
-        
         self.clear_screen()
         self.print_header()
         
+        # Check and install dependencies
+        if not check_and_install_dependencies():
+            self.print_error("Failed to install dependencies!")
+            input("\nPress Enter to exit...")
+            return
+            
         if not self.check_whisper_available():
-            self.print_info("\nRun: pip install openai-whisper torch")
+            self.print_error("Whisper not available!")
             input("\nPress Enter to exit...")
             return
             
@@ -473,12 +514,12 @@ class NotYCaptionGenerator:
                 while True:
                     self.clear_screen()
                     self.print_header()
-                    print(f"\n📁 Current file: {media_path.name}")
+                    print(f"\n{Colors.BOLD}📁 Current file: {media_path.name}{Colors.RESET}")
                     
                     if self.selected_model:
-                        print(f"   🤖 Model: {self.selected_model[0].upper()} ({self.WHISPER_MODELS[self.selected_model[0]]['size']})")
+                        print(f"   {Colors.GREEN}🤖 Model: {self.selected_model[0].upper()} ({WHISPER_MODELS[self.selected_model[0]]['size']}){Colors.RESET}")
                     if self.selected_language:
-                        print(f"   🌐 Language: {self.language_name}")
+                        print(f"   {Colors.GREEN}🌐 Language: {self.language_name}{Colors.RESET}")
                     print()
                     
                     options = []
@@ -506,7 +547,7 @@ class NotYCaptionGenerator:
                     selected_option = options[choice - 1]
                     
                     if selected_option == "Choose Model":
-                        model_options = [f"{m[0].upper()} ({self.WHISPER_MODELS[m[0]]['size']}) - {m[2]}" for m in self.models]
+                        model_options = [f"{m[0].upper()} ({WHISPER_MODELS[m[0]]['size']}) - {m[2]}" for m in self.models]
                         model_choice = self.show_menu("SELECT MODEL", model_options)
                         if model_choice != -1:
                             self.selected_model = self.models[model_choice]

@@ -42,10 +42,10 @@ def build_all():
     print(f"✅ Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
     
     # Step 2: Build installer
-    print("\n[2/2] Building installer...")
+    print("\n[2/2] Building console installer...")
     
-    # Create spec for installer - simpler, no compression
-    installer_py = str(builder_dir / "installer.py").replace('\\', '/')
+    # Create spec for installer
+    installer_py = str(builder_dir / "installer_console.py").replace('\\', '/')
     main_exe_path = str(main_exe).replace('\\', '/')
     
     # Copy resources to temp
@@ -75,7 +75,7 @@ a = Analysis(
         (r'{main_exe_path}', '.'),
         (r'{temp_dir / "resources"}', 'resources'),
     ],
-    hiddenimports=['tkinter', 'threading', 'struct', 'zlib'],
+    hiddenimports=['ctypes', 'struct', 'subprocess', 'shutil', 'pathlib', 'zipfile'],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
@@ -103,7 +103,7 @@ exe = EXE(
     upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
