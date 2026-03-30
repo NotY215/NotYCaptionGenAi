@@ -144,7 +144,24 @@ class NotYCaptionGenerator:
             ("large", WHISPER_MODELS["large"]["size"], WHISPER_MODELS["large"]["desc"])
         ]
         
+        # Language options
+        self.languages = [
+            ("English", "en", "English"),
+            ("Hindi", "hi", "Hindi"),
+            ("Japanese", "ja", "Japanese"),
+            ("Auto Detect", "auto", "Auto Detect")
+        ]
+        
+        # Mode options
+        self.modes = [
+            ("Normal", "normal", "Generate in selected language"),
+            ("Translate to English", "translate", "Translate to English"),
+            ("Transliteration", "transliterate", "Convert to English/Romanized text (Hindi/Japanese only)")
+        ]
+        
         self.selected_model = None
+        self.selected_language = None
+        self.selected_mode = None
         self.media_path_arg = media_path
         self.model = None
         
@@ -260,7 +277,7 @@ class NotYCaptionGenerator:
             return False
             
     def generate_captions(self, media_path: Path, model_name: str, line_type: str, 
-                          number_per_line: int, mode: int) -> bool:
+                          number_per_line: int, language_code: str, mode: str) -> bool:
         """Generate captions using pywhispercpp"""
         try:
             if self.model is None:
@@ -269,13 +286,27 @@ class NotYCaptionGenerator:
                     
             self.print_info("Transcribing audio...")
             
-            # Use pywhispercpp to transcribe
-            segments = self.model.transcribe(str(media_path))
+            # Set language and task
+            lang = None if language_code == "auto" else language_code
+            task = "translate" if mode == "translate" else "transcribe"
             
-            # Process based on user preference
+            # Transcribe with proper parameters
+            segments = self.model.transcribe(
+                str(media_path),
+                language=lang,
+                task=task,
+                print_progress=True,
+                print_special=False,
+                print_realtime=False,
+                print_timestamps=False
+            )
+            
+            # Determine output filename
             output_path = media_path.parent / f"{media_path.stem}"
-            if mode == 2:
+            if mode == "translate":
                 output_path = output_path.with_name(f"{media_path.stem}_en")
+            elif language_code != "auto":
+                output_path = output_path.with_name(f"{media_path.stem}_{language_code}")
             output_path = output_path.with_suffix(".srt")
             
             subtitle_index = 1
@@ -285,15 +316,22 @@ class NotYCaptionGenerator:
                     # Get segment text
                     text = segment.text.strip()
                     
+                    # Apply transliteration if needed
+                    if mode == "transliterate":
+                        text = self.transliterate_text(text, language_code)
+                    
                     if line_type == "words":
                         # Process words per line
                         words_list = text.split()
                         words_per_line = number_per_line
                         
-                        # Estimate timing for word groups
-                        start_time = segment.start
-                        end_time = segment.end
+                        # Get segment timing
+                        start_time = segment.start if hasattr(segment, 'start') else 0
+                        end_time = segment.end if hasattr(segment, 'end') else start_time + 1
                         word_count = len(words_list)
+                        
+                        if word_count == 0:
+                            continue
                         
                         for i in range(0, len(words_list), words_per_line):
                             chunk_words = words_list[i:i + words_per_line]
@@ -310,8 +348,8 @@ class NotYCaptionGenerator:
                     else:
                         # Letters per line
                         formatted_text = self.limit_letters_per_line(text, number_per_line)
-                        start_str = self.format_time(segment.start)
-                        end_str = self.format_time(segment.end)
+                        start_str = self.format_time(segment.start if hasattr(segment, 'start') else 0)
+                        end_str = self.format_time(segment.end if hasattr(segment, 'end') else start_time + 1)
                         f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{formatted_text}\n\n")
                         subtitle_index += 1
                     
@@ -324,6 +362,42 @@ class NotYCaptionGenerator:
             import traceback
             traceback.print_exc()
             return False
+            
+    def transliterate_text(self, text: str, language_code: str) -> str:
+        """Simple transliteration for Hindi and Japanese"""
+        if language_code == "hi":
+            # Simple Hindi to English transliteration mapping
+            hindi_map = {
+                'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
+                'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
+                'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
+                'च': 'cha', 'छ': 'chha', 'ज': 'ja', 'झ': 'jha', 'ञ': 'nya',
+                'ट': 'ta', 'ठ': 'tha', 'ड': 'da', 'ढ': 'dha', 'ण': 'na',
+                'त': 'ta', 'थ': 'tha', 'द': 'da', 'ध': 'dha', 'न': 'na',
+                'प': 'pa', 'फ': 'pha', 'ब': 'ba', 'भ': 'bha', 'म': 'ma',
+                'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha',
+                'ष': 'sha', 'स': 'sa', 'ह': 'ha', 'क्ष': 'ksha', 'त्र': 'tra',
+                'ज्ञ': 'gya', 'ॐ': 'om'
+            }
+            for hindi, english in hindi_map.items():
+                text = text.replace(hindi, english)
+        elif language_code == "ja":
+            # Simple Japanese to Romaji mapping (basic)
+            ja_map = {
+                'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
+                'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
+                'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
+                'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
+                'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
+                'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
+                'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
+                'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
+                'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
+                'わ': 'wa', 'を': 'wo', 'ん': 'n'
+            }
+            for japanese, romaji in ja_map.items():
+                text = text.replace(japanese, romaji)
+        return text
             
     def format_time(self, seconds: float) -> str:
         """Format time for SRT subtitle"""
@@ -443,11 +517,54 @@ class NotYCaptionGenerator:
                     else:
                         continue
                 
-                # Choose line preference
+                # Select language
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}\n")
+                
+                print(f"{Colors.CYAN}Select Language:{Colors.RESET}")
+                for i, (name, code, desc) in enumerate(self.languages, 1):
+                    print(f"  {i}) {name} ({code}) - {desc}")
+                print(f"  0) Back")
+                
+                lang_choice = self.get_number_input(f"\n> Choose language (0-{len(self.languages)}): ", 0, len(self.languages))
+                if lang_choice == 0:
+                    continue
+                    
+                self.selected_language = self.languages[lang_choice - 1]
+                language_code = self.selected_language[1]
+                
+                # Select mode
+                self.clear_screen()
+                print_header()
+                print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
+                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
+                print(f"{Colors.GREEN}Language: {self.selected_language[0]}{Colors.RESET}\n")
+                
+                print(f"{Colors.CYAN}Select Mode:{Colors.RESET}")
+                for i, (name, mode_id, desc) in enumerate(self.modes, 1):
+                    # Show warning for transliteration
+                    if mode_id == "transliterate":
+                        print(f"  {i}) {name} - {desc} (Hindi/Japanese only)")
+                    else:
+                        print(f"  {i}) {name} - {desc}")
+                print(f"  0) Back")
+                
+                mode_choice = self.get_number_input(f"\n> Choose mode (0-{len(self.modes)}): ", 0, len(self.modes))
+                if mode_choice == 0:
+                    continue
+                    
+                self.selected_mode = self.modes[mode_choice - 1]
+                mode = self.selected_mode[1]
+                
+                # Choose line preference
+                self.clear_screen()
+                print_header()
+                print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
+                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
+                print(f"{Colors.GREEN}Language: {self.selected_language[0]}{Colors.RESET}")
+                print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}\n")
                 
                 print(f"{Colors.CYAN}Line Preference:{Colors.RESET}")
                 print(f"  1) Words")
@@ -459,17 +576,6 @@ class NotYCaptionGenerator:
                     continue
                 line_type = "words" if line_choice == 1 else "letters"
                 
-                # Choose mode
-                print(f"\n{Colors.CYAN}Subtitle Mode:{Colors.RESET}")
-                print(f"  1) Normal (Generate subtitles)")
-                print(f"  2) Translate to English")
-                print(f"  0) Back")
-                
-                mode_choice = self.get_number_input(f"\n> Choose mode (0-2): ", 0, 2)
-                if mode_choice == 0:
-                    continue
-                mode = mode_choice
-                
                 # Number per line
                 number_per_line = self.get_number_input(
                     f"How many {line_type} per line? (1-30): ", 1, 30
@@ -480,7 +586,8 @@ class NotYCaptionGenerator:
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
-                print(f"Mode: {'Translate to English' if mode == 2 else 'Normal'}")
+                print(f"{Colors.GREEN}Language: {self.selected_language[0]}{Colors.RESET}")
+                print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}")
                 print(f"Line Type: {line_type}")
                 print(f"{line_type.title()} per line: {number_per_line}\n")
                 
@@ -493,12 +600,20 @@ class NotYCaptionGenerator:
                     self.selected_model,
                     line_type,
                     number_per_line,
+                    language_code,
                     mode
                 )
                 
                 if success:
                     self.print_success(f"Thanks for using {APP_NAME}!")
                     self.print_success("Your caption has been generated successfully!")
+                    
+                    # Open links
+                    try:
+                        webbrowser.open(APP_TELEGRAM)
+                        webbrowser.open(APP_YOUTUBE)
+                    except:
+                        pass
                     
                     if self.confirm("Process another video?"):
                         continue
