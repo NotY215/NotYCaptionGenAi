@@ -13,6 +13,8 @@ import time
 import platform
 import ctypes
 from pathlib import Path
+import tkinter as tk
+from tkinter import filedialog
 
 # Colors for console output
 class Colors:
@@ -25,41 +27,19 @@ class Colors:
     CYAN = '\033[96m'
     WHITE = '\033[97m'
     BOLD = '\033[1m'
-    BG_GREEN = '\033[42m'
-    BG_BLUE = '\033[44m'
 
 if platform.system() == "Windows":
     os.system('color')
 
-def draw_turtle_logo():
-    """Draw colorful turtle logo"""
-    logo = f"""
-{Colors.BG_GREEN}{Colors.BLACK}{Colors.BOLD}
-                    ╔═══════════════════════════════════════════════════╗
-                    ║                    🐢 NOTY AI 🐢                   ║
-                    ║         The Fastest Subtitle Generator           ║
-                    ║            Copyright (c) 2026 NotY215            ║
-                    ╚═══════════════════════════════════════════════════╝
-{Colors.RESET}
-
-{Colors.CYAN}    ╔═══════════════════════════════════════════════════════════════════╗
-    ║                 NOTY CAPTION GENERATOR INSTALLER v4.4                 ║
-    ╚═══════════════════════════════════════════════════════════════════╝{Colors.RESET}
-
-{Colors.GREEN}          ▄▄▄▄▄▄▄▄▄▄▄  {Colors.YELLOW}▄▄▄▄▄▄▄▄▄▄▄  {Colors.RED}▄▄▄▄▄▄▄▄▄▄▄  {Colors.BLUE}▄▄▄▄▄▄▄▄▄▄▄{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}          ▀▀▀▀▀▀▀▀▀▀▀  {Colors.YELLOW}▀▀▀▀▀▀▀▀▀▀▀  {Colors.RED}▀▀▀▀▀▀▀▀▀▀▀  {Colors.BLUE}▀▀▀▀▀▀▀▀▀▀▀{Colors.RESET}
-{Colors.RESET}
-{Colors.PURPLE}              ╔══════════════════════════════════════════╗
-              ║     🚀 FAST • EASY • POWERFUL SUBTITLES 🚀      ║
-              ╚══════════════════════════════════════════════╝{Colors.RESET}
-"""
-    print(logo)
+def print_header():
+    """Print application header"""
+    print(f"{Colors.CYAN}{Colors.BOLD}")
+    print("╔══════════════════════════════════════════════════════════════╗")
+    print("║              NotY Caption Generator AI Installer v4.4        ║")
+    print("║                 Copyright (c) 2026 NotY215                  ║")
+    print("║                     License: LGPL-3.0                        ║")
+    print("╚══════════════════════════════════════════════════════════════╝")
+    print(f"{Colors.RESET}")
 
 def print_success(message):
     print(f"{Colors.GREEN}✓ {message}{Colors.RESET}")
@@ -91,6 +71,19 @@ def get_number_input(prompt, min_val, max_val):
             print_error(f"Please enter a number between {min_val} and {max_val}")
         except ValueError:
             print_error("Invalid input! Please enter a number.")
+
+def select_folder_dialog():
+    """Open folder selection dialog"""
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        folder_path = filedialog.askdirectory(title="Select Installation Directory")
+        root.destroy()
+        return folder_path
+    except Exception as e:
+        print_error(f"Could not open folder dialog: {e}")
+        return None
 
 def get_free_space(path):
     if platform.system() == "Windows":
@@ -168,38 +161,13 @@ def copy_directory(src, dst):
     
     print(f"\r  Progress: 100%")
 
-def create_uninstaller(install_dir):
-    uninstaller_content = f'''@echo off
-echo ============================================================
-echo   NotY Caption Generator AI Uninstaller v4.4
-echo   Copyright (c) 2026 NotY215
-echo ============================================================
-echo.
-
-echo Removing files...
-rmdir /s /q "{install_dir}" 2>nul
-
-echo Removing shortcuts...
-del "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\NotYCaptionGenAi.lnk" 2>nul
-del "%USERPROFILE%\\Desktop\\NotYCaptionGenAi.lnk" 2>nul
-del "%APPDATA%\\Microsoft\\Windows\\SendTo\\NotYCaptionGenAi.lnk" 2>nul
-
-echo Removing registry entries...
-reg delete "HKCU\\Software\\NotYCaptionGenAi" /f 2>nul
-
-echo.
-echo ============================================================
-echo Uninstallation complete!
-echo ============================================================
-echo.
-echo The uninstaller will now delete itself...
-timeout /t 2 /nobreak >nul
-del "%~f0" 2>nul
-exit
+def register_application(install_dir):
+    reg = f'''
+New-Item -Path "HKCU:\\Software\\NotYCaptionGenAi" -Force | Out-Null
+Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "InstallPath" -Value "{install_dir}"
+Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "Version" -Value "4.4"
 '''
-    uninstaller_path = install_dir / "uninstall.bat"
-    with open(uninstaller_path, 'w', encoding='utf-8') as f:
-        f.write(uninstaller_content)
+    subprocess.run(["powershell", "-Command", reg], capture_output=True)
 
 def create_shortcut(path, target):
     ps = f'''$s = New-Object -ComObject WScript.Shell
@@ -221,14 +189,6 @@ def register_sendto_menu(install_dir):
     sendto.parent.mkdir(parents=True, exist_ok=True)
     create_shortcut(str(sendto), str(install_dir / "NotYCaptionGenAI.exe"))
 
-def register_application(install_dir):
-    reg = f'''
-New-Item -Path "HKCU:\\Software\\NotYCaptionGenAi" -Force | Out-Null
-Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "InstallPath" -Value "{install_dir}"
-Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "Version" -Value "4.4"
-'''
-    subprocess.run(["powershell", "-Command", reg], capture_output=True)
-
 def get_directory_size(path):
     total = 0
     for item in path.rglob('*'):
@@ -237,7 +197,7 @@ def get_directory_size(path):
     return total / (1024 * 1024)
 
 def install():
-    draw_turtle_logo()
+    print_header()
     
     # Get installer directory
     if getattr(sys, 'frozen', False):
@@ -251,7 +211,7 @@ def install():
         print(f"\n{Colors.BOLD}Installation Directory{Colors.RESET}")
         print(f"  Default location: {default_path}")
         print(f"\n  1) Continue with this location")
-        print(f"  2) Change location")
+        print(f"  2) Change location (Browse folder dialog)")
         print(f"  0) Cancel installation")
         
         choice = get_number_input("\n➤ Choose option (0-2): ", 0, 2)
@@ -263,52 +223,40 @@ def install():
             install_path = Path(default_path)
             break
         else:
-            while True:
-                draw_turtle_logo()
-                print(f"\n{Colors.BOLD}Enter Installation Path{Colors.RESET}")
-                print(f"  Example: D:\\Applications\\NotYCaptionGenAI")
-                print(f"  0) Back to previous menu")
+            # Use folder dialog to select location
+            selected_path = select_folder_dialog()
+            if selected_path:
+                install_path = Path(selected_path) / "NotYCaptionGenAI"
+                print_success(f"Selected: {install_path}")
                 
-                path_input = get_input("\n➤ Installation path: ")
+                print_header()
+                print(f"\n{Colors.BOLD}Confirm Installation{Colors.RESET}")
+                print(f"  Installation Path: {install_path}")
+                print(f"\n  1) Yes, proceed with installation")
+                print(f"  2) No, cancel installation")
+                print(f"  0) Back to path selection")
                 
-                if path_input == "0":
-                    break
+                confirm_choice = get_number_input("\n➤ Choose option (0-2): ", 0, 2)
                 
-                install_path = Path(path_input.strip().strip('"'))
-                
-                try:
-                    install_path.mkdir(parents=True, exist_ok=True)
-                    print_success(f"Directory created/verified: {install_path}")
-                    
-                    draw_turtle_logo()
-                    print(f"\n{Colors.BOLD}Confirm Installation{Colors.RESET}")
-                    print(f"  Installation Path: {install_path}")
-                    print(f"\n  1) Yes, proceed with installation")
-                    print(f"  2) No, cancel installation")
-                    print(f"  0) Back to path selection")
-                    
-                    confirm_choice = get_number_input("\n➤ Choose option (0-2): ", 0, 2)
-                    
-                    if confirm_choice == 0:
-                        continue
-                    elif confirm_choice == 1:
-                        break
-                    else:
-                        print_info("Installation cancelled.")
-                        return False
-                        
-                except Exception as e:
-                    print_error(f"Cannot create directory: {e}")
+                if confirm_choice == 0:
                     continue
+                elif confirm_choice == 1:
+                    break
+                else:
+                    print_info("Installation cancelled.")
+                    return False
+            else:
+                print_error("No folder selected. Please try again.")
+                continue
     
-    draw_turtle_logo()
+    print_header()
     if not check_requirements(install_path):
         print_error("\nSystem requirements not met!")
         print_info("Requirements: 3 GB free disk space, 2 GB RAM")
         input("\nPress Enter to exit...")
         return False
     
-    draw_turtle_logo()
+    print_header()
     print_info(f"Installing to: {install_path}")
     print_info("This may take a few minutes...")
     print()
@@ -325,6 +273,13 @@ def install():
         else:
             print_error("Main executable not found!")
             return False
+        
+        # Copy uninstaller executable
+        uninstaller_exe = installer_dir / "NotYCaptionGenAI_Uninstaller.exe"
+        if uninstaller_exe.exists():
+            print_info("Copying uninstaller...")
+            shutil.copy2(uninstaller_exe, install_path / "NotYCaptionGenAI_Uninstaller.exe")
+            print_success("Uninstaller copied")
         
         # Copy resources
         resources_dir = installer_dir / "resources"
@@ -346,11 +301,6 @@ def install():
             copy_directory(models_dir, dest_models)
             print_success("Models copied")
         
-        # Create uninstaller
-        print_info("Creating uninstaller...")
-        create_uninstaller(install_path)
-        print_success("Uninstaller created")
-        
         # Create shortcuts
         print_info("Creating shortcuts...")
         create_start_menu_shortcut(install_path)
@@ -363,13 +313,14 @@ def install():
         register_application(install_path)
         print_success("Application registered")
         
-        draw_turtle_logo()
+        print_header()
         print_success(f"Installation Complete!")
         print_info(f"Installed to: {install_path}")
         print_info(f"Size: {get_directory_size(install_path):.2f} MB")
         print()
         print_info("You can now run NotYCaptionGenAI.exe from the installation directory")
         print_info("Or right-click any video/audio file and select 'Send To' > 'NotYCaptionGenAi'")
+        print_info("To uninstall, run NotYCaptionGenAI_Uninstaller.exe from the installation directory")
         
         return True
         

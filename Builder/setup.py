@@ -11,6 +11,34 @@ import subprocess
 import shutil
 from pathlib import Path
 
+def build_uninstaller_exe(builder_dir, temp_dir):
+    """Build uninstaller executable"""
+    print("  Building uninstaller executable...")
+    
+    uninstaller_py = str(builder_dir / "uninstaller.py")
+    
+    cmd = [
+        sys.executable, "-m", "PyInstaller",
+        "--name=NotYCaptionGenAI_Uninstaller",
+        "--onefile",
+        "--console",
+        "--noconfirm",
+        uninstaller_py
+    ]
+    
+    try:
+        subprocess.check_call(cmd, cwd=str(temp_dir))
+        uninstaller_exe = temp_dir / "dist" / "NotYCaptionGenAI_Uninstaller.exe"
+        if uninstaller_exe.exists():
+            print(f"    ✅ Uninstaller built: {uninstaller_exe.name}")
+            return uninstaller_exe
+        else:
+            print("    ❌ Uninstaller not found!")
+            return None
+    except subprocess.CalledProcessError as e:
+        print(f"    ❌ Failed to build uninstaller: {e}")
+        return None
+
 def build_all():
     print("=" * 60)
     print("Building NotY Caption Generator AI v4.4")
@@ -27,7 +55,7 @@ def build_all():
     dist_dir.mkdir(parents=True, exist_ok=True)
     
     # Step 1: Build main executable
-    print("\n[1/2] Building main executable...")
+    print("\n[1/3] Building main executable...")
     try:
         subprocess.check_call([sys.executable, str(builder_dir / "build_exe.py")])
     except subprocess.CalledProcessError as e:
@@ -41,135 +69,110 @@ def build_all():
     
     print(f"✅ Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
     
-    # Step 2: Build installer
-    print("\n[2/2] Building console installer with models...")
+    # Step 2: Build uninstaller executable
+    print("\n[2/3] Building uninstaller executable...")
+    temp_build_dir = base_dir / "temp_build"
+    if temp_build_dir.exists():
+        shutil.rmtree(temp_build_dir)
+    temp_build_dir.mkdir(parents=True, exist_ok=True)
     
-    # Create spec for installer
-    installer_py = str(builder_dir / "installer_console.py").replace('\\', '/')
-    main_exe_path = str(main_exe).replace('\\', '/')
+    uninstaller_exe = build_uninstaller_exe(builder_dir, temp_build_dir)
+    if not uninstaller_exe:
+        print("❌ Failed to build uninstaller!")
+        sys.exit(1)
     
-    # Copy resources to temp
-    temp_dir = base_dir / "temp_resources"
+    print(f"✅ Uninstaller: {uninstaller_exe} ({uninstaller_exe.stat().st_size / 1024 / 1024:.2f} MB)")
+    
+    # Step 3: Build installer with both executables
+    print("\n[3/3] Building console installer with models and uninstaller...")
+    
+    # Create temp directory for installer files
+    temp_dir = base_dir / "temp_installer"
     if temp_dir.exists():
         shutil.rmtree(temp_dir)
     temp_dir.mkdir(parents=True, exist_ok=True)
     
-    # Copy resources (FFmpeg files)
+    # Copy main executable
+    shutil.copy2(main_exe, temp_dir / "NotYCaptionGenAI.exe")
+    
+    # Copy uninstaller executable
+    shutil.copy2(uninstaller_exe, temp_dir / "NotYCaptionGenAI_Uninstaller.exe")
+    
+    # Copy resources (FFmpeg files and icons)
     resources_dir = base_dir / "resources"
     if resources_dir.exists():
         shutil.copytree(resources_dir, temp_dir / "resources")
     
-    # Copy models if they exist (include all models)
+    # Copy models to temp
     models_dir = base_dir / "models"
     if models_dir.exists() and any(models_dir.iterdir()):
         print("  Including models from:", models_dir)
         dest_models = temp_dir / "models"
         shutil.copytree(models_dir, dest_models)
-        # Count models
         model_count = len(list(dest_models.glob("*.pt")))
         total_size = sum(f.stat().st_size for f in dest_models.glob("*.pt")) / (1024 * 1024)
         print(f"    Added {model_count} models ({total_size:.2f} MB)")
-    else:
-        print("  No models found - creating empty models folder")
-        (temp_dir / "models").mkdir(parents=True, exist_ok=True)
     
-    # Create spec file
-    spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
-
-a = Analysis(
-    [r'{installer_py}'],
-    pathex=[],
-    binaries=[],
-    datas=[
-        (r'{main_exe_path}', '.'),
-        (r'{temp_dir / "resources"}', 'resources'),
-    ],
-    hiddenimports=['ctypes', 'struct', 'subprocess', 'shutil', 'pathlib', 'zipfile', 'platform'],
-    hookspath=[],
-    hooksconfig={{}},
-    runtime_hooks=[],
-    excludes=[],
-    noarchive=False,
-)
-
-# Add models if they exist
-models_dir = r'{temp_dir / "models"}'
-if os.path.exists(models_dir):
-    # Add all model files individually to ensure they're included
-    for root, dirs, files in os.walk(models_dir):
-        for file in files:
-            if file.endswith('.pt'):
-                file_path = os.path.join(root, file)
-                rel_path = os.path.relpath(file_path, models_dir)
-                a.datas.append((file_path, os.path.join('models', rel_path)))
-
-pyz = PYZ(a.pure)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name='NotYCaptionGenAI_Installer_v4.4',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=False,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=r'{temp_dir / "resources/logo.ico"}'
-)
-'''
+    # Build installer using pyinstaller
+    print("\nBuilding installer with PyInstaller...")
     
-    spec_path = builder_dir / "Installer.spec"
-    with open(spec_path, 'w', encoding='utf-8') as f:
-        f.write(spec_content)
+    installer_py = str(builder_dir / "installer_console.py")
     
-    # Build installer
+    # Build command with all data files
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        str(spec_path),
-        "--distpath", str(dist_dir),
-        "--workpath", str(builder_dir / "build_installer"),
-        "--noconfirm"
+        "--name=NotYCaptionGenAI_Installer_v4.4",
+        "--onefile",
+        f"--add-data={temp_dir / 'NotYCaptionGenAI.exe'}{os.pathsep}.",
+        f"--add-data={temp_dir / 'NotYCaptionGenAI_Uninstaller.exe'}{os.pathsep}.",
+        f"--add-data={temp_dir / 'resources'}{os.pathsep}resources",
+        "--hidden-import=ctypes",
+        "--hidden-import=struct",
+        "--hidden-import=subprocess",
+        "--hidden-import=shutil",
+        "--hidden-import=pathlib",
+        "--hidden-import=platform",
+        "--console",
+        "--noconfirm",
+        installer_py
     ]
     
+    # Add models if they exist
+    models_path = temp_dir / "models"
+    if models_path.exists():
+        for model_file in models_path.glob("*.pt"):
+            cmd.insert(8, f"--add-data={model_file}{os.pathsep}models")
+            print(f"    Adding model: {model_file.name}")
+    
+    # Add icon if exists
+    icon_path = temp_dir / "resources" / "logo.ico"
+    if icon_path.exists():
+        cmd.insert(4, f"--icon={icon_path}")
+    
+    # Run PyInstaller
     try:
-        subprocess.check_call(cmd)
+        subprocess.check_call(cmd, cwd=str(temp_dir))
         print("\n✅ Installer built successfully!")
     except subprocess.CalledProcessError as e:
         print(f"\n❌ Installer build failed: {e}")
         sys.exit(1)
     
-    # Clean up
-    spec_path.unlink(missing_ok=True)
-    shutil.rmtree(temp_dir, ignore_errors=True)
-    shutil.rmtree(builder_dir / "build_installer", ignore_errors=True)
+    # Find and copy installer to root
+    installer_exe = temp_dir / "dist" / "NotYCaptionGenAI_Installer_v4.4.exe"
+    if not installer_exe.exists():
+        installer_exe = Path("dist") / "NotYCaptionGenAI_Installer_v4.4.exe"
     
-    # Copy installer to root
-    installer_exe = dist_dir / "NotYCaptionGenAI_Installer_v4.4.exe"
     if installer_exe.exists():
         final_installer = base_dir / "NotYCaptionGenAI_Installer_v4.4.exe"
         shutil.copy2(installer_exe, final_installer)
         size = final_installer.stat().st_size / 1024 / 1024
         print(f"\n✅ Installer created: {final_installer} ({size:.2f} MB)")
     else:
-        # Try to find with version 4.3 name
-        installer_exe = dist_dir / "NotYCaptionGenAI_Installer_v4.3.exe"
-        if installer_exe.exists():
-            final_installer = base_dir / "NotYCaptionGenAI_Installer_v4.4.exe"
-            shutil.copy2(installer_exe, final_installer)
-            size = final_installer.stat().st_size / 1024 / 1024
-            print(f"\n✅ Installer created: {final_installer} ({size:.2f} MB)")
-        else:
-            print("\n❌ Installer not found!")
+        print("\n❌ Installer not found!")
+    
+    # Clean up
+    shutil.rmtree(temp_dir, ignore_errors=True)
+    shutil.rmtree(temp_build_dir, ignore_errors=True)
     
     # Clean up dist folder - only keep installer
     print("\n[Cleanup] Cleaning dist folder...")
@@ -179,6 +182,15 @@ exe = EXE(
                 item.unlink()
             elif item.is_dir():
                 shutil.rmtree(item)
+    
+    # Clean build directories
+    build_dir = base_dir / "build"
+    if build_dir.exists():
+        shutil.rmtree(build_dir, ignore_errors=True)
+    
+    builder_build = builder_dir / "build"
+    if builder_build.exists():
+        shutil.rmtree(builder_build, ignore_errors=True)
     
     print("\n" + "=" * 60)
     print("Build complete!")

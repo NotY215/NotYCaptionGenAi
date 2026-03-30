@@ -15,6 +15,8 @@ import platform
 import argparse
 import subprocess
 import importlib.util
+import tkinter as tk
+from tkinter import filedialog
 from pathlib import Path
 from typing import List, Tuple, Optional
 
@@ -56,35 +58,39 @@ if platform.system() == "Windows":
             if not attr.startswith('__'):
                 setattr(Colors, attr, '')
 
-def draw_turtle_logo():
-    """Draw a colorful turtle logo in console"""
-    logo = f"""
-{Colors.BG_GREEN}{Colors.BLACK}{Colors.BOLD}
-                    ╔═══════════════════════════════════════════════════╗
-                    ║                    🐢 NOTY AI 🐢                   ║
-                    ║         The Fastest Subtitle Generator           ║
-                    ║            Copyright (c) 2026 NotY215            ║
-                    ╚═══════════════════════════════════════════════════╝
-{Colors.RESET}
+def select_file_dialog():
+    """Open file selection dialog for video/audio"""
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        file_types = [
+            ("Video Files", "*.mp4;*.avi;*.mkv;*.mov;*.m4v;*.mpg;*.mpeg"),
+            ("Audio Files", "*.mp3;*.wav;*.m4a;*.flac"),
+            ("All Files", "*.*")
+        ]
+        file_path = filedialog.askopenfilename(
+            title="Select Video/Audio File",
+            filetypes=file_types
+        )
+        root.destroy()
+        return file_path
+    except Exception as e:
+        print(f"{Colors.RED}✗ Could not open file dialog: {e}{Colors.RESET}")
+        return None
 
-{Colors.CYAN}    ╔═══════════════════════════════════════════════════════════════════╗
-    ║                           TURTLE POWER!                            ║
-    ╚═══════════════════════════════════════════════════════════════════╝{Colors.RESET}
-
-{Colors.GREEN}          ▄▄▄▄▄▄▄▄▄▄▄  {Colors.YELLOW}▄▄▄▄▄▄▄▄▄▄▄  {Colors.RED}▄▄▄▄▄▄▄▄▄▄▄  {Colors.BLUE}▄▄▄▄▄▄▄▄▄▄▄{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}          ▀▀▀▀▀▀▀▀▀▀▀  {Colors.YELLOW}▀▀▀▀▀▀▀▀▀▀▀  {Colors.RED}▀▀▀▀▀▀▀▀▀▀▀  {Colors.BLUE}▀▀▀▀▀▀▀▀▀▀▀{Colors.RESET}
-{Colors.RESET}
-{Colors.PURPLE}              ╔══════════════════════════════════════════╗
-              ║     🚀 AI-POWERED SUBTITLE GENERATION 🚀      ║
-              ╚══════════════════════════════════════════════╝{Colors.RESET}
-"""
-    print(logo)
+def print_header(title: str = None):
+    """Print application header"""
+    if title is None:
+        title = f"{APP_NAME} v{APP_VERSION}"
+    print(f"{Colors.CYAN}{Colors.BOLD}")
+    print("╔" + "═" * 58 + "╗")
+    print("║" + title.center(58) + "║")
+    print("║" + f"Copyright (c) {APP_YEAR} {APP_AUTHOR}".center(58) + "║")
+    print("║" + f"License: {APP_LICENSE}".center(58) + "║")
+    print("║" + "Powered by OpenAI Whisper (.pt models)".center(58) + "║")
+    print("╚" + "═" * 58 + "╝")
+    print(f"{Colors.RESET}")
 
 # Check and install dependencies
 def check_and_install_dependencies():
@@ -124,7 +130,6 @@ try:
     WHISPER_AVAILABLE = True
 except ImportError:
     WHISPER_AVAILABLE = False
-
 
 # Application metadata
 APP_NAME = "NotY Caption Generator AI"
@@ -205,20 +210,6 @@ class NotYCaptionGenerator:
     def clear_screen(self):
         os.system('cls' if platform.system() == 'Windows' else 'clear')
         
-    def print_header(self, title: str = None):
-        if title is None:
-            title = f"{APP_NAME} v{APP_VERSION}"
-        self.clear_screen()
-        draw_turtle_logo()
-        print(f"{Colors.CYAN}{Colors.BOLD}")
-        print("╔" + "═" * 58 + "╗")
-        print("║" + title.center(58) + "║")
-        print("║" + f"Copyright (c) {APP_YEAR} {APP_AUTHOR}".center(58) + "║")
-        print("║" + f"License: {APP_LICENSE}".center(58) + "║")
-        print("║" + "Powered by OpenAI Whisper (.pt models)".center(58) + "║")
-        print("╚" + "═" * 58 + "╝")
-        print(f"{Colors.RESET}")
-        
     def print_success(self, message: str):
         print(f"{Colors.GREEN}✓ {message}{Colors.RESET}")
         
@@ -290,12 +281,26 @@ class NotYCaptionGenerator:
             return choice - 1
             
     def get_media_path(self, allowed_extensions: List[str]) -> Path:
+        # If media path was provided via command line, use it
         if self.media_path_arg:
             path = Path(self.media_path_arg.strip('"'))
             if path.exists() and path.suffix.lower() in allowed_extensions:
                 self.print_success(f"Using file: {path}")
                 return path
-                
+        
+        # Use file dialog to select file
+        print_info("Opening file selection dialog...")
+        file_path = select_file_dialog()
+        
+        if file_path:
+            path = Path(file_path)
+            if path.exists() and path.suffix.lower() in allowed_extensions:
+                self.print_success(f"Selected: {path}")
+                return path
+            else:
+                self.print_error(f"Invalid file selected!")
+        
+        # Fallback to manual input
         while True:
             print(f"\n{Colors.CYAN}📂 Provide Video/Audio Path{Colors.RESET}")
             print(f"   Allowed extensions: {', '.join(allowed_extensions)}")
@@ -531,7 +536,8 @@ class NotYCaptionGenerator:
                 self.model = None
                 
                 while True:
-                    self.print_header()
+                    self.clear_screen()
+                    print_header()
                     print(f"\n{Colors.BOLD}📁 Current file: {media_path.name}{Colors.RESET}")
                     
                     if self.selected_model:
@@ -587,7 +593,8 @@ class NotYCaptionGenerator:
                         break
                 
                 if self.selected_model and self.selected_language:
-                    self.print_header()
+                    self.clear_screen()
+                    print_header()
                     
                     line_options = ["Words", "Letters"]
                     line_choice = self.show_menu("LINE PREFERENCE", line_options)
@@ -659,7 +666,8 @@ class NotYCaptionGenerator:
                 if not self.confirm("Continue?"):
                     break
                     
-        self.print_header("Thank You!")
+        self.clear_screen()
+        print_header("Thank You!")
         self.print_success(f"Thanks for using {APP_NAME}!")
         print()
 

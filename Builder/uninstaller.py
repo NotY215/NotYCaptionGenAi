@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NotY Caption Generator AI Uninstaller v4.3
+NotY Caption Generator AI Uninstaller v4.4 (Console)
 Copyright (c) 2026 NotY215
 """
 
@@ -9,134 +9,155 @@ import os
 import sys
 import shutil
 import subprocess
-import tkinter as tk
-from tkinter import ttk, messagebox
+import time
+import platform
 from pathlib import Path
-import threading
 
-class UninstallerGUI:
-    def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("NotY Caption Generator AI Uninstaller v4.3")
-        self.root.geometry("500x450")
-        self.root.resizable(False, False)
+# Colors for console output
+class Colors:
+    RESET = '\033[0m'
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    PURPLE = '\033[95m'
+    CYAN = '\033[96m'
+    WHITE = '\033[97m'
+    BOLD = '\033[1m'
+
+if platform.system() == "Windows":
+    os.system('color')
+
+def print_header():
+    print(f"{Colors.CYAN}{Colors.BOLD}")
+    print("╔══════════════════════════════════════════════════════════════╗")
+    print("║              NotY Caption Generator AI Uninstaller v4.4       ║")
+    print("║                 Copyright (c) 2026 NotY215                   ║")
+    print("╚══════════════════════════════════════════════════════════════╝")
+    print(f"{Colors.RESET}")
+
+def print_success(message):
+    print(f"{Colors.GREEN}✓ {message}{Colors.RESET}")
+
+def print_error(message):
+    print(f"{Colors.RED}✗ {message}{Colors.RESET}")
+
+def print_info(message):
+    print(f"{Colors.CYAN}ℹ {message}{Colors.RESET}")
+
+def get_install_path():
+    """Get install path from registry"""
+    try:
+        ps = 'Get-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "InstallPath" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty InstallPath'
+        result = subprocess.run(["powershell", "-Command", ps], capture_output=True, text=True)
+        if result.stdout.strip():
+            return Path(result.stdout.strip())
+    except:
+        pass
+    return None
+
+def get_directory_size(path):
+    """Get directory size in MB"""
+    total = 0
+    try:
+        for item in path.rglob('*'):
+            if item.is_file():
+                total += item.stat().st_size
+    except:
+        pass
+    return total / (1024 * 1024)
+
+def uninstall():
+    print_header()
+    print_info("Starting uninstallation process...")
+    print()
+    
+    # Get install path from registry
+    install_path = get_install_path()
+    
+    if not install_path or not install_path.exists():
+        print_error("Installation not found!")
+        print_info("No registry entry found for NotY Caption Generator AI.")
+        print_info("If the application was installed manually, please delete the folder manually.")
+        return False
+    
+    print_info(f"Found installation at: {install_path}")
+    print_info(f"Installation size: {get_directory_size(install_path):.2f} MB")
+    print()
+    
+    # Confirm uninstallation
+    print(f"{Colors.YELLOW}⚠ WARNING: This will permanently remove NotY Caption Generator AI{Colors.RESET}")
+    print(f"{Colors.YELLOW}   and all its components from your computer.{Colors.RESET}")
+    print()
+    
+    response = input(f"{Colors.CYAN}Are you sure you want to uninstall? (y/n): {Colors.RESET}").lower()
+    if response not in ['y', 'yes']:
+        print_info("Uninstallation cancelled.")
+        return False
+    
+    print()
+    
+    try:
+        # Remove installation directory
+        print_info("Removing application files...")
+        shutil.rmtree(install_path, ignore_errors=True)
+        print_success("Application files removed")
         
-        self.install_path = self.get_install_path()
-        self.setup_ui()
-        
-    def get_install_path(self):
-        try:
-            ps = 'Get-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "InstallPath" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty InstallPath'
-            result = subprocess.run(["powershell", "-Command", ps], capture_output=True, text=True)
-            if result.stdout.strip():
-                return Path(result.stdout.strip())
-        except:
-            pass
-        return None
-        
-    def setup_ui(self):
-        main_frame = ttk.Frame(self.root, padding="20")
-        main_frame.pack(fill="both", expand=True)
-        
-        title_label = ttk.Label(
-            main_frame,
-            text="NotY Caption Generator AI Uninstaller",
-            font=("Segoe UI", 16, "bold")
-        )
-        title_label.pack(pady=(0, 10))
-        
-        version_label = ttk.Label(
-            main_frame,
-            text="Version 4.3 | Copyright (c) 2026 NotY215",
-            font=("Segoe UI", 9)
-        )
-        version_label.pack(pady=(0, 20))
-        
-        warning_frame = ttk.LabelFrame(main_frame, text="⚠️ Warning", padding=10)
-        warning_frame.pack(fill="x", pady=10)
-        
-        warning_text = "This will completely remove NotY Caption Generator AI and all its components from your computer."
-        ttk.Label(warning_frame, text=warning_text, wraplength=450).pack()
-        
-        info_frame = ttk.LabelFrame(main_frame, text="Installation Information", padding=10)
-        info_frame.pack(fill="x", pady=10)
-        
-        if self.install_path and self.install_path.exists():
-            ttk.Label(info_frame, text=f"Installation Directory: {self.install_path}").pack(anchor="w", pady=5)
-        else:
-            ttk.Label(info_frame, text="Installation directory not found in registry.").pack(anchor="w", pady=5)
-        
-        components_frame = ttk.LabelFrame(main_frame, text="Components to Remove", padding=10)
-        components_frame.pack(fill="x", pady=10)
-        
-        components = [
-            "• Application files and resources",
-            "• Start Menu shortcut",
-            "• Desktop shortcut",
-            "• Send To menu entry",
-            "• Registry entries"
+        # Remove shortcuts
+        print_info("Removing shortcuts...")
+        shortcuts = [
+            Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAi.lnk",
+            Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAi.lnk",
+            Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo" / "NotYCaptionGenAi.lnk"
         ]
-        for comp in components:
-            ttk.Label(components_frame, text=comp).pack(anchor="w", pady=2)
+        for shortcut in shortcuts:
+            if shortcut.exists():
+                shortcut.unlink()
+                print(f"  Removed: {shortcut.name}")
+        print_success("Shortcuts removed")
         
-        self.progress = ttk.Progressbar(main_frame, mode="indeterminate", length=450)
-        self.progress.pack(pady=10)
+        # Remove registry entries
+        print_info("Removing registry entries...")
+        subprocess.run(
+            ["powershell", "-Command", 'Remove-Item -Path "HKCU:\\Software\\NotYCaptionGenAi" -Recurse -Force -ErrorAction SilentlyContinue'],
+            capture_output=True
+        )
+        print_success("Registry entries removed")
         
-        self.status_label = ttk.Label(main_frame, text="Ready to uninstall")
-        self.status_label.pack(pady=5)
+        print()
+        print_success("Uninstallation complete!")
+        print_info("NotY Caption Generator AI has been removed from your computer.")
         
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(pady=20)
+        # Self-delete
+        print()
+        print_info("The uninstaller will now delete itself...")
+        time.sleep(2)
         
-        self.uninstall_btn = ttk.Button(button_frame, text="Uninstall", command=self.start_uninstall, width=15)
-        self.uninstall_btn.pack(side="left", padx=5)
+        # Create a batch file to delete the uninstaller
+        if getattr(sys, 'frozen', False):
+            uninstaller_path = Path(sys.executable)
+            bat_content = f'''@echo off
+timeout /t 1 /nobreak >nul
+del "{uninstaller_path}" 2>nul
+exit
+'''
+            bat_path = Path(os.environ["TEMP"]) / "delete_uninstaller.bat"
+            with open(bat_path, 'w') as f:
+                f.write(bat_content)
+            subprocess.Popen([str(bat_path)], shell=True)
         
-        ttk.Button(button_frame, text="Cancel", command=self.root.quit, width=15).pack(side="left", padx=5)
+        return True
         
-    def start_uninstall(self):
-        self.uninstall_btn.config(state="disabled")
-        threading.Thread(target=self.uninstall, daemon=True).start()
-        
-    def update_status(self, message):
-        self.status_label.config(text=message)
-        self.progress.start()
-        self.root.update()
-        
-    def uninstall(self):
-        try:
-            if self.install_path and self.install_path.exists():
-                self.update_status("Removing application files...")
-                shutil.rmtree(self.install_path)
-                
-            self.update_status("Removing shortcuts...")
-            shortcuts = [
-                Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAi.lnk",
-                Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAi.lnk",
-                Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo" / "NotYCaptionGenAi.lnk"
-            ]
-            for shortcut in shortcuts:
-                if shortcut.exists():
-                    shortcut.unlink()
-                    
-            self.update_status("Removing registry entries...")
-            subprocess.run(["powershell", "-Command", 'Remove-Item -Path "HKCU:\\Software\\NotYCaptionGenAi" -Recurse -Force -ErrorAction SilentlyContinue'], capture_output=True)
-            
-            self.progress.stop()
-            self.status_label.config(text="Uninstallation complete!")
-            messagebox.showinfo("Uninstall Complete", "NotY Caption Generator AI has been uninstalled successfully!")
-            
-            # Self-delete
-            self.root.quit()
-            time.sleep(1)
-            if getattr(sys, 'frozen', False):
-                os.remove(sys.executable)
-            
-        except Exception as e:
-            self.progress.stop()
-            self.status_label.config(text=f"Uninstallation failed: {e}")
-            messagebox.showerror("Uninstall Failed", str(e))
-            self.uninstall_btn.config(state="normal")
+    except Exception as e:
+        print_error(f"Uninstallation failed: {e}")
+        return False
 
 if __name__ == "__main__":
-    uninstaller = UninstallerGUI()
-    uninstaller.run()
+    success = uninstall()
+    
+    if success:
+        print_success("\nUninstallation completed successfully!")
+    else:
+        print_error("\nUninstallation failed!")
+    
+    input("\nPress Enter to exit...")
