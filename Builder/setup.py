@@ -7,43 +7,8 @@ Copyright (c) 2026 NotY215
 
 import os
 import sys
-import subprocess
 import shutil
 from pathlib import Path
-
-def build_uninstaller_exe(builder_dir, temp_dir):
-    """Build uninstaller executable without running it"""
-    print("  Building uninstaller executable...")
-    
-    uninstaller_py = str(builder_dir / "uninstaller.py")
-    
-    # Change to temp directory to avoid running the script
-    original_dir = os.getcwd()
-    os.chdir(temp_dir)
-    
-    cmd = [
-        sys.executable, "-m", "PyInstaller",
-        "--name=NotYCaptionGenAI_Uninstaller",
-        "--onefile",
-        "--console",
-        "--noconfirm",
-        uninstaller_py
-    ]
-    
-    try:
-        subprocess.check_call(cmd, cwd=str(temp_dir))
-        uninstaller_exe = temp_dir / "dist" / "NotYCaptionGenAI_Uninstaller.exe"
-        if uninstaller_exe.exists():
-            print(f"    ✅ Uninstaller built: {uninstaller_exe.name}")
-            return uninstaller_exe
-        else:
-            print("    ❌ Uninstaller not found!")
-            return None
-    except subprocess.CalledProcessError as e:
-        print(f"    ❌ Failed to build uninstaller: {e}")
-        return None
-    finally:
-        os.chdir(original_dir)
 
 def build_all():
     print("=" * 60)
@@ -62,28 +27,20 @@ def build_all():
     
     # Step 1: Build main executable
     print("\n[1/3] Building main executable...")
+    
+    # Import and run build_exe directly instead of subprocess
+    sys.path.insert(0, str(builder_dir))
+    from build_exe import build_exe
+    
     try:
-        # Run build_exe.py as a subprocess
-        result = subprocess.run(
-            [sys.executable, str(builder_dir / "build_exe.py")],
-            capture_output=True,
-            text=True,
-            cwd=str(base_dir)
-        )
-        print(result.stdout)
-        if result.returncode != 0:
-            print(result.stderr)
+        main_exe = build_exe()
+        if not main_exe or not main_exe.exists():
+            print("\n❌ Main executable not found!")
             sys.exit(1)
+        print(f"✅ Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
     except Exception as e:
         print(f"\n❌ Failed to build main executable: {e}")
         sys.exit(1)
-    
-    main_exe = dist_dir / "NotYCaptionGenAI.exe"
-    if not main_exe.exists():
-        print("\n❌ Main executable not found!")
-        sys.exit(1)
-    
-    print(f"✅ Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
     
     # Step 2: Build uninstaller executable
     print("\n[2/3] Building uninstaller executable...")
@@ -92,12 +49,37 @@ def build_all():
         shutil.rmtree(temp_build_dir)
     temp_build_dir.mkdir(parents=True, exist_ok=True)
     
-    uninstaller_exe = build_uninstaller_exe(builder_dir, temp_build_dir)
-    if not uninstaller_exe:
-        print("❌ Failed to build uninstaller!")
+    # Import and run uninstaller build
+    try:
+        # Change to temp directory to avoid running the script
+        original_dir = os.getcwd()
+        os.chdir(temp_build_dir)
+        
+        import PyInstaller.__main__
+        
+        uninstaller_py = str(builder_dir / "uninstaller.py")
+        
+        PyInstaller.__main__.run([
+            '--name=NotYCaptionGenAI_Uninstaller',
+            '--onefile',
+            '--console',
+            '--noconfirm',
+            uninstaller_py
+        ])
+        
+        uninstaller_exe = temp_build_dir / "dist" / "NotYCaptionGenAI_Uninstaller.exe"
+        if uninstaller_exe.exists():
+            print(f"    ✅ Uninstaller built: {uninstaller_exe.name}")
+            print(f"✅ Uninstaller: {uninstaller_exe} ({uninstaller_exe.stat().st_size / 1024 / 1024:.2f} MB)")
+        else:
+            print("    ❌ Uninstaller not found!")
+            sys.exit(1)
+            
+    except Exception as e:
+        print(f"    ❌ Failed to build uninstaller: {e}")
         sys.exit(1)
-    
-    print(f"✅ Uninstaller: {uninstaller_exe} ({uninstaller_exe.stat().st_size / 1024 / 1024:.2f} MB)")
+    finally:
+        os.chdir(original_dir)
     
     # Step 3: Build installer with both executables
     print("\n[3/3] Building console installer with models and uninstaller...")
@@ -136,22 +118,21 @@ def build_all():
     
     # Build command with all data files
     cmd = [
-        sys.executable, "-m", "PyInstaller",
-        "--name=NotYCaptionGenAI_Installer_v4.4",
-        "--onefile",
-        f"--add-data={temp_dir / 'NotYCaptionGenAI.exe'}{os.pathsep}.",
-        f"--add-data={temp_dir / 'NotYCaptionGenAI_Uninstaller.exe'}{os.pathsep}.",
-        f"--add-data={temp_dir / 'resources'}{os.pathsep}resources",
-        "--hidden-import=ctypes",
-        "--hidden-import=struct",
-        "--hidden-import=subprocess",
-        "--hidden-import=shutil",
-        "--hidden-import=pathlib",
-        "--hidden-import=platform",
-        "--hidden-import=tkinter",
-        "--hidden-import=filedialog",
-        "--console",
-        "--noconfirm",
+        '--name=NotYCaptionGenAI_Installer_v4.4',
+        '--onefile',
+        f'--add-data={temp_dir / "NotYCaptionGenAI.exe"}{os.pathsep}.',
+        f'--add-data={temp_dir / "NotYCaptionGenAI_Uninstaller.exe"}{os.pathsep}.',
+        f'--add-data={temp_dir / "resources"}{os.pathsep}resources',
+        '--hidden-import=ctypes',
+        '--hidden-import=struct',
+        '--hidden-import=subprocess',
+        '--hidden-import=shutil',
+        '--hidden-import=pathlib',
+        '--hidden-import=platform',
+        '--hidden-import=tkinter',
+        '--hidden-import=filedialog',
+        '--console',
+        '--noconfirm',
         installer_py
     ]
     
@@ -159,26 +140,30 @@ def build_all():
     models_path = temp_dir / "models"
     if models_path.exists():
         for model_file in models_path.glob("*.pt"):
-            cmd.insert(8, f"--add-data={model_file}{os.pathsep}models")
+            cmd.insert(4, f'--add-data={model_file}{os.pathsep}models')
             print(f"    Adding model: {model_file.name}")
     
     # Add icon if exists
     icon_path = temp_dir / "resources" / "logo.ico"
     if icon_path.exists():
-        cmd.insert(4, f"--icon={icon_path}")
+        cmd.insert(4, f'--icon={icon_path}')
     
     # Run PyInstaller
     try:
-        subprocess.check_call(cmd, cwd=str(temp_dir))
+        original_dir = os.getcwd()
+        os.chdir(temp_dir)
+        PyInstaller.__main__.run(cmd)
         print("\n✅ Installer built successfully!")
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         print(f"\n❌ Installer build failed: {e}")
         sys.exit(1)
+    finally:
+        os.chdir(original_dir)
     
     # Find and copy installer to root
     installer_exe = temp_dir / "dist" / "NotYCaptionGenAI_Installer_v4.4.exe"
     if not installer_exe.exists():
-        installer_exe = Path("dist") / "NotYCaptionGenAI_Installer_v4.4.exe"
+        installer_exe = temp_dir / "NotYCaptionGenAI_Installer_v4.4.exe"
     
     if installer_exe.exists():
         final_installer = base_dir / "NotYCaptionGenAI_Installer_v4.4.exe"
