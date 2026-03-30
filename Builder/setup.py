@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Setup script for building NotY Caption Generator AI v4.3
+Setup script for building NotY Caption Generator AI v4.4
 Copyright (c) 2026 NotY215
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 def build_all():
     print("=" * 60)
-    print("Building NotY Caption Generator AI v4.3")
+    print("Building NotY Caption Generator AI v4.4")
     print("Copyright (c) 2026 NotY215")
     print("=" * 60)
     
@@ -42,7 +42,7 @@ def build_all():
     print(f"✅ Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
     
     # Step 2: Build installer
-    print("\n[2/2] Building console installer...")
+    print("\n[2/2] Building console installer with models...")
     
     # Create spec for installer
     installer_py = str(builder_dir / "installer_console.py").replace('\\', '/')
@@ -54,15 +54,24 @@ def build_all():
         shutil.rmtree(temp_dir)
     temp_dir.mkdir(parents=True, exist_ok=True)
     
-    # Copy resources
+    # Copy resources (FFmpeg files)
     resources_dir = base_dir / "resources"
     if resources_dir.exists():
         shutil.copytree(resources_dir, temp_dir / "resources")
     
-    # Copy models if they exist
+    # Copy models if they exist (include all models)
     models_dir = base_dir / "models"
     if models_dir.exists() and any(models_dir.iterdir()):
-        shutil.copytree(models_dir, temp_dir / "models")
+        print("  Including models from:", models_dir)
+        dest_models = temp_dir / "models"
+        shutil.copytree(models_dir, dest_models)
+        # Count models
+        model_count = len(list(dest_models.glob("*.pt")))
+        total_size = sum(f.stat().st_size for f in dest_models.glob("*.pt")) / (1024 * 1024)
+        print(f"    Added {model_count} models ({total_size:.2f} MB)")
+    else:
+        print("  No models found - creating empty models folder")
+        (temp_dir / "models").mkdir(parents=True, exist_ok=True)
     
     # Create spec file
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
@@ -75,7 +84,7 @@ a = Analysis(
         (r'{main_exe_path}', '.'),
         (r'{temp_dir / "resources"}', 'resources'),
     ],
-    hiddenimports=['ctypes', 'struct', 'subprocess', 'shutil', 'pathlib', 'zipfile'],
+    hiddenimports=['ctypes', 'struct', 'subprocess', 'shutil', 'pathlib', 'zipfile', 'platform'],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
@@ -86,7 +95,13 @@ a = Analysis(
 # Add models if they exist
 models_dir = r'{temp_dir / "models"}'
 if os.path.exists(models_dir):
-    a.datas += Tree(models_dir, prefix='models')
+    # Add all model files individually to ensure they're included
+    for root, dirs, files in os.walk(models_dir):
+        for file in files:
+            if file.endswith('.pt'):
+                file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(file_path, models_dir)
+                a.datas.append((file_path, os.path.join('models', rel_path)))
 
 pyz = PYZ(a.pure)
 
@@ -96,7 +111,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='NotYCaptionGenAI_Installer_v4.3',
+    name='NotYCaptionGenAI_Installer_v4.4',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -139,17 +154,35 @@ exe = EXE(
     shutil.rmtree(builder_dir / "build_installer", ignore_errors=True)
     
     # Copy installer to root
-    installer_exe = dist_dir / "NotYCaptionGenAI_Installer_v4.3.exe"
+    installer_exe = dist_dir / "NotYCaptionGenAI_Installer_v4.4.exe"
     if installer_exe.exists():
-        final_installer = base_dir / "NotYCaptionGenAI_Installer_v4.3.exe"
+        final_installer = base_dir / "NotYCaptionGenAI_Installer_v4.4.exe"
         shutil.copy2(installer_exe, final_installer)
         size = final_installer.stat().st_size / 1024 / 1024
         print(f"\n✅ Installer created: {final_installer} ({size:.2f} MB)")
     else:
-        print("\n❌ Installer not found!")
+        # Try to find with version 4.3 name
+        installer_exe = dist_dir / "NotYCaptionGenAI_Installer_v4.3.exe"
+        if installer_exe.exists():
+            final_installer = base_dir / "NotYCaptionGenAI_Installer_v4.4.exe"
+            shutil.copy2(installer_exe, final_installer)
+            size = final_installer.stat().st_size / 1024 / 1024
+            print(f"\n✅ Installer created: {final_installer} ({size:.2f} MB)")
+        else:
+            print("\n❌ Installer not found!")
+    
+    # Clean up dist folder - only keep installer
+    print("\n[Cleanup] Cleaning dist folder...")
+    for item in dist_dir.iterdir():
+        if item.name != "NotYCaptionGenAI_Installer_v4.4.exe":
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                shutil.rmtree(item)
     
     print("\n" + "=" * 60)
     print("Build complete!")
+    print(f"Installer: {base_dir / 'NotYCaptionGenAI_Installer_v4.4.exe'}")
     print("=" * 60)
 
 if __name__ == "__main__":

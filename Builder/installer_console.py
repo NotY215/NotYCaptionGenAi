@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NotY Caption Generator AI Installer v4.3 (Console)
+NotY Caption Generator AI Installer v4.4 (Console)
 Copyright (c) 2026 NotY215
 """
 
@@ -43,7 +43,7 @@ def draw_turtle_logo():
 {Colors.RESET}
 
 {Colors.CYAN}    ╔═══════════════════════════════════════════════════════════════════╗
-    ║                    NOTY CAPTION GENERATOR INSTALLER                     ║
+    ║                 NOTY CAPTION GENERATOR INSTALLER v4.4                 ║
     ╚═══════════════════════════════════════════════════════════════════╝{Colors.RESET}
 
 {Colors.GREEN}          ▄▄▄▄▄▄▄▄▄▄▄  {Colors.YELLOW}▄▄▄▄▄▄▄▄▄▄▄  {Colors.RED}▄▄▄▄▄▄▄▄▄▄▄  {Colors.BLUE}▄▄▄▄▄▄▄▄▄▄▄{Colors.RESET}
@@ -171,7 +171,7 @@ def copy_directory(src, dst):
 def create_uninstaller(install_dir):
     uninstaller_content = f'''@echo off
 echo ============================================================
-echo   NotY Caption Generator AI Uninstaller v4.3
+echo   NotY Caption Generator AI Uninstaller v4.4
 echo   Copyright (c) 2026 NotY215
 echo ============================================================
 echo.
@@ -225,7 +225,7 @@ def register_application(install_dir):
     reg = f'''
 New-Item -Path "HKCU:\\Software\\NotYCaptionGenAi" -Force | Out-Null
 Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "InstallPath" -Value "{install_dir}"
-Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "Version" -Value "4.3"
+Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "Version" -Value "4.4"
 '''
     subprocess.run(["powershell", "-Command", reg], capture_output=True)
 

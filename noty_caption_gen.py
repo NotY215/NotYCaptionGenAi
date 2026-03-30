@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-NotY Caption Generator AI v4.3
+NotY Caption Generator AI v4.4
 Using OpenAI Whisper (PyTorch .pt models)
 Copyright (c) 2026 NotY215
 """
@@ -23,6 +23,68 @@ if platform.system() == "Windows":
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
+
+# ANSI color codes
+class Colors:
+    RESET = '\033[0m'
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    PURPLE = '\033[95m'
+    CYAN = '\033[96m'
+    WHITE = '\033[97m'
+    BLACK = '\033[30m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    BG_RED = '\033[41m'
+    BG_GREEN = '\033[42m'
+    BG_YELLOW = '\033[43m'
+    BG_BLUE = '\033[44m'
+    BG_PURPLE = '\033[45m'
+    BG_CYAN = '\033[46m'
+    BG_WHITE = '\033[47m'
+    BG_BLACK = '\033[40m'
+
+if platform.system() == "Windows":
+    try:
+        import colorama
+        colorama.init()
+    except ImportError:
+        # If colorama not installed, disable colors
+        for attr in dir(Colors):
+            if not attr.startswith('__'):
+                setattr(Colors, attr, '')
+
+def draw_turtle_logo():
+    """Draw a colorful turtle logo in console"""
+    logo = f"""
+{Colors.BG_GREEN}{Colors.BLACK}{Colors.BOLD}
+                    ╔═══════════════════════════════════════════════════╗
+                    ║                    🐢 NOTY AI 🐢                   ║
+                    ║         The Fastest Subtitle Generator           ║
+                    ║            Copyright (c) 2026 NotY215            ║
+                    ╚═══════════════════════════════════════════════════╝
+{Colors.RESET}
+
+{Colors.CYAN}    ╔═══════════════════════════════════════════════════════════════════╗
+    ║                           TURTLE POWER!                            ║
+    ╚═══════════════════════════════════════════════════════════════════╝{Colors.RESET}
+
+{Colors.GREEN}          ▄▄▄▄▄▄▄▄▄▄▄  {Colors.YELLOW}▄▄▄▄▄▄▄▄▄▄▄  {Colors.RED}▄▄▄▄▄▄▄▄▄▄▄  {Colors.BLUE}▄▄▄▄▄▄▄▄▄▄▄{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
+{Colors.GREEN}          ▀▀▀▀▀▀▀▀▀▀▀  {Colors.YELLOW}▀▀▀▀▀▀▀▀▀▀▀  {Colors.RED}▀▀▀▀▀▀▀▀▀▀▀  {Colors.BLUE}▀▀▀▀▀▀▀▀▀▀▀{Colors.RESET}
+{Colors.RESET}
+{Colors.PURPLE}              ╔══════════════════════════════════════════╗
+              ║     🚀 AI-POWERED SUBTITLE GENERATION 🚀      ║
+              ╚══════════════════════════════════════════════╝{Colors.RESET}
+"""
+    print(logo)
 
 # Check and install dependencies
 def check_and_install_dependencies():
@@ -63,75 +125,15 @@ try:
 except ImportError:
     WHISPER_AVAILABLE = False
 
+
 # Application metadata
 APP_NAME = "NotY Caption Generator AI"
-APP_VERSION = "4.3"
+APP_VERSION = "4.4"
 APP_AUTHOR = "NotY215"
 APP_YEAR = "2026"
 APP_LICENSE = "LGPL-3.0"
-APP_TELEGRAM = "https://t.me/NotY215"
+APP_TELEGRAM = "https://t.me/Noty_215"
 APP_YOUTUBE = "https://www.youtube.com/@NotY215"
-
-# ANSI color codes
-class Colors:
-    RESET = '\033[0m'
-    RED = '\033[91m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    PURPLE = '\033[95m'
-    CYAN = '\033[96m'
-    WHITE = '\033[97m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-    BG_RED = '\033[41m'
-    BG_GREEN = '\033[42m'
-    BG_YELLOW = '\033[43m'
-    BG_BLUE = '\033[44m'
-    BG_PURPLE = '\033[45m'
-    BG_CYAN = '\033[46m'
-
-if platform.system() == "Windows":
-    try:
-        import colorama
-        colorama.init()
-    except ImportError:
-        Colors.RESET = ''
-        Colors.RED = ''
-        Colors.GREEN = ''
-        Colors.YELLOW = ''
-        Colors.CYAN = ''
-        Colors.BOLD = ''
-
-def draw_turtle_logo():
-    """Draw a colorful turtle logo in console"""
-    turtle_art = f"""
-{Colors.BG_GREEN}{Colors.BLACK}{Colors.BOLD}
-                    ╔═══════════════════════════════════════════════════╗
-                    ║                    🐢 NOTY AI 🐢                   ║
-                    ║         The Fastest Subtitle Generator           ║
-                    ║            Copyright (c) 2026 NotY215            ║
-                    ╚═══════════════════════════════════════════════════╝
-{Colors.RESET}
-
-{Colors.CYAN}    ╔═══════════════════════════════════════════════════════════════════╗
-    ║                           TURTLE POWER!                            ║
-    ╚═══════════════════════════════════════════════════════════════════╝{Colors.RESET}
-
-{Colors.GREEN}          ▄▄▄▄▄▄▄▄▄▄▄  {Colors.YELLOW}▄▄▄▄▄▄▄▄▄▄▄  {Colors.RED}▄▄▄▄▄▄▄▄▄▄▄  {Colors.BLUE}▄▄▄▄▄▄▄▄▄▄▄{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}         █{Colors.WHITE}░░░░░░░░░{Colors.GREEN}█{Colors.YELLOW}█{Colors.WHITE}░░░░░░░░░{Colors.YELLOW}█{Colors.RED}█{Colors.WHITE}░░░░░░░░░{Colors.RED}█{Colors.BLUE}█{Colors.WHITE}░░░░░░░░░{Colors.BLUE}█{Colors.RESET}
-{Colors.GREEN}          ▀▀▀▀▀▀▀▀▀▀▀  {Colors.YELLOW}▀▀▀▀▀▀▀▀▀▀▀  {Colors.RED}▀▀▀▀▀▀▀▀▀▀▀  {Colors.BLUE}▀▀▀▀▀▀▀▀▀▀▀{Colors.RESET}
-{Colors.RESET}
-{Colors.PURPLE}              ╔══════════════════════════════════════════╗
-              ║     🚀 AI-POWERED SUBTITLE GENERATION 🚀      ║
-              ╚══════════════════════════════════════════════╝{Colors.RESET}
-"""
-    print(turtle_art)
 
 # Whisper models with correct OpenAI URLs
 WHISPER_MODELS = {
@@ -171,9 +173,9 @@ class NotYCaptionGenerator:
             self.base_dir = Path(__file__).parent
             
         self.models_dir = self.base_dir / "models"
-        self.files_dir = self.base_dir / "files"
+        self.resources_dir = self.base_dir / "resources"
         self.models_dir.mkdir(parents=True, exist_ok=True)
-        self.files_dir.mkdir(parents=True, exist_ok=True)
+        self.resources_dir.mkdir(parents=True, exist_ok=True)
         
         # Models list for display
         self.models = [
@@ -206,6 +208,7 @@ class NotYCaptionGenerator:
     def print_header(self, title: str = None):
         if title is None:
             title = f"{APP_NAME} v{APP_VERSION}"
+        self.clear_screen()
         draw_turtle_logo()
         print(f"{Colors.CYAN}{Colors.BOLD}")
         print("╔" + "═" * 58 + "╗")
@@ -340,18 +343,15 @@ class NotYCaptionGenerator:
         model_path = self.models_dir / f"{model_name}.pt"
         if model_path.exists():
             return True
-        # Check for existing model files
         for f in self.models_dir.glob("*.pt"):
             if f.stem == model_name or model_name in f.stem:
                 return True
         return False
         
     def get_model_path(self, model_name: str) -> Path:
-        # Check for exact match
         exact_path = self.models_dir / f"{model_name}.pt"
         if exact_path.exists():
             return exact_path
-        # Check for partial match
         for f in self.models_dir.glob("*.pt"):
             if model_name in f.stem:
                 return f
@@ -369,26 +369,99 @@ class NotYCaptionGenerator:
             self.print_error(f"Failed to load model: {e}")
             return False
             
-    def format_subtitle_text(self, text: str, line_type: str, number_per_line: int) -> str:
-        if not text:
-            return text
-        if line_type == "words":
-            return self.limit_words_per_line(text, number_per_line)
-        else:
-            return self.limit_letters_per_line(text, number_per_line)
-    
-    def limit_words_per_line(self, text: str, max_words: int) -> str:
-        if max_words <= 0:
-            return text
-        words = text.split()
-        if len(words) <= max_words:
-            return text
-        lines = []
-        for i in range(0, len(words), max_words):
-            line_words = words[i:i + max_words]
-            lines.append(' '.join(line_words))
-        return '\n'.join(lines)
-    
+    def generate_captions(self, media_path: Path, model_name: str, line_type: str, 
+                          number_per_line: int, mode: int, language_code: str) -> bool:
+        try:
+            if self.model is None:
+                if not self.load_model(model_name):
+                    return False
+                    
+            self.print_info("Transcribing audio with word timestamps...")
+            
+            task = "transcribe"
+            if mode == 2:
+                task = "translate"
+            language = language_code if language_code != "auto" else None
+            
+            # Transcribe with word-level timestamps
+            result = self.model.transcribe(
+                str(media_path),
+                task=task,
+                language=language,
+                verbose=False,
+                word_timestamps=True
+            )
+            
+            # Process based on user preference
+            output_path = media_path.parent / f"{media_path.stem}"
+            if mode == 2:
+                output_path = output_path.with_name(f"{media_path.stem}_en")
+            elif language_code != "auto":
+                output_path = output_path.with_name(f"{media_path.stem}_{language_code}")
+            output_path = output_path.with_suffix(".srt")
+            
+            subtitle_index = 1
+            
+            with open(output_path, 'w', encoding='utf-8') as f:
+                for segment in result["segments"]:
+                    if line_type == "words":
+                        # Process each word individually with its own timestamp
+                        words = segment.get("words", [])
+                        if words:
+                            # Group words by the number per line
+                            for i in range(0, len(words), number_per_line):
+                                chunk = words[i:i + number_per_line]
+                                if chunk:
+                                    start_time = chunk[0]["start"]
+                                    end_time = chunk[-1]["end"]
+                                    text = " ".join([w["word"].strip() for w in chunk])
+                                    start_str = self.format_time(start_time)
+                                    end_str = self.format_time(end_time)
+                                    f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{text}\n\n")
+                                    subtitle_index += 1
+                        else:
+                            # Fallback to segment-level if no word timestamps
+                            text = segment["text"].strip()
+                            words_list = text.split()
+                            words_per_line = number_per_line
+                            
+                            for i in range(0, len(words_list), words_per_line):
+                                chunk_words = words_list[i:i + words_per_line]
+                                chunk_text = " ".join(chunk_words)
+                                
+                                # Estimate timestamps based on word positions
+                                word_count = len(words_list)
+                                start_time = segment["start"] + (i / word_count) * (segment["end"] - segment["start"])
+                                end_time = segment["start"] + ((i + len(chunk_words)) / word_count) * (segment["end"] - segment["start"])
+                                
+                                start_str = self.format_time(start_time)
+                                end_str = self.format_time(end_time)
+                                f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{chunk_text}\n\n")
+                                subtitle_index += 1
+                    else:
+                        # Letters per line - process the entire segment
+                        text = segment["text"].strip()
+                        formatted_text = self.limit_letters_per_line(text, number_per_line)
+                        start_str = self.format_time(segment["start"])
+                        end_str = self.format_time(segment["end"])
+                        f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{formatted_text}\n\n")
+                        subtitle_index += 1
+                    
+            self.print_success(f"Captions saved to: {output_path}")
+            self.print_info(f"Generated {subtitle_index - 1} subtitle entries")
+            return True
+            
+        except Exception as e:
+            self.print_error(f"Error: {e}")
+            return False
+            
+    def format_time(self, seconds: float) -> str:
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        millis = int((seconds % 1) * 1000)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+        
     def limit_letters_per_line(self, text: str, max_letters: int) -> str:
         if max_letters <= 0:
             return text
@@ -420,57 +493,6 @@ class NotYCaptionGenerator:
             lines.append(current_line)
         return '\n'.join(lines)
         
-    def generate_captions(self, media_path: Path, model_name: str, line_type: str, 
-                          number_per_line: int, mode: int, language_code: str) -> bool:
-        try:
-            if self.model is None:
-                if not self.load_model(model_name):
-                    return False
-                    
-            self.print_info("Transcribing audio... This may take several minutes.")
-            
-            task = "transcribe"
-            if mode == 2:
-                task = "translate"
-            language = language_code if language_code != "auto" else None
-            
-            result = self.model.transcribe(
-                str(media_path),
-                task=task,
-                language=language,
-                verbose=False,
-                word_timestamps=True
-            )
-            
-            output_path = media_path.parent / f"{media_path.stem}"
-            if mode == 2:
-                output_path = output_path.with_name(f"{media_path.stem}_en")
-            elif language_code != "auto":
-                output_path = output_path.with_name(f"{media_path.stem}_{language_code}")
-            output_path = output_path.with_suffix(".srt")
-            
-            with open(output_path, 'w', encoding='utf-8') as f:
-                for i, segment in enumerate(result["segments"], 1):
-                    start = self.format_time(segment["start"])
-                    end = self.format_time(segment["end"])
-                    text = segment["text"].strip()
-                    text = self.format_subtitle_text(text, line_type, number_per_line)
-                    f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
-                    
-            self.print_success(f"Captions saved to: {output_path}")
-            return True
-            
-        except Exception as e:
-            self.print_error(f"Error: {e}")
-            return False
-            
-    def format_time(self, seconds: float) -> str:
-        hours = int(seconds // 3600)
-        minutes = int((seconds % 3600) // 60)
-        secs = int(seconds % 60)
-        millis = int((seconds % 1) * 1000)
-        return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
-        
     def open_browser_links(self):
         self.print_info("Opening links...")
         try:
@@ -483,9 +505,6 @@ class NotYCaptionGenerator:
             self.print_warning(f"Could not open browser: {e}")
             
     def run(self):
-        self.clear_screen()
-        self.print_header()
-        
         # Check and install dependencies
         if not check_and_install_dependencies():
             self.print_error("Failed to install dependencies!")
@@ -512,7 +531,6 @@ class NotYCaptionGenerator:
                 self.model = None
                 
                 while True:
-                    self.clear_screen()
                     self.print_header()
                     print(f"\n{Colors.BOLD}📁 Current file: {media_path.name}{Colors.RESET}")
                     
@@ -569,7 +587,6 @@ class NotYCaptionGenerator:
                         break
                 
                 if self.selected_model and self.selected_language:
-                    self.clear_screen()
                     self.print_header()
                     
                     line_options = ["Words", "Letters"]
@@ -642,7 +659,6 @@ class NotYCaptionGenerator:
                 if not self.confirm("Continue?"):
                     break
                     
-        self.clear_screen()
         self.print_header("Thank You!")
         self.print_success(f"Thanks for using {APP_NAME}!")
         print()

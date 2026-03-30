@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build NotY Caption Generator AI Executable
+Build NotY Caption Generator AI Executable v4.4
 """
 
 import os
@@ -12,7 +12,7 @@ from pathlib import Path
 
 def build_exe():
     print("=" * 60)
-    print("Building NotY Caption Generator AI Executable v4.3")
+    print("Building NotY Caption Generator AI Executable v4.4")
     print("=" * 60)
     
     base_dir = Path(__file__).parent.parent
@@ -58,7 +58,6 @@ a = Analysis(
         'threading',
         'time',
         'pathlib',
-        'turtle',
         'platform'
     ],
     hookspath=[],
