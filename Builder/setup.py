@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Setup script for building NotY Caption Generator AI v4.4
+Using pywhispercpp (Whisper.cpp bindings)
 Copyright (c) 2026 NotY215
 """
 
@@ -9,7 +10,6 @@ import os
 import sys
 import shutil
 import subprocess
-import time
 from pathlib import Path
 
 def build_all():
@@ -30,44 +30,39 @@ def build_all():
     
     # Step 1: Build main executable
     print("\n[1/3] Building main executable...")
-    print("This will take 5-10 minutes. Please wait...")
     
     build_exe_path = builder_dir / "build_exe.py"
     if not build_exe_path.exists():
-        print("❌ build_exe.py not found!")
+        print("[ERROR] build_exe.py not found!")
         sys.exit(1)
     
-    # Run build with proper error handling
     try:
-        start_time = time.time()
         result = subprocess.run(
             [sys.executable, str(build_exe_path)], 
             capture_output=True, 
             text=True,
-            timeout=1800
+            timeout=600
         )
         
         if result.returncode != 0:
-            print("❌ Build failed!")
+            print("[ERROR] Build failed!")
             print("Error output:")
             print(result.stderr)
             sys.exit(1)
             
-        print(f"✅ Build completed in {int(time.time() - start_time)} seconds")
-        
     except subprocess.TimeoutExpired:
-        print("❌ Build timed out after 30 minutes!")
+        print("[ERROR] Build timed out after 10 minutes!")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Build failed: {e}")
+        print(f"[ERROR] Build failed: {e}")
         sys.exit(1)
     
     main_exe = dist_dir / "NotYCaptionGenAI.exe"
     if not main_exe.exists():
-        print("\n❌ Main executable not found!")
+        print("\n[ERROR] Main executable not found!")
         sys.exit(1)
     
-    print(f"✅ Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
+    print(f"[OK] Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
     
     # Step 2: Build uninstaller
     print("\n[2/3] Building uninstaller executable...")
@@ -80,7 +75,6 @@ def build_all():
         "--onefile",
         "--console",
         "--noconfirm",
-        "--log-level=WARN",
         uninstaller_py
     ]
     
@@ -93,12 +87,12 @@ def build_all():
         subprocess.run(cmd, cwd=str(temp_build_dir), check=True, timeout=120)
         uninstaller_exe = temp_build_dir / "dist" / "NotYCaptionGenAI_Uninstaller.exe"
         if uninstaller_exe.exists():
-            print(f"✅ Uninstaller built: {uninstaller_exe} ({uninstaller_exe.stat().st_size / 1024 / 1024:.2f} MB)")
+            print(f"[OK] Uninstaller built: {uninstaller_exe} ({uninstaller_exe.stat().st_size / 1024 / 1024:.2f} MB)")
         else:
-            print("❌ Uninstaller not found!")
+            print("[ERROR] Uninstaller not found!")
             sys.exit(1)
     except Exception as e:
-        print(f"❌ Failed to build uninstaller: {e}")
+        print(f"[ERROR] Failed to build uninstaller: {e}")
         sys.exit(1)
     
     # Step 3: Build installer
@@ -125,8 +119,8 @@ def build_all():
     if models_dir.exists() and any(models_dir.iterdir()):
         print("  Including models...")
         shutil.copytree(models_dir, temp_dir / "models")
-        model_count = len(list((temp_dir / "models").glob("*.pt")))
-        total_size = sum(f.stat().st_size for f in (temp_dir / "models").glob("*.pt")) / (1024 * 1024)
+        model_count = len(list((temp_dir / "models").glob("ggml-*.bin")))
+        total_size = sum(f.stat().st_size for f in (temp_dir / "models").glob("ggml-*.bin")) / (1024 * 1024)
         print(f"    Added {model_count} models ({total_size:.2f} MB)")
     
     # Build installer
@@ -150,7 +144,6 @@ def build_all():
         "--hidden-import=tempfile",
         "--console",
         "--noconfirm",
-        "--log-level=WARN",
         installer_py
     ]
     
@@ -165,9 +158,9 @@ def build_all():
     
     try:
         subprocess.run(cmd, cwd=str(temp_dir), check=True, timeout=300)
-        print("\n✅ Installer built successfully!")
+        print("\n[OK] Installer built successfully!")
     except Exception as e:
-        print(f"\n❌ Installer build failed: {e}")
+        print(f"\n[ERROR] Installer build failed: {e}")
         sys.exit(1)
     
     # Copy installer to root
@@ -176,9 +169,9 @@ def build_all():
         final_installer = base_dir / "NotYCaptionGenAI_Installer_v4.4.exe"
         shutil.copy2(installer_exe, final_installer)
         size = final_installer.stat().st_size / 1024 / 1024
-        print(f"\n✅ Installer created: {final_installer} ({size:.2f} MB)")
+        print(f"\n[OK] Installer created: {final_installer} ({size:.2f} MB)")
     else:
-        print("\n❌ Installer not found!")
+        print("\n[ERROR] Installer not found!")
     
     # Clean up
     shutil.rmtree(temp_dir, ignore_errors=True)

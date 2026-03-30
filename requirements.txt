@@ -1,13 +1,4 @@
-openai-whisper
-torch==2.0.1+cpu
-numpy
-colorama
-tiktoken
-regex
-requests
-urllib3
-certifi
-charset_normalizer
-idna
-packaging
+requests 
+colorama>=0.4.6
 pyinstaller>=6.0.0
+pywhispercpp
