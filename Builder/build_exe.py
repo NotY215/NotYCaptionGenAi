@@ -21,7 +21,6 @@ def build_exe():
     resources_dir = base_dir / "resources"
     dist_dir = base_dir / "dist"
     
-    # Clean
     if dist_dir.exists():
         shutil.rmtree(dist_dir)
     dist_dir.mkdir(parents=True, exist_ok=True)
@@ -29,15 +28,16 @@ def build_exe():
     source_path = str(base_dir / "noty_caption_gen.py").replace('\\', '/')
     icon_path = str(resources_dir / "app.ico").replace('\\', '/')
     
+    # Create spec file
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
+
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 a = Analysis(
     [r'{source_path}'],
     pathex=[],
     binaries=[],
-    datas=[
-        (r'{icon_path}', '.'),
-    ],
+    datas=collect_data_files('whisper') + collect_data_files('torch') + [(r'{icon_path}', '.')],
     hiddenimports=[
         'whisper',
         'whisper.__main__',
@@ -47,111 +47,32 @@ a = Analysis(
         'whisper.tokenizer',
         'whisper.utils',
         'whisper.normalizers',
+        'whisper.transcribe',
         'torch',
         'torch._C',
-        'torch._ops',
-        'torch._utils',
         'torch.nn',
         'torch.nn.functional',
-        'torch.serialization',
-        'torch.storage',
-        'torch.types',
         'numpy',
         'numpy.core',
-        'numpy.core._methods',
-        'numpy.core.fromnumeric',
-        'numpy.core.umath',
         'numpy.lib',
-        'numpy.lib.format',
         'colorama',
-        'argparse',
-        'webbrowser',
-        'subprocess',
-        'threading',
-        'time',
-        'pathlib',
-        'platform',
-        'tkinter',
-        'tkinter.filedialog',
-        'ctypes',
-        'importlib',
-        'importlib.metadata',
-        'packaging',
-        'packaging.version',
-        'regex',
         'tiktoken',
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
-        'requests',
-        'urllib3',
-        'certifi',
-        'charset_normalizer',
-        'idna',
+        'regex'
     ],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
     excludes=[
-        'torch.cuda',
-        'torch.cuda.amp',
-        'torch.distributed',
-        'torch.testing',
-        'torch.jit',
-        'torch.onnx',
-        'torch.ao',
-        'torch.fx',
-        'torch._dynamo',
-        'torch._inductor',
-        'torch._export',
-        'torch._functorch',
-        'torch._lazy',
-        'torch._numpy',
-        'torch._prims',
-        'torch._subclasses',
-        'torch.backends',
-        'torch.contrib',
-        'torch.distributions',
-        'torch.fft',
-        'torch.futures',
-        'torch.linalg',
-        'torch.mps',
-        'torch.optim',
-        'torch.package',
-        'torch.profiler',
-        'torch.quantization',
-        'torch.special',
-        'torch.sparse',
-        'torch.utils.benchmark',
-        'torch.utils.checkpoint',
-        'torch.utils.cpp_extension',
-        'torch.utils.data',
-        'torch.utils.dlpack',
-        'torch.utils.hooks',
-        'torch.utils.model_zoo',
-        'torch.utils.tensorboard',
-        'torchaudio',
-        'torchvision',
-        'torchtext',
-        'numpy.random',
-        'numpy.ma',
-        'numpy.fft',
-        'numpy.linalg',
-        'numpy.polynomial',
-        'numpy.testing',
-        'numpy.distutils',
-        'setuptools',
-        'pkg_resources',
-        'jinja2',
-        'markupsafe',
-        'tensorboard',
-        'tqdm',
         'matplotlib',
-        'PIL',
-        'sklearn',
         'scipy',
-        'numba',
-        'llvmlite',
-        'pandas'
+        'sklearn',
+        'pandas',
+        'PIL',
+        'tensorboard',
+        'torchvision',
+        'torchaudio'
     ],
     noarchive=False,
 )
@@ -168,7 +89,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,
+    upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=True,
@@ -191,22 +112,15 @@ exe = EXE(
         "--distpath", str(dist_dir),
         "--workpath", str(builder_dir / "build"),
         "--noconfirm",
-        "--clean",
-        "--log-level=WARN"
+        "--clean"
     ]
     
     try:
         print("Building executable...")
         subprocess.check_call(cmd, timeout=1800)
         print("\n[OK] Build completed successfully!")
-    except subprocess.TimeoutExpired:
-        print("\n[ERROR] Build timed out!")
-        sys.exit(1)
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         print(f"\n[ERROR] Build failed: {e}")
-        sys.exit(1)
-    except KeyboardInterrupt:
-        print("\n[WARNING] Build interrupted!")
         sys.exit(1)
     
     spec_path.unlink(missing_ok=True)

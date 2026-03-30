@@ -26,9 +26,9 @@ if platform.system() == "Windows":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
 
-# Set environment variables for PyTorch
+# Set environment variables
 os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable CUDA
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 # ANSI color codes
 class Colors:
@@ -56,7 +56,7 @@ if platform.system() == "Windows":
     try:
         import colorama
         colorama.init()
-    except ImportError:
+    except:
         for attr in dir(Colors):
             if not attr.startswith('__'):
                 setattr(Colors, attr, '')
@@ -104,33 +104,13 @@ APP_LICENSE = "LGPL-3.0"
 APP_TELEGRAM = "https://t.me/Noty_215"
 APP_YOUTUBE = "https://www.youtube.com/@NotY215"
 
-# Whisper models with download URLs
+# Whisper models
 WHISPER_MODELS = {
-    "tiny": {
-        "size": "75 MB", 
-        "desc": "Fastest",
-        "url": "https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt"
-    },
-    "base": {
-        "size": "150 MB", 
-        "desc": "Balanced",
-        "url": "https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt"
-    },
-    "small": {
-        "size": "500 MB", 
-        "desc": "Good",
-        "url": "https://openaipublic.azureedge.net/main/whisper/models/9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794/small.pt"
-    },
-    "medium": {
-        "size": "1.5 GB", 
-        "desc": "Accurate",
-        "url": "https://openaipublic.azureedge.net/main/whisper/models/345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674b08dcb1/medium.pt"
-    },
-    "large": {
-        "size": "2.9 GB", 
-        "desc": "Best",
-        "url": "https://openaipublic.azureedge.net/main/whisper/models/e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb/large-v3.pt"
-    }
+    "tiny": {"size": "75 MB", "desc": "Fastest"},
+    "base": {"size": "150 MB", "desc": "Balanced"},
+    "small": {"size": "500 MB", "desc": "Good"},
+    "medium": {"size": "1.5 GB", "desc": "Accurate"},
+    "large": {"size": "2.9 GB", "desc": "Best"}
 }
 
 class NotYCaptionGenerator:
@@ -146,11 +126,11 @@ class NotYCaptionGenerator:
         self.resources_dir.mkdir(parents=True, exist_ok=True)
         
         self.models = [
-            ("tiny", WHISPER_MODELS["tiny"]["size"], WHISPER_MODELS["tiny"]["desc"], WHISPER_MODELS["tiny"]["url"]),
-            ("base", WHISPER_MODELS["base"]["size"], WHISPER_MODELS["base"]["desc"], WHISPER_MODELS["base"]["url"]),
-            ("small", WHISPER_MODELS["small"]["size"], WHISPER_MODELS["small"]["desc"], WHISPER_MODELS["small"]["url"]),
-            ("medium", WHISPER_MODELS["medium"]["size"], WHISPER_MODELS["medium"]["desc"], WHISPER_MODELS["medium"]["url"]),
-            ("large", WHISPER_MODELS["large"]["size"], WHISPER_MODELS["large"]["desc"], WHISPER_MODELS["large"]["url"])
+            ("tiny", WHISPER_MODELS["tiny"]["size"], WHISPER_MODELS["tiny"]["desc"]),
+            ("base", WHISPER_MODELS["base"]["size"], WHISPER_MODELS["base"]["desc"]),
+            ("small", WHISPER_MODELS["small"]["size"], WHISPER_MODELS["small"]["desc"]),
+            ("medium", WHISPER_MODELS["medium"]["size"], WHISPER_MODELS["medium"]["desc"]),
+            ("large", WHISPER_MODELS["large"]["size"], WHISPER_MODELS["large"]["desc"])
         ]
         
         self.languages = [
@@ -284,67 +264,6 @@ class NotYCaptionGenerator:
                 
             return path
             
-    def check_whisper_available(self) -> bool:
-        try:
-            import whisper
-            return True
-        except ImportError:
-            self.print_error("OpenAI Whisper not installed!")
-            self.print_info("Installing dependencies automatically...")
-            try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "openai-whisper", "--quiet"])
-                return True
-            except:
-                self.print_error("Failed to install dependencies")
-                return False
-            
-    def check_model_exists(self, model_name: str) -> bool:
-        model_path = self.models_dir / f"{model_name}.pt"
-        if model_path.exists():
-            return True
-        for f in self.models_dir.glob("*.pt"):
-            if f.stem == model_name or model_name in f.stem:
-                return True
-        return False
-        
-    def download_model(self, model_name: str):
-        """Download model from URL with progress"""
-        import requests
-        model_info = WHISPER_MODELS[model_name]
-        model_url = model_info["url"]
-        model_path = self.models_dir / f"{model_name}.pt"
-        
-        self.print_info(f"Downloading {model_name.upper()} model...")
-        self.print_info(f"URL: {model_url}")
-        self.print_info(f"Size: {model_info['size']}")
-        
-        try:
-            response = requests.get(model_url, stream=True)
-            response.raise_for_status()
-            
-            total_size = int(response.headers.get('content-length', 0))
-            downloaded = 0
-            
-            with open(model_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total_size > 0:
-                            percent = (downloaded / total_size) * 100
-                            mb_downloaded = downloaded / (1024 * 1024)
-                            mb_total = total_size / (1024 * 1024)
-                            print(f"\r  Progress: {percent:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end="", flush=True)
-            
-            print()  # New line
-            self.print_success(f"Model downloaded: {model_path}")
-            return True
-        except Exception as e:
-            self.print_error(f"Failed to download model: {e}")
-            self.print_info(f"You can manually download from: {model_url}")
-            self.print_info(f"Place the file in: {self.models_dir}")
-            return False
-            
     def load_model(self, model_name: str):
         try:
             import whisper
@@ -450,6 +369,7 @@ class NotYCaptionGenerator:
                 word_timestamps=True
             )
             
+            # Determine output filename
             output_path = media_path.parent / f"{media_path.stem}"
             if mode == "translate":
                 output_path = output_path.with_name(f"{media_path.stem}_en")
@@ -458,11 +378,13 @@ class NotYCaptionGenerator:
             output_path = output_path.with_suffix(".srt")
             
             subtitle_index = 1
+            MIN_DURATION = 0.5  # Minimum 0.5 seconds per subtitle
             
             with open(output_path, 'w', encoding='utf-8') as f:
                 for segment in result["segments"]:
                     text = segment["text"].strip()
                     
+                    # Apply transliteration if needed
                     if mode == "transliterate":
                         text = self.transliterate_text(text, language_code)
                     
@@ -474,28 +396,52 @@ class NotYCaptionGenerator:
                                 if chunk:
                                     start_time = chunk[0]["start"]
                                     end_time = chunk[-1]["end"]
+                                    
+                                    # Ensure minimum duration
+                                    if end_time - start_time < MIN_DURATION:
+                                        end_time = start_time + MIN_DURATION
+                                    
                                     chunk_text = " ".join([w["word"].strip() for w in chunk])
                                     start_str = self.format_time(start_time)
                                     end_str = self.format_time(end_time)
                                     f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{chunk_text}\n\n")
                                     subtitle_index += 1
                         else:
+                            # Fallback: use segment timestamps
                             words_list = text.split()
                             if len(words_list) == 0:
                                 continue
+                                
+                            # Calculate duration per word
+                            segment_duration = segment["end"] - segment["start"]
+                            duration_per_word = segment_duration / len(words_list)
+                            
                             for i in range(0, len(words_list), number_per_line):
                                 chunk = words_list[i:i + number_per_line]
                                 chunk_text = " ".join(chunk)
-                                start_time = segment["start"] + (i / len(words_list)) * (segment["end"] - segment["start"])
-                                end_time = segment["start"] + ((i + len(chunk)) / len(words_list)) * (segment["end"] - segment["start"])
+                                start_time = segment["start"] + (i * duration_per_word)
+                                end_time = segment["start"] + ((i + len(chunk)) * duration_per_word)
+                                
+                                # Ensure minimum duration
+                                if end_time - start_time < MIN_DURATION:
+                                    end_time = start_time + MIN_DURATION
+                                
                                 start_str = self.format_time(start_time)
                                 end_str = self.format_time(end_time)
                                 f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{chunk_text}\n\n")
                                 subtitle_index += 1
                     else:
+                        # Letters per line - use segment timestamps
                         formatted_text = self.limit_letters_per_line(text, number_per_line)
-                        start_str = self.format_time(segment["start"])
-                        end_str = self.format_time(segment["end"])
+                        start_time = segment["start"]
+                        end_time = segment["end"]
+                        
+                        # Ensure minimum duration
+                        if end_time - start_time < MIN_DURATION:
+                            end_time = start_time + MIN_DURATION
+                        
+                        start_str = self.format_time(start_time)
+                        end_str = self.format_time(end_time)
                         f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{formatted_text}\n\n")
                         subtitle_index += 1
                     
@@ -510,7 +456,13 @@ class NotYCaptionGenerator:
             return False
             
     def run(self):
-        if not self.check_whisper_available():
+        # Try to import whisper to verify it works
+        try:
+            import whisper
+            self.print_success("Whisper loaded successfully")
+        except ImportError as e:
+            self.print_error(f"Whisper import failed: {e}")
+            self.print_info("Please ensure openai-whisper is installed")
             input("\nPress Enter to exit...")
             return
             
@@ -532,14 +484,6 @@ class NotYCaptionGenerator:
                     
                 self.selected_model = self.models[model_choice][0]
                 
-                if not self.check_model_exists(self.selected_model):
-                    self.print_warning(f"{self.selected_model.upper()} model not found!")
-                    if self.confirm("Download model now?"):
-                        if not self.download_model(self.selected_model):
-                            continue
-                    else:
-                        continue
-                
                 # Select language
                 self.clear_screen()
                 print_header()
@@ -555,7 +499,7 @@ class NotYCaptionGenerator:
                 language_code = self.selected_language[1]
                 language_name = self.selected_language[0]
                 
-                # Select mode
+                # Select mode (only show appropriate modes based on language)
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")

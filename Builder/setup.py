@@ -21,7 +21,6 @@ def build_all():
     builder_dir = Path(__file__).parent
     dist_dir = base_dir / "dist"
     
-    # Clean
     if dist_dir.exists():
         print("Cleaning previous build...")
         shutil.rmtree(dist_dir)
@@ -36,20 +35,7 @@ def build_all():
         sys.exit(1)
     
     try:
-        result = subprocess.run(
-            [sys.executable, str(build_exe_path)], 
-            capture_output=True, 
-            text=True,
-            timeout=1800
-        )
-        
-        if result.returncode != 0:
-            print("[ERROR] Build failed!")
-            print(result.stderr)
-            sys.exit(1)
-    except subprocess.TimeoutExpired:
-        print("[ERROR] Build timed out!")
-        sys.exit(1)
+        subprocess.run([sys.executable, str(build_exe_path)], check=True, timeout=1800)
     except Exception as e:
         print(f"[ERROR] Build failed: {e}")
         sys.exit(1)
