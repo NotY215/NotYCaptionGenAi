@@ -9,6 +9,7 @@ import os
 import sys
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 def build_all():
@@ -23,151 +24,42 @@ def build_all():
     
     # Clean
     if dist_dir.exists():
+        print("Cleaning previous build...")
         shutil.rmtree(dist_dir)
     dist_dir.mkdir(parents=True, exist_ok=True)
     
-    # Step 1: Build main executable (simplified)
+    # Step 1: Build main executable
     print("\n[1/3] Building main executable...")
+    print("This will take 5-10 minutes. Please wait...")
     
-    # Create a simplified spec file for main executable
-    source_path = str(base_dir / "noty_caption_gen.py").replace('\\', '/')
-    icon_path = str(base_dir / "resources" / "app.ico").replace('\\', '/')
+    build_exe_path = builder_dir / "build_exe.py"
+    if not build_exe_path.exists():
+        print("❌ build_exe.py not found!")
+        sys.exit(1)
     
-    spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
-
-a = Analysis(
-    [r'{source_path}'],
-    pathex=[],
-    binaries=[],
-    datas=[
-        (r'{icon_path}', '.'),
-    ],
-    hiddenimports=[
-        'whisper',
-        'whisper.__main__',
-        'whisper.audio',
-        'whisper.decoding',
-        'whisper.model',
-        'whisper.tokenizer',
-        'whisper.utils',
-        'whisper.normalizers',
-        'torch',
-        'torch.nn',
-        'torch.nn.functional',
-        'torch._C',
-        'numpy',
-        'colorama',
-        'argparse',
-        'webbrowser',
-        'subprocess',
-        'threading',
-        'time',
-        'pathlib',
-        'platform',
-        'tkinter'
-    ],
-    hookspath=[],
-    hooksconfig={{}},
-    runtime_hooks=[],
-    excludes=[
-        'torch.distributed',
-        'torch.testing',
-        'torch.jit',
-        'torch.onnx',
-        'torch.ao',
-        'torch.fx',
-        'torch._dynamo',
-        'torch._inductor',
-        'torch._export',
-        'torch._functorch',
-        'torch._lazy',
-        'torch._numpy',
-        'torch._prims',
-        'torch._subclasses',
-        'torch._tensor',
-        'torch.backends',
-        'torch.contrib',
-        'torch.cuda',
-        'torch.distributions',
-        'torch.fft',
-        'torch.futures',
-        'torch.linalg',
-        'torch.mps',
-        'torch.optim',
-        'torch.package',
-        'torch.profiler',
-        'torch.quantization',
-        'torch.special',
-        'torch.sparse',
-        'torch.utils',
-        'numpy.random',
-        'numpy.ma',
-        'numpy.fft',
-        'numpy.linalg',
-        'numpy.polynomial',
-        'numpy.testing',
-        'numpy.distutils',
-        'setuptools',
-        'pkg_resources',
-        'jinja2',
-        'markupsafe',
-        'tensorboard',
-        'tqdm',
-        'matplotlib',
-        'PIL',
-        'sklearn',
-        'scipy',
-        'numba',
-        'llvmlite'
-    ],
-    noarchive=False,
-)
-
-pyz = PYZ(a.pure)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name='NotYCaptionGenAI',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=False,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=r'{icon_path}'
-)
-'''
-    
-    spec_path = builder_dir / "NotYCaptionGenAI.spec"
-    with open(spec_path, 'w', encoding='utf-8') as f:
-        f.write(spec_content)
-    
-    # Build main executable
-    cmd = [
-        sys.executable, "-m", "PyInstaller",
-        str(spec_path),
-        "--distpath", str(dist_dir),
-        "--workpath", str(builder_dir / "build"),
-        "--noconfirm"
-    ]
-    
+    # Run build with proper error handling
     try:
-        subprocess.run(cmd, check=True, timeout=600)
-        print("\n✅ Main executable built successfully!")
+        start_time = time.time()
+        result = subprocess.run(
+            [sys.executable, str(build_exe_path)], 
+            capture_output=True, 
+            text=True,
+            timeout=1800
+        )
+        
+        if result.returncode != 0:
+            print("❌ Build failed!")
+            print("Error output:")
+            print(result.stderr)
+            sys.exit(1)
+            
+        print(f"✅ Build completed in {int(time.time() - start_time)} seconds")
+        
     except subprocess.TimeoutExpired:
-        print("\n⚠️ Build timed out, but may have completed. Checking...")
-    except subprocess.CalledProcessError as e:
-        print(f"\n❌ Build failed: {e}")
+        print("❌ Build timed out after 30 minutes!")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Build failed: {e}")
         sys.exit(1)
     
     main_exe = dist_dir / "NotYCaptionGenAI.exe"
@@ -177,7 +69,7 @@ exe = EXE(
     
     print(f"✅ Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
     
-    # Step 2: Build uninstaller executable
+    # Step 2: Build uninstaller
     print("\n[2/3] Building uninstaller executable...")
     
     uninstaller_py = str(builder_dir / "uninstaller.py")
@@ -188,6 +80,7 @@ exe = EXE(
         "--onefile",
         "--console",
         "--noconfirm",
+        "--log-level=WARN",
         uninstaller_py
     ]
     
@@ -225,6 +118,7 @@ exe = EXE(
     resources_dir = base_dir / "resources"
     if resources_dir.exists():
         shutil.copytree(resources_dir, temp_dir / "resources")
+        print("  Copied resources")
     
     # Copy models if they exist
     models_dir = base_dir / "models"
@@ -238,6 +132,7 @@ exe = EXE(
     # Build installer
     installer_py = str(builder_dir / "installer_console.py")
     
+    # Build the installer command
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--name=NotYCaptionGenAI_Installer_v4.4",
@@ -251,18 +146,20 @@ exe = EXE(
         "--hidden-import=pathlib",
         "--hidden-import=platform",
         "--hidden-import=tkinter",
+        "--hidden-import=tkinter.filedialog",
+        "--hidden-import=tempfile",
         "--console",
         "--noconfirm",
+        "--log-level=WARN",
         installer_py
     ]
     
-    # Add models
+    # Add models if they exist
     if (temp_dir / "models").exists():
-        for model_file in (temp_dir / "models").glob("*.pt"):
-            cmd.insert(4, f"--add-data={model_file}{os.pathsep}models")
+        cmd.insert(4, f"--add-data={temp_dir / 'models'}{os.pathsep}models")
     
     # Add icon
-    icon_path = temp_dir / "resources" / "logo.ico"
+    icon_path = temp_dir / "resources" / "app.ico"
     if icon_path.exists():
         cmd.insert(4, f"--icon={icon_path}")
     

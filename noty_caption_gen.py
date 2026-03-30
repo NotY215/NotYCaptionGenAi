@@ -19,6 +19,9 @@ import tkinter as tk
 from tkinter import filedialog
 from pathlib import Path
 from typing import List, Tuple, Optional
+from Builder.installer_console import print_info
+
+
 
 # Fix Windows console encoding
 if platform.system() == "Windows":
@@ -26,6 +29,7 @@ if platform.system() == "Windows":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
 
+os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
 # ANSI color codes
 class Colors:
     RESET = '\033[0m'
