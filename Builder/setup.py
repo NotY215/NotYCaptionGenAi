@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Setup script for building NotY Caption Generator AI v4.4
-Using pywhispercpp (Whisper.cpp bindings)
 Copyright (c) 2026 NotY215
 """
 
@@ -30,6 +29,7 @@ def build_all():
     
     # Step 1: Build main executable
     print("\n[1/3] Building main executable...")
+    print("This will take 5-10 minutes. Please wait...")
     
     build_exe_path = builder_dir / "build_exe.py"
     if not build_exe_path.exists():
@@ -41,7 +41,7 @@ def build_all():
             [sys.executable, str(build_exe_path)], 
             capture_output=True, 
             text=True,
-            timeout=600
+            timeout=1800
         )
         
         if result.returncode != 0:
@@ -51,7 +51,7 @@ def build_all():
             sys.exit(1)
             
     except subprocess.TimeoutExpired:
-        print("[ERROR] Build timed out after 10 minutes!")
+        print("[ERROR] Build timed out after 30 minutes!")
         sys.exit(1)
     except Exception as e:
         print(f"[ERROR] Build failed: {e}")
@@ -119,8 +119,8 @@ def build_all():
     if models_dir.exists() and any(models_dir.iterdir()):
         print("  Including models...")
         shutil.copytree(models_dir, temp_dir / "models")
-        model_count = len(list((temp_dir / "models").glob("ggml-*.bin")))
-        total_size = sum(f.stat().st_size for f in (temp_dir / "models").glob("ggml-*.bin")) / (1024 * 1024)
+        model_count = len(list((temp_dir / "models").glob("*.pt")))
+        total_size = sum(f.stat().st_size for f in (temp_dir / "models").glob("*.pt")) / (1024 * 1024)
         print(f"    Added {model_count} models ({total_size:.2f} MB)")
     
     # Build installer

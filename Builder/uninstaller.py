@@ -13,7 +13,6 @@ import time
 import platform
 from pathlib import Path
 
-# Colors for console output
 class Colors:
     RESET = '\033[0m'
     RED = '\033[91m'
@@ -30,20 +29,20 @@ if platform.system() == "Windows":
 
 def print_header():
     print(f"{Colors.CYAN}{Colors.BOLD}")
-    print("╔══════════════════════════════════════════════════════════════╗")
-    print("║              NotY Caption Generator AI Uninstaller v4.4       ║")
-    print("║                 Copyright (c) 2026 NotY215                   ║")
-    print("╚══════════════════════════════════════════════════════════════╝")
+    print("+" + "=" * 58 + "+")
+    print("|" + "NotY Caption Generator AI Uninstaller v4.4".center(58) + "|")
+    print("|" + "Copyright (c) 2026 NotY215".center(58) + "|")
+    print("+" + "=" * 58 + "+")
     print(f"{Colors.RESET}")
 
 def print_success(message):
-    print(f"{Colors.GREEN}✓ {message}{Colors.RESET}")
+    print(f"{Colors.GREEN}[OK] {message}{Colors.RESET}")
 
 def print_error(message):
-    print(f"{Colors.RED}✗ {message}{Colors.RESET}")
+    print(f"{Colors.RED}[ERROR] {message}{Colors.RESET}")
 
 def print_info(message):
-    print(f"{Colors.CYAN}ℹ {message}{Colors.RESET}")
+    print(f"{Colors.CYAN}[INFO] {message}{Colors.RESET}")
 
 def get_install_path():
     """Get install path from registry"""
@@ -72,7 +71,6 @@ def uninstall():
     print_info("Starting uninstallation process...")
     print()
     
-    # Get install path from registry
     install_path = get_install_path()
     
     if not install_path or not install_path.exists():
@@ -85,8 +83,7 @@ def uninstall():
     print_info(f"Installation size: {get_directory_size(install_path):.2f} MB")
     print()
     
-    # Confirm uninstallation
-    print(f"{Colors.YELLOW}⚠ WARNING: This will permanently remove NotY Caption Generator AI{Colors.RESET}")
+    print(f"{Colors.YELLOW}[WARNING] This will permanently remove NotY Caption Generator AI{Colors.RESET}")
     print(f"{Colors.YELLOW}   and all its components from your computer.{Colors.RESET}")
     print()
     
@@ -98,12 +95,10 @@ def uninstall():
     print()
     
     try:
-        # Remove installation directory
         print_info("Removing application files...")
         shutil.rmtree(install_path, ignore_errors=True)
         print_success("Application files removed")
         
-        # Remove shortcuts
         print_info("Removing shortcuts...")
         shortcuts = [
             Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAi.lnk",
@@ -116,7 +111,6 @@ def uninstall():
                 print(f"  Removed: {shortcut.name}")
         print_success("Shortcuts removed")
         
-        # Remove registry entries
         print_info("Removing registry entries...")
         subprocess.run(
             ["powershell", "-Command", 'Remove-Item -Path "HKCU:\\Software\\NotYCaptionGenAi" -Recurse -Force -ErrorAction SilentlyContinue'],
@@ -128,28 +122,21 @@ def uninstall():
         print_success("Uninstallation complete!")
         print_info("NotY Caption Generator AI has been removed from your computer.")
         
-        # Self-delete
-        print()
-        print_info("The uninstaller will now delete itself...")
-        time.sleep(2)
-        
-        # Create a batch file to delete the uninstaller
         if getattr(sys, 'frozen', False):
             uninstaller_path = Path(sys.executable)
             print_info("The uninstaller will now delete itself...")
+            time.sleep(2)
             
-            # Create a batch file to delete the uninstaller
             bat_path = Path(os.environ["TEMP"]) / f"delete_uninstaller_{int(time.time())}.bat"
             bat_content = f'''@echo off
-        timeout /t 2 /nobreak >nul
-        del "{uninstaller_path}" 2>nul
-        del "%~f0" 2>nul
-        exit
-        '''
+timeout /t 2 /nobreak >nul
+del "{uninstaller_path}" 2>nul
+del "%~f0" 2>nul
+exit
+'''
             with open(bat_path, 'w') as f:
                 f.write(bat_content)
             
-            # Run the batch file and exit
             subprocess.Popen([str(bat_path)], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
             return True
         

@@ -35,24 +35,24 @@ if platform.system() == "Windows":
 def print_header():
     """Print application header"""
     print(f"{Colors.CYAN}{Colors.BOLD}")
-    print("╔══════════════════════════════════════════════════════════════╗")
-    print("║              NotY Caption Generator AI Installer v4.4        ║")
-    print("║                 Copyright (c) 2026 NotY215                  ║")
-    print("║                     License: LGPL-3.0                        ║")
-    print("╚══════════════════════════════════════════════════════════════╝")
+    print("+" + "=" * 58 + "+")
+    print("|" + "NotY Caption Generator AI Installer v4.4".center(58) + "|")
+    print("|" + "Copyright (c) 2026 NotY215".center(58) + "|")
+    print("|" + "License: LGPL-3.0".center(58) + "|")
+    print("+" + "=" * 58 + "+")
     print(f"{Colors.RESET}")
 
 def print_success(message):
-    print(f"{Colors.GREEN}✓ {message}{Colors.RESET}")
+    print(f"{Colors.GREEN}[OK] {message}{Colors.RESET}")
 
 def print_error(message):
-    print(f"{Colors.RED}✗ {message}{Colors.RESET}")
+    print(f"{Colors.RED}[ERROR] {message}{Colors.RESET}")
 
 def print_warning(message):
-    print(f"{Colors.YELLOW}⚠ {message}{Colors.RESET}")
+    print(f"{Colors.YELLOW}[WARNING] {message}{Colors.RESET}")
 
 def print_info(message):
-    print(f"{Colors.CYAN}ℹ {message}{Colors.RESET}")
+    print(f"{Colors.CYAN}[INFO] {message}{Colors.RESET}")
 
 def get_input(prompt, default=None):
     if default:
@@ -95,19 +95,17 @@ def get_free_space(path):
                 drive = "C:"
             
             free_bytes = ctypes.c_ulonglong(0)
-            total_bytes = ctypes.c_ulonglong(0)
             ret = ctypes.windll.kernel32.GetDiskFreeSpaceExW(
                 ctypes.c_wchar_p(drive + "\\"),
                 ctypes.byref(free_bytes),
-                ctypes.byref(total_bytes),
+                None,
                 None
             )
             if ret:
                 return free_bytes.value
             else:
                 import shutil
-                free_bytes = shutil.disk_usage(drive).free
-                return free_bytes
+                return shutil.disk_usage(drive).free
         else:
             import shutil
             return shutil.disk_usage(path).free
@@ -247,18 +245,14 @@ def get_directory_size(path):
 
 def get_executable_path(installer_dir):
     """Find the main executable in the installer directory or temp extraction"""
-    # Check in installer directory
     exe_path = installer_dir / "NotYCaptionGenAI.exe"
     if exe_path.exists():
         return exe_path
     
-    # Check in current directory
     exe_path = Path.cwd() / "NotYCaptionGenAI.exe"
     if exe_path.exists():
         return exe_path
     
-    # Check in temp directory (when running from the installer exe)
-    # The installer exe extracts files to a temp directory
     temp_dir = Path(tempfile.gettempdir())
     for temp_subdir in temp_dir.iterdir():
         if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
@@ -266,33 +260,23 @@ def get_executable_path(installer_dir):
             if exe_path.exists():
                 return exe_path
     
-    # Check in the directory of the running executable
     if getattr(sys, 'frozen', False):
         exe_path = Path(sys.executable).parent / "NotYCaptionGenAI.exe"
         if exe_path.exists():
             return exe_path
     
-    # Try to find by searching
-    for root, dirs, files in os.walk(Path(tempfile.gettempdir())):
-        for file in files:
-            if file == "NotYCaptionGenAI.exe":
-                return Path(root) / file
-    
     return None
 
 def get_uninstaller_path(installer_dir):
     """Find the uninstaller executable"""
-    # Check in installer directory
     uninstaller_path = installer_dir / "NotYCaptionGenAI_Uninstaller.exe"
     if uninstaller_path.exists():
         return uninstaller_path
     
-    # Check in current directory
     uninstaller_path = Path.cwd() / "NotYCaptionGenAI_Uninstaller.exe"
     if uninstaller_path.exists():
         return uninstaller_path
     
-    # Check in temp directory
     temp_dir = Path(tempfile.gettempdir())
     for temp_subdir in temp_dir.iterdir():
         if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
@@ -300,175 +284,12 @@ def get_uninstaller_path(installer_dir):
             if uninstaller_path.exists():
                 return uninstaller_path
     
-    # Check in the directory of the running executable
     if getattr(sys, 'frozen', False):
         uninstaller_path = Path(sys.executable).parent / "NotYCaptionGenAI_Uninstaller.exe"
         if uninstaller_path.exists():
             return uninstaller_path
     
     return None
-
-def install():
-    print_header()
-    
-    # Get installer directory
-    if getattr(sys, 'frozen', False):
-        installer_dir = Path(sys.executable).parent
-        print_info(f"Running from: {installer_dir}")
-    else:
-        installer_dir = Path(__file__).parent
-    
-    default_path = "C:\\NotYCaptionGenAI"
-    
-    while True:
-        print(f"\n{Colors.BOLD}Installation Directory{Colors.RESET}")
-        print(f"  Default location: {default_path}")
-        print(f"\n  1) Continue with this location")
-        print(f"  2) Change location (Browse folder dialog)")
-        print(f"  0) Cancel installation")
-        
-        choice = get_number_input("\n➤ Choose option (0-2): ", 0, 2)
-        
-        if choice == 0:
-            print_info("Installation cancelled.")
-            return False
-        elif choice == 1:
-            install_path = Path(default_path)
-            break
-        else:
-            selected_path = select_folder_dialog()
-            if selected_path:
-                install_path = Path(selected_path) / "NotYCaptionGenAI"
-                print_success(f"Selected: {install_path}")
-                
-                print_header()
-                print(f"\n{Colors.BOLD}Confirm Installation{Colors.RESET}")
-                print(f"  Installation Path: {install_path}")
-                print(f"\n  1) Yes, proceed with installation")
-                print(f"  2) No, cancel installation")
-                print(f"  0) Back to path selection")
-                
-                confirm_choice = get_number_input("\n➤ Choose option (0-2): ", 0, 2)
-                
-                if confirm_choice == 0:
-                    continue
-                elif confirm_choice == 1:
-                    break
-                else:
-                    print_info("Installation cancelled.")
-                    return False
-            else:
-                print_error("No folder selected. Please try again.")
-                continue
-    
-    print_header()
-    if not check_requirements(install_path):
-        print_error("\nSystem requirements not met!")
-        print_info("Requirements: 3 GB free disk space, 2 GB RAM")
-        print_info("You can still continue, but the application may not work properly.")
-        response = input(f"{Colors.CYAN}Continue anyway? (y/n): {Colors.RESET}").lower()
-        if response not in ['y', 'yes']:
-            return False
-    
-    print_header()
-    print_info(f"Installing to: {install_path}")
-    print_info("This may take a few minutes...")
-    print()
-    
-    try:
-        install_path.mkdir(parents=True, exist_ok=True)
-        
-        # Find main executable
-        exe_file = get_executable_path(installer_dir)
-        if exe_file and exe_file.exists():
-            print_info(f"Found main executable: {exe_file}")
-            print_info("Copying main executable...")
-            shutil.copy2(exe_file, install_path / "NotYCaptionGenAI.exe")
-            print_success("Main executable copied")
-        else:
-            print_error("Main executable not found!")
-            print_info("Looking for executable in:")
-            print_info(f"  - {installer_dir / 'NotYCaptionGenAI.exe'}")
-            print_info(f"  - {Path.cwd() / 'NotYCaptionGenAI.exe'}")
-            return False
-        
-        # Find uninstaller
-        uninstaller_file = get_uninstaller_path(installer_dir)
-        if uninstaller_file and uninstaller_file.exists():
-            print_info("Copying uninstaller...")
-            shutil.copy2(uninstaller_file, install_path / "NotYCaptionGenAI_Uninstaller.exe")
-            print_success("Uninstaller copied")
-        else:
-            print_warning("Uninstaller not found, creating batch uninstaller")
-            create_uninstaller_batch(install_path)
-        
-        # Copy resources
-        resources_dir = installer_dir / "resources"
-        if not resources_dir.exists():
-            # Try to find resources in temp directory
-            temp_dir = Path(tempfile.gettempdir())
-            for temp_subdir in temp_dir.iterdir():
-                if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
-                    resources_dir = temp_subdir / "resources"
-                    if resources_dir.exists():
-                        break
-        
-        if resources_dir and resources_dir.exists():
-            print_info("Copying resources...")
-            dest_resources = install_path / "resources"
-            if dest_resources.exists():
-                shutil.rmtree(dest_resources)
-            copy_directory(resources_dir, dest_resources)
-            print_success("Resources copied")
-        else:
-            print_warning("Resources not found")
-        
-        # Copy models if they exist
-        models_dir = installer_dir / "models"
-        if not models_dir.exists():
-            temp_dir = Path(tempfile.gettempdir())
-            for temp_subdir in temp_dir.iterdir():
-                if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
-                    models_dir = temp_subdir / "models"
-                    if models_dir.exists():
-                        break
-        
-        if models_dir and models_dir.exists():
-            print_info("Copying models...")
-            dest_models = install_path / "models"
-            if dest_models.exists():
-                shutil.rmtree(dest_models)
-            copy_directory(models_dir, dest_models)
-            print_success("Models copied")
-        
-        # Create shortcuts
-        print_info("Creating shortcuts...")
-        create_start_menu_shortcut(install_path)
-        create_desktop_shortcut(install_path)
-        register_sendto_menu(install_path)
-        print_success("Shortcuts created")
-        
-        # Register application
-        print_info("Registering application...")
-        register_application(install_path)
-        print_success("Application registered")
-        
-        print_header()
-        print_success(f"Installation Complete!")
-        print_info(f"Installed to: {install_path}")
-        print_info(f"Size: {get_directory_size(install_path):.2f} MB")
-        print()
-        print_info("You can now run NotYCaptionGenAI.exe from the installation directory")
-        print_info("Or right-click any video/audio file and select 'Send To' > 'NotYCaptionGenAi'")
-        print_info("To uninstall, run NotYCaptionGenAI_Uninstaller.exe from the installation directory")
-        
-        return True
-        
-    except Exception as e:
-        print_error(f"Installation failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
 
 def create_uninstaller_batch(install_dir):
     """Create batch uninstaller as fallback"""
@@ -500,6 +321,157 @@ pause
     uninstaller_path = install_dir / "uninstall.bat"
     with open(uninstaller_path, 'w', encoding='utf-8') as f:
         f.write(uninstaller_content)
+
+def install():
+    print_header()
+    
+    if getattr(sys, 'frozen', False):
+        installer_dir = Path(sys.executable).parent
+        print_info(f"Running from: {installer_dir}")
+    else:
+        installer_dir = Path(__file__).parent
+    
+    default_path = "C:\\NotYCaptionGenAI"
+    
+    while True:
+        print(f"\n{Colors.BOLD}Installation Directory{Colors.RESET}")
+        print(f"  Default location: {default_path}")
+        print(f"\n  1) Continue with this location")
+        print(f"  2) Change location (Browse folder dialog)")
+        print(f"  0) Cancel installation")
+        
+        choice = get_number_input("\nChoose option (0-2): ", 0, 2)
+        
+        if choice == 0:
+            print_info("Installation cancelled.")
+            return False
+        elif choice == 1:
+            install_path = Path(default_path)
+            break
+        else:
+            selected_path = select_folder_dialog()
+            if selected_path:
+                install_path = Path(selected_path) / "NotYCaptionGenAI"
+                print_success(f"Selected: {install_path}")
+                
+                print_header()
+                print(f"\n{Colors.BOLD}Confirm Installation{Colors.RESET}")
+                print(f"  Installation Path: {install_path}")
+                print(f"\n  1) Yes, proceed with installation")
+                print(f"  2) No, cancel installation")
+                print(f"  0) Back to path selection")
+                
+                confirm_choice = get_number_input("\nChoose option (0-2): ", 0, 2)
+                
+                if confirm_choice == 0:
+                    continue
+                elif confirm_choice == 1:
+                    break
+                else:
+                    print_info("Installation cancelled.")
+                    return False
+            else:
+                print_error("No folder selected. Please try again.")
+                continue
+    
+    print_header()
+    if not check_requirements(install_path):
+        print_error("\nSystem requirements not met!")
+        print_info("Requirements: 3 GB free disk space, 2 GB RAM")
+        print_info("You can still continue, but the application may not work properly.")
+        response = input(f"{Colors.CYAN}Continue anyway? (y/n): {Colors.RESET}").lower()
+        if response not in ['y', 'yes']:
+            return False
+    
+    print_header()
+    print_info(f"Installing to: {install_path}")
+    print_info("This may take a few minutes...")
+    print()
+    
+    try:
+        install_path.mkdir(parents=True, exist_ok=True)
+        
+        exe_file = get_executable_path(installer_dir)
+        if exe_file and exe_file.exists():
+            print_info(f"Found main executable: {exe_file}")
+            print_info("Copying main executable...")
+            shutil.copy2(exe_file, install_path / "NotYCaptionGenAI.exe")
+            print_success("Main executable copied")
+        else:
+            print_error("Main executable not found!")
+            return False
+        
+        uninstaller_file = get_uninstaller_path(installer_dir)
+        if uninstaller_file and uninstaller_file.exists():
+            print_info("Copying uninstaller...")
+            shutil.copy2(uninstaller_file, install_path / "NotYCaptionGenAI_Uninstaller.exe")
+            print_success("Uninstaller copied")
+        else:
+            print_warning("Uninstaller not found, creating batch uninstaller")
+            create_uninstaller_batch(install_path)
+        
+        resources_dir = installer_dir / "resources"
+        if not resources_dir.exists():
+            temp_dir = Path(tempfile.gettempdir())
+            for temp_subdir in temp_dir.iterdir():
+                if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
+                    resources_dir = temp_subdir / "resources"
+                    if resources_dir.exists():
+                        break
+        
+        if resources_dir and resources_dir.exists():
+            print_info("Copying resources...")
+            dest_resources = install_path / "resources"
+            if dest_resources.exists():
+                shutil.rmtree(dest_resources)
+            copy_directory(resources_dir, dest_resources)
+            print_success("Resources copied")
+        else:
+            print_warning("Resources not found")
+        
+        models_dir = installer_dir / "models"
+        if not models_dir.exists():
+            temp_dir = Path(tempfile.gettempdir())
+            for temp_subdir in temp_dir.iterdir():
+                if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
+                    models_dir = temp_subdir / "models"
+                    if models_dir.exists():
+                        break
+        
+        if models_dir and models_dir.exists():
+            print_info("Copying models...")
+            dest_models = install_path / "models"
+            if dest_models.exists():
+                shutil.rmtree(dest_models)
+            copy_directory(models_dir, dest_models)
+            print_success("Models copied")
+        
+        print_info("Creating shortcuts...")
+        create_start_menu_shortcut(install_path)
+        create_desktop_shortcut(install_path)
+        register_sendto_menu(install_path)
+        print_success("Shortcuts created")
+        
+        print_info("Registering application...")
+        register_application(install_path)
+        print_success("Application registered")
+        
+        print_header()
+        print_success(f"Installation Complete!")
+        print_info(f"Installed to: {install_path}")
+        print_info(f"Size: {get_directory_size(install_path):.2f} MB")
+        print()
+        print_info("You can now run NotYCaptionGenAI.exe from the installation directory")
+        print_info("Or right-click any video/audio file and select 'Send To' > 'NotYCaptionGenAi'")
+        print_info("To uninstall, run NotYCaptionGenAI_Uninstaller.exe from the installation directory")
+        
+        return True
+        
+    except Exception as e:
+        print_error(f"Installation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 if __name__ == "__main__":
     success = install()

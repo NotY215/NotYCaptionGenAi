@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Build NotY Caption Generator AI Executable v4.4
-Using pywhispercpp (Whisper.cpp bindings)
 Copyright (c) 2026 NotY215
 """
 
@@ -30,7 +29,6 @@ def build_exe():
     source_path = str(base_dir / "noty_caption_gen.py").replace('\\', '/')
     icon_path = str(resources_dir / "app.ico").replace('\\', '/')
     
-    # Simplified spec file for pywhispercpp
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
@@ -41,35 +39,122 @@ a = Analysis(
         (r'{icon_path}', '.'),
     ],
     hiddenimports=[
-        'pywhispercpp',
-        'pywhispercpp.model',
-        'pywhispercpp.utils',
-        'requests',
+        'whisper',
+        'whisper.__main__',
+        'whisper.audio',
+        'whisper.decoding',
+        'whisper.model',
+        'whisper.tokenizer',
+        'whisper.utils',
+        'whisper.normalizers',
+        'torch',
+        'torch._C',
+        'torch._ops',
+        'torch._utils',
+        'torch.nn',
+        'torch.nn.functional',
+        'torch.serialization',
+        'torch.storage',
+        'torch.types',
+        'numpy',
+        'numpy.core',
+        'numpy.core._methods',
+        'numpy.core.fromnumeric',
+        'numpy.core.umath',
+        'numpy.lib',
+        'numpy.lib.format',
         'colorama',
+        'argparse',
+        'webbrowser',
+        'subprocess',
+        'threading',
+        'time',
+        'pathlib',
+        'platform',
         'tkinter',
         'tkinter.filedialog',
+        'ctypes',
+        'importlib',
+        'importlib.metadata',
+        'packaging',
+        'packaging.version',
+        'regex',
+        'tiktoken',
+        'tiktoken_ext',
+        'tiktoken_ext.openai_public',
+        'requests',
+        'urllib3',
+        'certifi',
+        'charset_normalizer',
+        'idna',
+        'more_itertools',
     ],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
     excludes=[
-        'PyQt5',
-        'PyQt6',
-        'PySide2',
-        'PySide6',
+        'torch.cuda',
+        'torch.cuda.amp',
+        'torch.distributed',
+        'torch.testing',
+        'torch.jit',
+        'torch.onnx',
+        'torch.ao',
+        'torch.fx',
+        'torch._dynamo',
+        'torch._inductor',
+        'torch._export',
+        'torch._functorch',
+        'torch._lazy',
+        'torch._numpy',
+        'torch._prims',
+        'torch._subclasses',
+        'torch.backends',
+        'torch.contrib',
+        'torch.distributions',
+        'torch.fft',
+        'torch.futures',
+        'torch.linalg',
+        'torch.mps',
+        'torch.optim',
+        'torch.package',
+        'torch.profiler',
+        'torch.quantization',
+        'torch.special',
+        'torch.sparse',
+        'torch.utils.benchmark',
+        'torch.utils.checkpoint',
+        'torch.utils.cpp_extension',
+        'torch.utils.data',
+        'torch.utils.dlpack',
+        'torch.utils.hooks',
+        'torch.utils.model_zoo',
+        'torch.utils.tensorboard',
+        'torchaudio',
+        'torchvision',
+        'torchtext',
+        'numpy.random',
+        'numpy.ma',
+        'numpy.fft',
+        'numpy.linalg',
+        'numpy.polynomial',
+        'numpy.testing',
+        'numpy.distutils',
+        'setuptools',
+        'pkg_resources',
+        'jinja2',
+        'markupsafe',
+        'tensorboard',
+        'tqdm',
         'matplotlib',
         'PIL',
-        'scipy',
         'sklearn',
+        'scipy',
         'numba',
+        'llvmlite',
         'pandas',
-        'tensorflow',
-        'torch',
-        'torchvision',
-        'torchaudio',
-        'jupyter',
-        'notebook',
-        'ipython'
+        'pytorch_lightning',
+        'torchmetrics'
     ],
     noarchive=False,
 )
@@ -86,7 +171,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=True,
@@ -103,25 +188,31 @@ exe = EXE(
     with open(spec_path, 'w', encoding='utf-8') as f:
         f.write(spec_content)
     
-    # Build
     cmd = [
         sys.executable, "-m", "PyInstaller",
         str(spec_path),
         "--distpath", str(dist_dir),
         "--workpath", str(builder_dir / "build"),
         "--noconfirm",
-        "--clean"
+        "--clean",
+        "--log-level=WARN"
     ]
     
     try:
-        print("Building executable...")
-        subprocess.check_call(cmd, timeout=600)
+        print("Building executable (optimized build)...")
+        print("This will take 3-5 minutes...")
+        subprocess.check_call(cmd, timeout=1800)
         print("\n[OK] Build completed successfully!")
+    except subprocess.TimeoutExpired:
+        print("\n[ERROR] Build timed out after 30 minutes!")
+        sys.exit(1)
     except subprocess.CalledProcessError as e:
         print(f"\n[ERROR] Build failed: {e}")
         sys.exit(1)
+    except KeyboardInterrupt:
+        print("\n[WARNING] Build interrupted by user!")
+        sys.exit(1)
     
-    # Clean up
     spec_path.unlink(missing_ok=True)
     shutil.rmtree(builder_dir / "build", ignore_errors=True)
     
@@ -130,18 +221,15 @@ exe = EXE(
         size = exe_file.stat().st_size / 1024 / 1024
         print(f"\n[OK] Executable built: {exe_file} ({size:.2f} MB)")
         
-        # Create models directory in dist
         models_dir = dist_dir / "models"
         models_dir.mkdir(exist_ok=True)
         
-        # Copy models if they exist
         source_models = base_dir / "models"
         if source_models.exists():
-            for model_file in source_models.glob("ggml-*.bin"):
+            for model_file in source_models.glob("*.pt"):
                 shutil.copy2(model_file, models_dir / model_file.name)
                 print(f"  Copied model: {model_file.name}")
         
-        # Copy resources
         dest_resources = dist_dir / "resources"
         if resources_dir.exists():
             if dest_resources.exists():

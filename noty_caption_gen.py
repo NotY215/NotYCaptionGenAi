@@ -3,7 +3,7 @@
 
 """
 NotY Caption Generator AI v4.4
-Using pywhispercpp (Whisper.cpp bindings)
+Using OpenAI Whisper (PyTorch)
 Copyright (c) 2026 NotY215
 """
 
@@ -26,7 +26,11 @@ if platform.system() == "Windows":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
 
-# ANSI color codes without emojis for Windows compatibility
+# Set environment variables for PyTorch to avoid CUDA issues
+os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable CUDA
+
+# ANSI color codes
 class Colors:
     RESET = '\033[0m'
     RED = '\033[91m'
@@ -39,13 +43,20 @@ class Colors:
     BLACK = '\033[30m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+    BG_RED = '\033[41m'
+    BG_GREEN = '\033[42m'
+    BG_YELLOW = '\033[43m'
+    BG_BLUE = '\033[44m'
+    BG_PURPLE = '\033[45m'
+    BG_CYAN = '\033[46m'
+    BG_WHITE = '\033[47m'
+    BG_BLACK = '\033[40m'
 
 if platform.system() == "Windows":
     try:
         import colorama
         colorama.init()
     except ImportError:
-        # If colorama not installed, disable colors
         for attr in dir(Colors):
             if not attr.startswith('__'):
                 setattr(Colors, attr, '')
@@ -57,7 +68,7 @@ def select_file_dialog():
         root.withdraw()
         root.attributes('-topmost', True)
         file_types = [
-            ("Video Files", "*.mp4;*.avi;*.mkv;*.mov;*.m4v;*.mpg;*.mpeg"),
+            ("Video Files", "*.mp4;*.avi;*.mkv;*.mov;*.m4v;*.mpg;*.mpeg;*.webm"),
             ("Audio Files", "*.mp3;*.wav;*.m4a;*.flac"),
             ("All Files", "*.*")
         ]
@@ -68,7 +79,7 @@ def select_file_dialog():
         root.destroy()
         return file_path
     except Exception as e:
-        print(f"{Colors.RED}X Could not open file dialog: {e}{Colors.RESET}")
+        print(f"{Colors.RED}[ERROR] Could not open file dialog: {e}{Colors.RESET}")
         return None
 
 def print_header(title: str = None):
@@ -80,7 +91,7 @@ def print_header(title: str = None):
     print("|" + title.center(58) + "|")
     print("|" + f"Copyright (c) {APP_YEAR} {APP_AUTHOR}".center(58) + "|")
     print("|" + f"License: {APP_LICENSE}".center(58) + "|")
-    print("|" + "Powered by Whisper.cpp".center(58) + "|")
+    print("|" + "Powered by OpenAI Whisper".center(58) + "|")
     print("+" + "=" * 58 + "+")
     print(f"{Colors.RESET}")
 
@@ -93,38 +104,17 @@ APP_LICENSE = "LGPL-3.0"
 APP_TELEGRAM = "https://t.me/Noty_215"
 APP_YOUTUBE = "https://www.youtube.com/@NotY215"
 
-# Whisper models with correct URLs
+# Whisper models
 WHISPER_MODELS = {
-    "tiny": {
-        "size": "75 MB",
-        "desc": "Fastest",
-        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"
-    },
-    "base": {
-        "size": "150 MB",
-        "desc": "Balanced",
-        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
-    },
-    "small": {
-        "size": "500 MB",
-        "desc": "Good",
-        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
-    },
-    "medium": {
-        "size": "1.5 GB",
-        "desc": "Accurate",
-        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin"
-    },
-    "large": {
-        "size": "2.9 GB",
-        "desc": "Best",
-        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large.bin"
-    }
+    "tiny": {"size": "75 MB", "desc": "Fastest", "url": "https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt"},
+    "base": {"size": "150 MB", "desc": "Balanced", "url": "https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt"},
+    "small": {"size": "500 MB", "desc": "Good", "url": "https://openaipublic.azureedge.net/main/whisper/models/9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794/small.pt"},
+    "medium": {"size": "1.5 GB", "desc": "Accurate", "url": "https://openaipublic.azureedge.net/main/whisper/models/345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674b08dcb1/medium.pt"},
+    "large": {"size": "2.9 GB", "desc": "Best", "url": "https://openaipublic.azureedge.net/main/whisper/models/e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb/large-v3.pt"}
 }
 
 class NotYCaptionGenerator:
     def __init__(self, media_path: str = None):
-        # Get application directory
         if getattr(sys, 'frozen', False):
             self.base_dir = Path(sys.executable).parent
         else:
@@ -135,7 +125,6 @@ class NotYCaptionGenerator:
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.resources_dir.mkdir(parents=True, exist_ok=True)
         
-        # Models list for display
         self.models = [
             ("tiny", WHISPER_MODELS["tiny"]["size"], WHISPER_MODELS["tiny"]["desc"]),
             ("base", WHISPER_MODELS["base"]["size"], WHISPER_MODELS["base"]["desc"]),
@@ -144,7 +133,6 @@ class NotYCaptionGenerator:
             ("large", WHISPER_MODELS["large"]["size"], WHISPER_MODELS["large"]["desc"])
         ]
         
-        # Language options
         self.languages = [
             ("English", "en"),
             ("Hindi", "hi"),
@@ -152,8 +140,15 @@ class NotYCaptionGenerator:
             ("Auto Detect", "auto")
         ]
         
+        self.modes = [
+            ("Normal", "normal", "Generate subtitles in selected language"),
+            ("Translate to English", "translate", "Translate any language to English"),
+            ("Transliteration", "transliterate", "Convert Hindi/Japanese to English/Romanized text")
+        ]
+        
         self.selected_model = None
         self.selected_language = None
+        self.selected_mode = None
         self.media_path_arg = media_path
         self.model = None
         
@@ -171,6 +166,15 @@ class NotYCaptionGenerator:
         
     def print_info(self, message: str):
         print(f"{Colors.CYAN}[INFO] {message}{Colors.RESET}")
+        
+    def print_box(self, lines: List[str]):
+        width = max(len(line) for line in lines) + 4
+        print(f"{Colors.GREEN}")
+        print("+" + "-" * (width - 2) + "+")
+        for line in lines:
+            print(f"| {line.ljust(width - 4)} |")
+        print("+" + "-" * (width - 2) + "+")
+        print(f"{Colors.RESET}")
         
     def get_input(self, prompt: str, default: str = None) -> str:
         try:
@@ -207,17 +211,88 @@ class NotYCaptionGenerator:
                 return False
             print(f"{Colors.RED}Please enter y or n{Colors.RESET}")
             
+    def show_menu(self, title: str, options: List[str]) -> int:
+        while True:
+            print(f"\n{Colors.CYAN}{Colors.BOLD}{title}{Colors.RESET}")
+            print(f"{Colors.CYAN}┌{'─' * 50}┐{Colors.RESET}")
+            for i, option in enumerate(options, 1):
+                print(f"{Colors.CYAN}│{Colors.RESET} {i:2}) {option:<45} {Colors.CYAN}│{Colors.RESET}")
+            print(f"{Colors.CYAN}│{Colors.RESET}  0) Back{' ' * 45}{Colors.CYAN}│{Colors.RESET}")
+            print(f"{Colors.CYAN}└{'─' * 50}┘{Colors.RESET}")
+            
+            choice = self.get_number_input(f"Choose option (0-{len(options)}): ", 0, len(options))
+            if choice == 0:
+                return -1
+            return choice - 1
+            
+    def get_media_path(self, allowed_extensions: List[str]) -> Path:
+        if self.media_path_arg:
+            path = Path(self.media_path_arg.strip('"'))
+            if path.exists() and path.suffix.lower() in allowed_extensions:
+                self.print_success(f"Using file: {path}")
+                return path
+        
+        self.print_info("Opening file selection dialog...")
+        file_path = select_file_dialog()
+        
+        if file_path:
+            path = Path(file_path)
+            if path.exists() and path.suffix.lower() in allowed_extensions:
+                self.print_success(f"Selected: {path}")
+                return path
+            else:
+                self.print_error("Invalid file selected!")
+        
+        while True:
+            print(f"\n{Colors.CYAN}Provide Video/Audio Path{Colors.RESET}")
+            print(f"   Allowed extensions: {', '.join(allowed_extensions)}")
+            print(f"   Tip: You can drag and drop a file here, then press Enter")
+            path_str = self.get_input("> ").strip().strip('"')
+            
+            if not path_str:
+                self.print_error("Path cannot be empty!")
+                continue
+                
+            path = Path(path_str)
+            if not path.exists():
+                self.print_error(f"File not found: {path}")
+                continue
+                
+            if path.suffix.lower() not in allowed_extensions:
+                self.print_error(f"Invalid extension! Allowed: {', '.join(allowed_extensions)}")
+                continue
+                
+            return path
+            
+    def check_and_install_dependencies(self):
+        """Check if whisper is installed"""
+        try:
+            import whisper
+            return True
+        except ImportError:
+            self.print_error("Whisper not installed!")
+            self.print_info("Installing dependencies...")
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "openai-whisper", "--quiet"])
+                return True
+            except:
+                return False
+                
     def check_model_exists(self, model_name: str) -> bool:
-        """Check if model exists in models directory"""
-        model_path = self.models_dir / f"ggml-{model_name}.bin"
-        return model_path.exists()
+        model_path = self.models_dir / f"{model_name}.pt"
+        if model_path.exists():
+            return True
+        for f in self.models_dir.glob("*.pt"):
+            if f.stem == model_name or model_name in f.stem:
+                return True
+        return False
         
     def download_model(self, model_name: str):
         """Download model from URL"""
         import requests
         model_info = WHISPER_MODELS[model_name]
         model_url = model_info["url"]
-        model_path = self.models_dir / f"ggml-{model_name}.bin"
+        model_path = self.models_dir / f"{model_name}.pt"
         
         self.print_info(f"Downloading {model_name.upper()} model...")
         self.print_info(f"URL: {model_url}")
@@ -239,140 +314,28 @@ class NotYCaptionGenerator:
                             percent = (downloaded / total_size) * 100
                             print(f"\r  Progress: {percent:.1f}%", end="", flush=True)
             
-            print()  # New line
+            print()
             self.print_success(f"Model downloaded: {model_path}")
             return True
         except Exception as e:
             self.print_error(f"Failed to download model: {e}")
             return False
             
-    def get_model_path(self, model_name: str) -> Path:
-        """Get path to model file"""
-        return self.models_dir / f"ggml-{model_name}.bin"
-        
     def load_model(self, model_name: str):
-        """Load model using pywhispercpp"""
+        """Load whisper model"""
         try:
-            from pywhispercpp.model import Model
-            
-            model_path = self.get_model_path(model_name)
-            if not model_path.exists():
-                self.print_error(f"Model not found: {model_path}")
-                return False
-                
+            import whisper
             self.print_info(f"Loading {model_name.upper()} model...")
-            self.model = Model(str(model_path), n_threads=4)
+            self.model = whisper.load_model(model_name, download_root=str(self.models_dir))
             self.print_success("Model loaded successfully")
             return True
         except Exception as e:
             self.print_error(f"Failed to load model: {e}")
             return False
             
-    def generate_captions(self, media_path: Path, model_name: str, line_type: str, 
-                          number_per_line: int, language_code: str) -> bool:
-        """Generate captions using pywhispercpp with proper segment handling"""
-        try:
-            if self.model is None:
-                if not self.load_model(model_name):
-                    return False
-                    
-            self.print_info("Transcribing audio...")
-            self.print_info("This may take a few minutes...")
-            
-            # Set language (None for auto-detect)
-            lang = None if language_code == "auto" else language_code
-            
-            # Transcribe with proper parameters
-            segments = self.model.transcribe(
-                str(media_path),
-                language=lang,
-                print_progress=True,
-                print_special=False,
-                print_realtime=False,
-                print_timestamps=True,
-                max_len=0,  # No maximum length
-                best_of=5,  # Better accuracy
-                beam_size=5  # Beam search for better accuracy
-            )
-            
-            # Determine output filename
-            output_path = media_path.parent / f"{media_path.stem}"
-            if language_code != "auto":
-                output_path = output_path.with_name(f"{media_path.stem}_{language_code}")
-            output_path = output_path.with_suffix(".srt")
-            
-            subtitle_index = 1
-            segment_count = 0
-            
-            with open(output_path, 'w', encoding='utf-8') as f:
-                for segment in segments:
-                    # Get segment text
-                    text = segment.text.strip()
-                    if not text:
-                        continue
-                    
-                    segment_count += 1
-                    
-                    # Apply transliteration for Hindi/Japanese if needed
-                    if language_code in ["hi", "ja"]:
-                        text = self.transliterate_text(text, language_code)
-                    
-                    # Get timestamps
-                    start_time = segment.start if hasattr(segment, 'start') else 0
-                    end_time = segment.end if hasattr(segment, 'end') else start_time + 1
-                    
-                    if line_type == "words":
-                        # Split into words
-                        words_list = text.split()
-                        words_per_line = number_per_line
-                        word_count = len(words_list)
-                        
-                        if word_count == 0:
-                            continue
-                        
-                        # Group words into chunks
-                        for i in range(0, word_count, words_per_line):
-                            chunk_words = words_list[i:i + words_per_line]
-                            chunk_text = " ".join(chunk_words)
-                            
-                            # Calculate approximate timestamps for word groups
-                            chunk_start = start_time + (i / word_count) * (end_time - start_time)
-                            chunk_end = start_time + ((i + len(chunk_words)) / word_count) * (end_time - start_time)
-                            
-                            start_str = self.format_time(chunk_start)
-                            end_str = self.format_time(chunk_end)
-                            f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{chunk_text}\n\n")
-                            subtitle_index += 1
-                    else:
-                        # Letters per line
-                        formatted_text = self.limit_letters_per_line(text, number_per_line)
-                        start_str = self.format_time(start_time)
-                        end_str = self.format_time(end_time)
-                        f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{formatted_text}\n\n")
-                        subtitle_index += 1
-                    
-                    # Show progress every 10 segments
-                    if segment_count % 10 == 0:
-                        print(f"  Processed {segment_count} segments...", flush=True)
-                    
-            if segment_count == 0:
-                self.print_error("No segments were transcribed! Check if audio is valid.")
-                return False
-                
-            self.print_success(f"Captions saved to: {output_path}")
-            self.print_info(f"Generated {subtitle_index - 1} subtitle entries from {segment_count} segments")
-            return True
-            
-        except Exception as e:
-            self.print_error(f"Error: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-            
     def transliterate_text(self, text: str, language_code: str) -> str:
         """Simple transliteration for Hindi and Japanese"""
         if language_code == "hi":
-            # Simple Hindi to English transliteration mapping
             hindi_map = {
                 'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
                 'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
@@ -388,7 +351,6 @@ class NotYCaptionGenerator:
             for hindi, english in hindi_map.items():
                 text = text.replace(hindi, english)
         elif language_code == "ja":
-            # Simple Japanese to Romaji mapping (basic)
             ja_map = {
                 'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
                 'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
@@ -406,7 +368,6 @@ class NotYCaptionGenerator:
         return text
             
     def format_time(self, seconds: float) -> str:
-        """Format time for SRT subtitle"""
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
         secs = int(seconds % 60)
@@ -414,7 +375,6 @@ class NotYCaptionGenerator:
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
         
     def limit_letters_per_line(self, text: str, max_letters: int) -> str:
-        """Limit text to max letters per line"""
         if max_letters <= 0:
             return text
         if len(text) <= max_letters:
@@ -445,66 +405,94 @@ class NotYCaptionGenerator:
             lines.append(current_line)
         return '\n'.join(lines)
         
-    def get_media_path(self, allowed_extensions: List[str]) -> Path:
-        """Get media file path from user"""
-        # If media path was provided via command line, use it
-        if self.media_path_arg:
-            path = Path(self.media_path_arg.strip('"'))
-            if path.exists() and path.suffix.lower() in allowed_extensions:
-                self.print_success(f"Using file: {path}")
-                return path
-        
-        # Use file dialog to select file
-        self.print_info("Opening file selection dialog...")
-        file_path = select_file_dialog()
-        
-        if file_path:
-            path = Path(file_path)
-            if path.exists() and path.suffix.lower() in allowed_extensions:
-                self.print_success(f"Selected: {path}")
-                return path
-            else:
-                self.print_error("Invalid file selected!")
-        
-        # Fallback to manual input
-        while True:
-            print(f"\n{Colors.CYAN}Provide Video/Audio Path{Colors.RESET}")
-            print(f"   Allowed extensions: {', '.join(allowed_extensions)}")
-            print(f"   Tip: You can drag and drop a file here, then press Enter")
-            path_str = self.get_input("> ").strip().strip('"')
+    def generate_captions(self, media_path: Path, model_name: str, line_type: str, 
+                          number_per_line: int, language_code: str, mode: str) -> bool:
+        try:
+            import whisper
             
-            if not path_str:
-                self.print_error("Path cannot be empty!")
-                continue
-                
-            path = Path(path_str)
-            if not path.exists():
-                self.print_error(f"File not found: {path}")
-                continue
-                
-            if path.suffix.lower() not in allowed_extensions:
-                self.print_error(f"Invalid extension! Allowed: {', '.join(allowed_extensions)}")
-                continue
-                
-            return path
+            if self.model is None:
+                if not self.load_model(model_name):
+                    return False
+                    
+            self.print_info("Transcribing audio...")
             
-    def show_menu(self, title: str, options: List[str]) -> int:
-        """Show a menu and return selected index"""
-        while True:
-            print(f"\n{Colors.CYAN}{Colors.BOLD}{title}{Colors.RESET}")
-            print(f"{Colors.CYAN}┌{'─' * 50}┐{Colors.RESET}")
-            for i, option in enumerate(options, 1):
-                print(f"{Colors.CYAN}│{Colors.RESET} {i:2}) {option:<45} {Colors.CYAN}│{Colors.RESET}")
-            print(f"{Colors.CYAN}│{Colors.RESET}  0) Back{' ' * 45}{Colors.CYAN}│{Colors.RESET}")
-            print(f"{Colors.CYAN}└{'─' * 50}┘{Colors.RESET}")
+            task = "translate" if mode == "translate" else "transcribe"
+            language = language_code if language_code != "auto" else None
             
-            choice = self.get_number_input(f"➤ Choose option (0-{len(options)}): ", 0, len(options))
-            if choice == 0:
-                return -1
-            return choice - 1
+            result = self.model.transcribe(
+                str(media_path),
+                task=task,
+                language=language,
+                verbose=False,
+                word_timestamps=True
+            )
+            
+            # Determine output filename
+            output_path = media_path.parent / f"{media_path.stem}"
+            if mode == "translate":
+                output_path = output_path.with_name(f"{media_path.stem}_en")
+            elif language_code != "auto":
+                output_path = output_path.with_name(f"{media_path.stem}_{language_code}")
+            output_path = output_path.with_suffix(".srt")
+            
+            subtitle_index = 1
+            
+            with open(output_path, 'w', encoding='utf-8') as f:
+                for segment in result["segments"]:
+                    text = segment["text"].strip()
+                    
+                    # Apply transliteration if needed
+                    if mode == "transliterate":
+                        text = self.transliterate_text(text, language_code)
+                    
+                    if line_type == "words":
+                        words = segment.get("words", [])
+                        if words:
+                            for i in range(0, len(words), number_per_line):
+                                chunk = words[i:i + number_per_line]
+                                if chunk:
+                                    start_time = chunk[0]["start"]
+                                    end_time = chunk[-1]["end"]
+                                    chunk_text = " ".join([w["word"].strip() for w in chunk])
+                                    start_str = self.format_time(start_time)
+                                    end_str = self.format_time(end_time)
+                                    f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{chunk_text}\n\n")
+                                    subtitle_index += 1
+                        else:
+                            words_list = text.split()
+                            for i in range(0, len(words_list), number_per_line):
+                                chunk = words_list[i:i + number_per_line]
+                                chunk_text = " ".join(chunk)
+                                start_time = segment["start"] + (i / len(words_list)) * (segment["end"] - segment["start"])
+                                end_time = segment["start"] + ((i + len(chunk)) / len(words_list)) * (segment["end"] - segment["start"])
+                                start_str = self.format_time(start_time)
+                                end_str = self.format_time(end_time)
+                                f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{chunk_text}\n\n")
+                                subtitle_index += 1
+                    else:
+                        formatted_text = self.limit_letters_per_line(text, number_per_line)
+                        start_str = self.format_time(segment["start"])
+                        end_str = self.format_time(segment["end"])
+                        f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{formatted_text}\n\n")
+                        subtitle_index += 1
+                    
+            self.print_success(f"Captions saved to: {output_path}")
+            self.print_info(f"Generated {subtitle_index - 1} subtitle entries")
+            return True
+            
+        except Exception as e:
+            self.print_error(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
             
     def run(self):
-        """Main application loop"""
+        # Check dependencies
+        if not self.check_and_install_dependencies():
+            self.print_error("Failed to install dependencies!")
+            input("\nPress Enter to exit...")
+            return
+            
         while True:
             try:
                 allowed_extensions = ['.mp4', '.avi', '.mkv', '.mov', '.mp3', '.wav', '.m4a', '.flac', '.webm', '.m4v', '.mpg', '.mpeg']
@@ -547,12 +535,36 @@ class NotYCaptionGenerator:
                 language_code = self.selected_language[1]
                 language_name = self.selected_language[0]
                 
-                # Choose line preference
+                # Select mode (only show appropriate modes based on language)
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
                 print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
+                
+                mode_options = []
+                if language_name in ["Hindi", "Japanese"]:
+                    mode_options = [f"{m[0]} - {m[2]}" for m in self.modes]
+                else:
+                    mode_options = [f"{self.modes[0][0]} - {self.modes[0][2]}", f"{self.modes[1][0]} - {self.modes[1][2]}"]
+                
+                mode_choice = self.show_menu("SELECT MODE", mode_options)
+                if mode_choice == -1:
+                    continue
+                    
+                if language_name in ["Hindi", "Japanese"]:
+                    self.selected_mode = self.modes[mode_choice]
+                else:
+                    self.selected_mode = self.modes[mode_choice]
+                mode = self.selected_mode[1]
+                
+                # Choose line preference
+                self.clear_screen()
+                print_header()
+                print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
+                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
+                print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}")
+                print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}\n")
                 
                 line_options = ["Words", "Letters"]
                 line_choice = self.show_menu("LINE PREFERENCE", line_options)
@@ -568,11 +580,14 @@ class NotYCaptionGenerator:
                 # Confirm and generate
                 self.clear_screen()
                 print_header()
-                print(f"\n{Colors.BOLD}File: {media_path}{Colors.RESET}")
-                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
-                print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}")
-                print(f"Line Type: {line_type}")
-                print(f"{line_type.title()} per line: {number_per_line}\n")
+                self.print_box([
+                    f"Media File: {media_path}",
+                    f"Model: {self.selected_model.upper()}",
+                    f"Language: {language_name}",
+                    f"Mode: {self.selected_mode[0]}",
+                    f"Line Type: {line_type}",
+                    f"{line_type.title()} per line: {number_per_line}"
+                ])
                 
                 if not self.confirm("Generate captions?"):
                     continue
@@ -583,14 +598,14 @@ class NotYCaptionGenerator:
                     self.selected_model,
                     line_type,
                     number_per_line,
-                    language_code
+                    language_code,
+                    mode
                 )
                 
                 if success:
                     self.print_success(f"Thanks for using {APP_NAME}!")
                     self.print_success("Your caption has been generated successfully!")
                     
-                    # Open links
                     try:
                         webbrowser.open(APP_TELEGRAM)
                         webbrowser.open(APP_YOUTUBE)
@@ -610,8 +625,6 @@ class NotYCaptionGenerator:
                 break
             except Exception as e:
                 self.print_error(f"Unexpected error: {e}")
-                import traceback
-                traceback.print_exc()
                 if not self.confirm("Continue?"):
                     break
                     
