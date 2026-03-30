@@ -136,17 +136,22 @@ def uninstall():
         # Create a batch file to delete the uninstaller
         if getattr(sys, 'frozen', False):
             uninstaller_path = Path(sys.executable)
+            print_info("The uninstaller will now delete itself...")
+            
+            # Create a batch file to delete the uninstaller
+            bat_path = Path(os.environ["TEMP"]) / f"delete_uninstaller_{int(time.time())}.bat"
             bat_content = f'''@echo off
-timeout /t 1 /nobreak >nul
-del "{uninstaller_path}" 2>nul
-exit
-'''
-            bat_path = Path(os.environ["TEMP"]) / "delete_uninstaller.bat"
+        timeout /t 2 /nobreak >nul
+        del "{uninstaller_path}" 2>nul
+        del "%~f0" 2>nul
+        exit
+        '''
             with open(bat_path, 'w') as f:
                 f.write(bat_content)
-            subprocess.Popen([str(bat_path)], shell=True)
-        
-        return True
+            
+            # Run the batch file and exit
+            subprocess.Popen([str(bat_path)], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            return True
         
     except Exception as e:
         print_error(f"Uninstallation failed: {e}")
