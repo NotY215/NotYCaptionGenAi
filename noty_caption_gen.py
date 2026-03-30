@@ -26,7 +26,7 @@ if platform.system() == "Windows":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
 
-# Set environment variables for PyTorch to avoid CUDA issues
+# Set environment variables for PyTorch
 os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable CUDA
 
@@ -104,13 +104,33 @@ APP_LICENSE = "LGPL-3.0"
 APP_TELEGRAM = "https://t.me/Noty_215"
 APP_YOUTUBE = "https://www.youtube.com/@NotY215"
 
-# Whisper models
+# Whisper models with download URLs
 WHISPER_MODELS = {
-    "tiny": {"size": "75 MB", "desc": "Fastest", "url": "https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt"},
-    "base": {"size": "150 MB", "desc": "Balanced", "url": "https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt"},
-    "small": {"size": "500 MB", "desc": "Good", "url": "https://openaipublic.azureedge.net/main/whisper/models/9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794/small.pt"},
-    "medium": {"size": "1.5 GB", "desc": "Accurate", "url": "https://openaipublic.azureedge.net/main/whisper/models/345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674b08dcb1/medium.pt"},
-    "large": {"size": "2.9 GB", "desc": "Best", "url": "https://openaipublic.azureedge.net/main/whisper/models/e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb/large-v3.pt"}
+    "tiny": {
+        "size": "75 MB", 
+        "desc": "Fastest",
+        "url": "https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt"
+    },
+    "base": {
+        "size": "150 MB", 
+        "desc": "Balanced",
+        "url": "https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt"
+    },
+    "small": {
+        "size": "500 MB", 
+        "desc": "Good",
+        "url": "https://openaipublic.azureedge.net/main/whisper/models/9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794/small.pt"
+    },
+    "medium": {
+        "size": "1.5 GB", 
+        "desc": "Accurate",
+        "url": "https://openaipublic.azureedge.net/main/whisper/models/345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674b08dcb1/medium.pt"
+    },
+    "large": {
+        "size": "2.9 GB", 
+        "desc": "Best",
+        "url": "https://openaipublic.azureedge.net/main/whisper/models/e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb/large-v3.pt"
+    }
 }
 
 class NotYCaptionGenerator:
@@ -126,11 +146,11 @@ class NotYCaptionGenerator:
         self.resources_dir.mkdir(parents=True, exist_ok=True)
         
         self.models = [
-            ("tiny", WHISPER_MODELS["tiny"]["size"], WHISPER_MODELS["tiny"]["desc"]),
-            ("base", WHISPER_MODELS["base"]["size"], WHISPER_MODELS["base"]["desc"]),
-            ("small", WHISPER_MODELS["small"]["size"], WHISPER_MODELS["small"]["desc"]),
-            ("medium", WHISPER_MODELS["medium"]["size"], WHISPER_MODELS["medium"]["desc"]),
-            ("large", WHISPER_MODELS["large"]["size"], WHISPER_MODELS["large"]["desc"])
+            ("tiny", WHISPER_MODELS["tiny"]["size"], WHISPER_MODELS["tiny"]["desc"], WHISPER_MODELS["tiny"]["url"]),
+            ("base", WHISPER_MODELS["base"]["size"], WHISPER_MODELS["base"]["desc"], WHISPER_MODELS["base"]["url"]),
+            ("small", WHISPER_MODELS["small"]["size"], WHISPER_MODELS["small"]["desc"], WHISPER_MODELS["small"]["url"]),
+            ("medium", WHISPER_MODELS["medium"]["size"], WHISPER_MODELS["medium"]["desc"], WHISPER_MODELS["medium"]["url"]),
+            ("large", WHISPER_MODELS["large"]["size"], WHISPER_MODELS["large"]["desc"], WHISPER_MODELS["large"]["url"])
         ]
         
         self.languages = [
@@ -264,20 +284,20 @@ class NotYCaptionGenerator:
                 
             return path
             
-    def check_and_install_dependencies(self):
-        """Check if whisper is installed"""
+    def check_whisper_available(self) -> bool:
         try:
             import whisper
             return True
         except ImportError:
-            self.print_error("Whisper not installed!")
-            self.print_info("Installing dependencies...")
+            self.print_error("OpenAI Whisper not installed!")
+            self.print_info("Installing dependencies automatically...")
             try:
                 subprocess.check_call([sys.executable, "-m", "pip", "install", "openai-whisper", "--quiet"])
                 return True
             except:
+                self.print_error("Failed to install dependencies")
                 return False
-                
+            
     def check_model_exists(self, model_name: str) -> bool:
         model_path = self.models_dir / f"{model_name}.pt"
         if model_path.exists():
@@ -288,7 +308,7 @@ class NotYCaptionGenerator:
         return False
         
     def download_model(self, model_name: str):
-        """Download model from URL"""
+        """Download model from URL with progress"""
         import requests
         model_info = WHISPER_MODELS[model_name]
         model_url = model_info["url"]
@@ -312,17 +332,20 @@ class NotYCaptionGenerator:
                         downloaded += len(chunk)
                         if total_size > 0:
                             percent = (downloaded / total_size) * 100
-                            print(f"\r  Progress: {percent:.1f}%", end="", flush=True)
+                            mb_downloaded = downloaded / (1024 * 1024)
+                            mb_total = total_size / (1024 * 1024)
+                            print(f"\r  Progress: {percent:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end="", flush=True)
             
-            print()
+            print()  # New line
             self.print_success(f"Model downloaded: {model_path}")
             return True
         except Exception as e:
             self.print_error(f"Failed to download model: {e}")
+            self.print_info(f"You can manually download from: {model_url}")
+            self.print_info(f"Place the file in: {self.models_dir}")
             return False
             
     def load_model(self, model_name: str):
-        """Load whisper model"""
         try:
             import whisper
             self.print_info(f"Loading {model_name.upper()} model...")
@@ -427,7 +450,6 @@ class NotYCaptionGenerator:
                 word_timestamps=True
             )
             
-            # Determine output filename
             output_path = media_path.parent / f"{media_path.stem}"
             if mode == "translate":
                 output_path = output_path.with_name(f"{media_path.stem}_en")
@@ -441,7 +463,6 @@ class NotYCaptionGenerator:
                 for segment in result["segments"]:
                     text = segment["text"].strip()
                     
-                    # Apply transliteration if needed
                     if mode == "transliterate":
                         text = self.transliterate_text(text, language_code)
                     
@@ -460,6 +481,8 @@ class NotYCaptionGenerator:
                                     subtitle_index += 1
                         else:
                             words_list = text.split()
+                            if len(words_list) == 0:
+                                continue
                             for i in range(0, len(words_list), number_per_line):
                                 chunk = words_list[i:i + number_per_line]
                                 chunk_text = " ".join(chunk)
@@ -487,9 +510,7 @@ class NotYCaptionGenerator:
             return False
             
     def run(self):
-        # Check dependencies
-        if not self.check_and_install_dependencies():
-            self.print_error("Failed to install dependencies!")
+        if not self.check_whisper_available():
             input("\nPress Enter to exit...")
             return
             
@@ -511,7 +532,6 @@ class NotYCaptionGenerator:
                     
                 self.selected_model = self.models[model_choice][0]
                 
-                # Check if model exists, download if not
                 if not self.check_model_exists(self.selected_model):
                     self.print_warning(f"{self.selected_model.upper()} model not found!")
                     if self.confirm("Download model now?"):
@@ -535,7 +555,7 @@ class NotYCaptionGenerator:
                 language_code = self.selected_language[1]
                 language_name = self.selected_language[0]
                 
-                # Select mode (only show appropriate modes based on language)
+                # Select mode
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
@@ -572,7 +592,6 @@ class NotYCaptionGenerator:
                     continue
                 line_type = "words" if line_choice == 0 else "letters"
                 
-                # Number per line
                 number_per_line = self.get_number_input(
                     f"How many {line_type} per line? (1-30): ", 1, 30
                 )

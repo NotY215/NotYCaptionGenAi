@@ -87,7 +87,6 @@ a = Analysis(
         'certifi',
         'charset_normalizer',
         'idna',
-        'more_itertools',
     ],
     hookspath=[],
     hooksconfig={{}},
@@ -152,9 +151,7 @@ a = Analysis(
         'scipy',
         'numba',
         'llvmlite',
-        'pandas',
-        'pytorch_lightning',
-        'torchmetrics'
+        'pandas'
     ],
     noarchive=False,
 )
@@ -199,18 +196,17 @@ exe = EXE(
     ]
     
     try:
-        print("Building executable (optimized build)...")
-        print("This will take 3-5 minutes...")
+        print("Building executable...")
         subprocess.check_call(cmd, timeout=1800)
         print("\n[OK] Build completed successfully!")
     except subprocess.TimeoutExpired:
-        print("\n[ERROR] Build timed out after 30 minutes!")
+        print("\n[ERROR] Build timed out!")
         sys.exit(1)
     except subprocess.CalledProcessError as e:
         print(f"\n[ERROR] Build failed: {e}")
         sys.exit(1)
     except KeyboardInterrupt:
-        print("\n[WARNING] Build interrupted by user!")
+        print("\n[WARNING] Build interrupted!")
         sys.exit(1)
     
     spec_path.unlink(missing_ok=True)
