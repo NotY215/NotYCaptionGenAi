@@ -261,7 +261,7 @@ class NotYCaptionGenerator:
                 return False
                 
             self.print_info(f"Loading {model_name.upper()} model...")
-            self.model = Model(str(model_path))
+            self.model = Model(str(model_path), n_threads=4)
             self.print_success("Model loaded successfully")
             return True
         except Exception as e:
@@ -270,26 +270,29 @@ class NotYCaptionGenerator:
             
     def generate_captions(self, media_path: Path, model_name: str, line_type: str, 
                           number_per_line: int, language_code: str) -> bool:
-        """Generate captions using pywhispercpp"""
+        """Generate captions using pywhispercpp with proper segment handling"""
         try:
             if self.model is None:
                 if not self.load_model(model_name):
                     return False
                     
             self.print_info("Transcribing audio...")
+            self.print_info("This may take a few minutes...")
             
             # Set language (None for auto-detect)
             lang = None if language_code == "auto" else language_code
             
             # Transcribe with proper parameters
-            # pywhispercpp doesn't support task parameter, so we just transcribe
             segments = self.model.transcribe(
                 str(media_path),
                 language=lang,
                 print_progress=True,
                 print_special=False,
                 print_realtime=False,
-                print_timestamps=True
+                print_timestamps=True,
+                max_len=0,  # No maximum length
+                best_of=5,  # Better accuracy
+                beam_size=5  # Beam search for better accuracy
             )
             
             # Determine output filename
@@ -299,6 +302,7 @@ class NotYCaptionGenerator:
             output_path = output_path.with_suffix(".srt")
             
             subtitle_index = 1
+            segment_count = 0
             
             with open(output_path, 'w', encoding='utf-8') as f:
                 for segment in segments:
@@ -307,28 +311,31 @@ class NotYCaptionGenerator:
                     if not text:
                         continue
                     
+                    segment_count += 1
+                    
                     # Apply transliteration for Hindi/Japanese if needed
                     if language_code in ["hi", "ja"]:
                         text = self.transliterate_text(text, language_code)
                     
+                    # Get timestamps
+                    start_time = segment.start if hasattr(segment, 'start') else 0
+                    end_time = segment.end if hasattr(segment, 'end') else start_time + 1
+                    
                     if line_type == "words":
-                        # Process words per line
+                        # Split into words
                         words_list = text.split()
                         words_per_line = number_per_line
-                        
-                        # Get segment timing
-                        start_time = segment.start if hasattr(segment, 'start') else 0
-                        end_time = segment.end if hasattr(segment, 'end') else start_time + 1
                         word_count = len(words_list)
                         
                         if word_count == 0:
                             continue
                         
-                        for i in range(0, len(words_list), words_per_line):
+                        # Group words into chunks
+                        for i in range(0, word_count, words_per_line):
                             chunk_words = words_list[i:i + words_per_line]
                             chunk_text = " ".join(chunk_words)
                             
-                            # Estimate timestamps based on word positions
+                            # Calculate approximate timestamps for word groups
                             chunk_start = start_time + (i / word_count) * (end_time - start_time)
                             chunk_end = start_time + ((i + len(chunk_words)) / word_count) * (end_time - start_time)
                             
@@ -339,15 +346,21 @@ class NotYCaptionGenerator:
                     else:
                         # Letters per line
                         formatted_text = self.limit_letters_per_line(text, number_per_line)
-                        start_time = segment.start if hasattr(segment, 'start') else 0
-                        end_time = segment.end if hasattr(segment, 'end') else start_time + 1
                         start_str = self.format_time(start_time)
                         end_str = self.format_time(end_time)
                         f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{formatted_text}\n\n")
                         subtitle_index += 1
                     
+                    # Show progress every 10 segments
+                    if segment_count % 10 == 0:
+                        print(f"  Processed {segment_count} segments...", flush=True)
+                    
+            if segment_count == 0:
+                self.print_error("No segments were transcribed! Check if audio is valid.")
+                return False
+                
             self.print_success(f"Captions saved to: {output_path}")
-            self.print_info(f"Generated {subtitle_index - 1} subtitle entries")
+            self.print_info(f"Generated {subtitle_index - 1} subtitle entries from {segment_count} segments")
             return True
             
         except Exception as e:
