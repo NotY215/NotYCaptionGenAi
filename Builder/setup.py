@@ -12,10 +12,14 @@ import shutil
 from pathlib import Path
 
 def build_uninstaller_exe(builder_dir, temp_dir):
-    """Build uninstaller executable"""
+    """Build uninstaller executable without running it"""
     print("  Building uninstaller executable...")
     
     uninstaller_py = str(builder_dir / "uninstaller.py")
+    
+    # Change to temp directory to avoid running the script
+    original_dir = os.getcwd()
+    os.chdir(temp_dir)
     
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -38,6 +42,8 @@ def build_uninstaller_exe(builder_dir, temp_dir):
     except subprocess.CalledProcessError as e:
         print(f"    ❌ Failed to build uninstaller: {e}")
         return None
+    finally:
+        os.chdir(original_dir)
 
 def build_all():
     print("=" * 60)
@@ -57,8 +63,18 @@ def build_all():
     # Step 1: Build main executable
     print("\n[1/3] Building main executable...")
     try:
-        subprocess.check_call([sys.executable, str(builder_dir / "build_exe.py")])
-    except subprocess.CalledProcessError as e:
+        # Run build_exe.py as a subprocess
+        result = subprocess.run(
+            [sys.executable, str(builder_dir / "build_exe.py")],
+            capture_output=True,
+            text=True,
+            cwd=str(base_dir)
+        )
+        print(result.stdout)
+        if result.returncode != 0:
+            print(result.stderr)
+            sys.exit(1)
+    except Exception as e:
         print(f"\n❌ Failed to build main executable: {e}")
         sys.exit(1)
     
@@ -132,6 +148,8 @@ def build_all():
         "--hidden-import=shutil",
         "--hidden-import=pathlib",
         "--hidden-import=platform",
+        "--hidden-import=tkinter",
+        "--hidden-import=filedialog",
         "--console",
         "--noconfirm",
         installer_py
