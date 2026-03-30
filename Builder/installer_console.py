@@ -86,50 +86,95 @@ def select_folder_dialog():
         return None
 
 def get_free_space(path):
-    if platform.system() == "Windows":
-        free_bytes = ctypes.c_ulonglong(0)
-        ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(str(path)), None, None, ctypes.pointer(free_bytes))
-        return free_bytes.value
-    else:
-        stat = os.statvfs(path)
-        return stat.f_bavail * stat.f_frsize
+    """Get free disk space in bytes"""
+    try:
+        if platform.system() == "Windows":
+            # Get drive letter from path
+            drive = str(Path(path).drive)
+            if not drive:
+                drive = "C:"
+            
+            # Use ctypes to get free space
+            free_bytes = ctypes.c_ulonglong(0)
+            total_bytes = ctypes.c_ulonglong(0)
+            ret = ctypes.windll.kernel32.GetDiskFreeSpaceExW(
+                ctypes.c_wchar_p(drive + "\\"),
+                ctypes.byref(free_bytes),
+                ctypes.byref(total_bytes),
+                None
+            )
+            if ret:
+                return free_bytes.value
+            else:
+                # Fallback to using os module
+                import shutil
+                free_bytes = shutil.disk_usage(drive).free
+                return free_bytes
+        else:
+            import shutil
+            return shutil.disk_usage(path).free
+    except Exception as e:
+        print_warning(f"Could not get free space: {e}")
+        # Return large number to skip check
+        return 1024 * 1024 * 1024 * 100  # 100 GB
 
 def get_total_ram():
-    if platform.system() == "Windows":
-        class MEMORYSTATUSEX(ctypes.Structure):
-            _fields_ = [
-                ("dwLength", ctypes.c_ulong),
-                ("dwMemoryLoad", ctypes.c_ulong),
-                ("ullTotalPhys", ctypes.c_ulonglong),
-                ("ullAvailPhys", ctypes.c_ulonglong),
-                ("ullTotalPageFile", ctypes.c_ulonglong),
-                ("ullAvailPageFile", ctypes.c_ulonglong),
-                ("ullTotalVirtual", ctypes.c_ulonglong),
-                ("ullAvailVirtual", ctypes.c_ulonglong),
-                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
-            ]
-        
-        memory_status = MEMORYSTATUSEX()
-        memory_status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(memory_status))
-        return memory_status.ullTotalPhys
-    return 0
+    """Get total RAM in bytes"""
+    try:
+        if platform.system() == "Windows":
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+            
+            memory_status = MEMORYSTATUSEX()
+            memory_status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(memory_status)):
+                return memory_status.ullTotalPhys
+            else:
+                return 8 * 1024 * 1024 * 1024  # 8 GB default
+        else:
+            with open('/proc/meminfo', 'r') as f:
+                for line in f:
+                    if line.startswith('MemTotal:'):
+                        return int(line.split()[1]) * 1024
+    except Exception as e:
+        print_warning(f"Could not get RAM info: {e}")
+        return 8 * 1024 * 1024 * 1024  # 8 GB default
 
 def check_requirements(install_path):
+    """Check system requirements"""
     print_info("Checking system requirements...")
     
+    all_requirements_met = True
+    
+    # Check disk space
     try:
+        # Ensure path exists
+        install_path.mkdir(parents=True, exist_ok=True)
+        
         free_space = get_free_space(install_path)
         free_space_gb = free_space / (1024 ** 3)
         print_info(f"Free disk space: {free_space_gb:.2f} GB")
         
         if free_space_gb < 3:
             print_error(f"Insufficient disk space! Need 3 GB, but only {free_space_gb:.2f} GB available.")
-            return False
-        print_success(f"Disk space OK (3 GB required)")
+            all_requirements_met = False
+        else:
+            print_success(f"Disk space OK (3 GB required)")
     except Exception as e:
         print_warning(f"Could not check disk space: {e}")
+        print_info("Assuming disk space is sufficient...")
     
+    # Check RAM
     try:
         total_ram = get_total_ram()
         total_ram_gb = total_ram / (1024 ** 3)
@@ -137,15 +182,21 @@ def check_requirements(install_path):
         
         if total_ram_gb < 2:
             print_error(f"Insufficient RAM! Need 2 GB, but only {total_ram_gb:.2f} GB available.")
-            return False
-        print_success(f"RAM OK (2 GB required)")
+            all_requirements_met = False
+        else:
+            print_success(f"RAM OK (2 GB required)")
     except Exception as e:
         print_warning(f"Could not check RAM: {e}")
+        print_info("Assuming RAM is sufficient...")
     
-    return True
+    return all_requirements_met
 
 def copy_directory(src, dst):
+    """Copy directory with progress"""
     total_files = sum(1 for _ in src.rglob('*') if _.is_file())
+    if total_files == 0:
+        return
+    
     copied = 0
     
     for item in src.rglob('*'):
@@ -162,6 +213,7 @@ def copy_directory(src, dst):
     print(f"\r  Progress: 100%")
 
 def register_application(install_dir):
+    """Register application in Windows registry"""
     reg = f'''
 New-Item -Path "HKCU:\\Software\\NotYCaptionGenAi" -Force | Out-Null
 Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "InstallPath" -Value "{install_dir}"
@@ -170,6 +222,7 @@ Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "Version" -Valu
     subprocess.run(["powershell", "-Command", reg], capture_output=True)
 
 def create_shortcut(path, target):
+    """Create Windows shortcut"""
     ps = f'''$s = New-Object -ComObject WScript.Shell
 $l = $s.CreateShortcut("{path}")
 $l.TargetPath = "{target}"
@@ -177,19 +230,23 @@ $l.Save()'''
     subprocess.run(["powershell", "-Command", ps], capture_output=True)
 
 def create_start_menu_shortcut(install_dir):
+    """Create Start Menu shortcut"""
     start = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAi.lnk"
     create_shortcut(str(start), str(install_dir / "NotYCaptionGenAI.exe"))
 
 def create_desktop_shortcut(install_dir):
+    """Create Desktop shortcut"""
     desktop = Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAi.lnk"
     create_shortcut(str(desktop), str(install_dir / "NotYCaptionGenAI.exe"))
 
 def register_sendto_menu(install_dir):
+    """Register to Send To menu"""
     sendto = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo" / "NotYCaptionGenAi.lnk"
     sendto.parent.mkdir(parents=True, exist_ok=True)
     create_shortcut(str(sendto), str(install_dir / "NotYCaptionGenAI.exe"))
 
 def get_directory_size(path):
+    """Get directory size in MB"""
     total = 0
     for item in path.rglob('*'):
         if item.is_file():
@@ -253,8 +310,10 @@ def install():
     if not check_requirements(install_path):
         print_error("\nSystem requirements not met!")
         print_info("Requirements: 3 GB free disk space, 2 GB RAM")
-        input("\nPress Enter to exit...")
-        return False
+        print_info("You can still continue, but the application may not work properly.")
+        response = input(f"{Colors.CYAN}Continue anyway? (y/n): {Colors.RESET}").lower()
+        if response not in ['y', 'yes']:
+            return False
     
     print_header()
     print_info(f"Installing to: {install_path}")
