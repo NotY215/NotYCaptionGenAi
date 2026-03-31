@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import List, Tuple
 from datetime import timedelta
 
+import torch
+
 # Fix Windows console encoding
 if platform.system() == "Windows":
     import io
