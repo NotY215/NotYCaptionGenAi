@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-NotY Caption Generator AI v4.4
+NotY Caption Generator AI v4.5
 Using OpenAI Whisper (PyTorch)
 Copyright (c) 2026 NotY215
 """
@@ -14,11 +14,11 @@ import time
 import platform
 import argparse
 import subprocess
-import importlib.util
 import tkinter as tk
 from tkinter import filedialog
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple
+from datetime import timedelta
 
 # Fix Windows console encoding
 if platform.system() == "Windows":
@@ -43,14 +43,6 @@ class Colors:
     BLACK = '\033[30m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
-    BG_RED = '\033[41m'
-    BG_GREEN = '\033[42m'
-    BG_YELLOW = '\033[43m'
-    BG_BLUE = '\033[44m'
-    BG_PURPLE = '\033[45m'
-    BG_CYAN = '\033[46m'
-    BG_WHITE = '\033[47m'
-    BG_BLACK = '\033[40m'
 
 if platform.system() == "Windows":
     try:
@@ -97,7 +89,7 @@ def print_header(title: str = None):
 
 # Application metadata
 APP_NAME = "NotY Caption Generator AI"
-APP_VERSION = "4.4"
+APP_VERSION = "4.5"
 APP_AUTHOR = "NotY215"
 APP_YEAR = "2026"
 APP_LICENSE = "LGPL-3.0"
@@ -121,9 +113,7 @@ class NotYCaptionGenerator:
             self.base_dir = Path(__file__).parent
             
         self.models_dir = self.base_dir / "models"
-        self.resources_dir = self.base_dir / "resources"
         self.models_dir.mkdir(parents=True, exist_ok=True)
-        self.resources_dir.mkdir(parents=True, exist_ok=True)
         
         self.models = [
             ("tiny", WHISPER_MODELS["tiny"]["size"], WHISPER_MODELS["tiny"]["desc"]),
@@ -141,7 +131,7 @@ class NotYCaptionGenerator:
         ]
         
         self.modes = [
-            ("Normal", "normal", "Generate subtitles in selected language"),
+            ("Normal", "transcribe", "Generate subtitles in selected language"),
             ("Translate to English", "translate", "Translate any language to English"),
             ("Transliteration", "transliterate", "Convert Hindi/Japanese to English/Romanized text")
         ]
@@ -151,6 +141,7 @@ class NotYCaptionGenerator:
         self.selected_mode = None
         self.media_path_arg = media_path
         self.model = None
+        self.temp_audio = None
         
     def clear_screen(self):
         os.system('cls' if platform.system() == 'Windows' else 'clear')
@@ -264,6 +255,25 @@ class NotYCaptionGenerator:
                 
             return path
             
+    def extract_audio(self, video_path: Path) -> Path:
+        """Extract audio from video file using moviepy"""
+        try:
+            from moviepy.editor import VideoFileClip
+            
+            temp_dir = Path(os.environ.get('TEMP', '.'))
+            audio_path = temp_dir / f"{video_path.stem}_temp_audio.wav"
+            
+            self.print_info(f"Extracting audio from {video_path.name}...")
+            video = VideoFileClip(str(video_path))
+            video.audio.write_audiofile(str(audio_path), codec='pcm_s16_le', verbose=False, logger=None)
+            video.close()
+            
+            self.print_success("Audio extracted successfully")
+            return audio_path
+        except Exception as e:
+            self.print_error(f"Failed to extract audio: {e}")
+            return None
+            
     def load_model(self, model_name: str):
         try:
             import whisper
@@ -351,6 +361,14 @@ class NotYCaptionGenerator:
                           number_per_line: int, language_code: str, mode: str) -> bool:
         try:
             import whisper
+            from datetime import timedelta
+            
+            # Handle video files - extract audio
+            audio_path = media_path
+            if media_path.suffix.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm']:
+                audio_path = self.extract_audio(media_path)
+                if not audio_path:
+                    return False
             
             if self.model is None:
                 if not self.load_model(model_name):
@@ -361,8 +379,12 @@ class NotYCaptionGenerator:
             task = "translate" if mode == "translate" else "transcribe"
             language = language_code if language_code != "auto" else None
             
+            # Get device
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.print_info(f"Using device: {device}")
+            
             result = self.model.transcribe(
-                str(media_path),
+                str(audio_path),
                 task=task,
                 language=language,
                 verbose=False,
@@ -377,76 +399,73 @@ class NotYCaptionGenerator:
                 output_path = output_path.with_name(f"{media_path.stem}_{language_code}")
             output_path = output_path.with_suffix(".srt")
             
-            subtitle_index = 1
-            MIN_DURATION = 0.5  # Minimum 0.5 seconds per subtitle
+            subtitles = []
+            index = 1
             
+            for segment in result.get("segments", []):
+                segment_text = segment.get("text", "").strip()
+                if not segment_text:
+                    continue
+                    
+                segment_start = segment.get("start", 0)
+                segment_end = segment.get("end", segment_start + 1)
+                
+                # Apply transliteration if needed
+                if mode == "transliterate":
+                    segment_text = self.transliterate_text(segment_text, language_code)
+                
+                words_data = segment.get("words", [])
+                
+                if line_type == "words" and words_data:
+                    # Use word-level timestamps for perfect sync
+                    words = [w["word"].strip() for w in words_data]
+                    word_starts = [w.get("start", segment_start) for w in words_data]
+                    word_ends = [w.get("end", segment_end) for w in words_data]
+                    
+                    for i in range(0, len(words), number_per_line):
+                        chunk_words = words[i:i + number_per_line]
+                        line_text = " ".join(chunk_words).strip()
+                        if not line_text:
+                            continue
+                        chunk_start = word_starts[i]
+                        chunk_end = word_ends[min(i + number_per_line - 1, len(word_ends) - 1)]
+                        
+                        subtitles.append({
+                            "index": index,
+                            "start": timedelta(seconds=chunk_start),
+                            "end": timedelta(seconds=chunk_end),
+                            "text": line_text
+                        })
+                        index += 1
+                else:
+                    # Use segment-level timestamps
+                    if line_type == "letters":
+                        segment_text = self.limit_letters_per_line(segment_text, number_per_line)
+                    
+                    subtitles.append({
+                        "index": index,
+                        "start": timedelta(seconds=segment_start),
+                        "end": timedelta(seconds=segment_end),
+                        "text": segment_text
+                    })
+                    index += 1
+            
+            # Write SRT file
             with open(output_path, 'w', encoding='utf-8') as f:
-                for segment in result["segments"]:
-                    text = segment["text"].strip()
-                    
-                    # Apply transliteration if needed
-                    if mode == "transliterate":
-                        text = self.transliterate_text(text, language_code)
-                    
-                    if line_type == "words":
-                        words = segment.get("words", [])
-                        if words:
-                            for i in range(0, len(words), number_per_line):
-                                chunk = words[i:i + number_per_line]
-                                if chunk:
-                                    start_time = chunk[0]["start"]
-                                    end_time = chunk[-1]["end"]
-                                    
-                                    # Ensure minimum duration
-                                    if end_time - start_time < MIN_DURATION:
-                                        end_time = start_time + MIN_DURATION
-                                    
-                                    chunk_text = " ".join([w["word"].strip() for w in chunk])
-                                    start_str = self.format_time(start_time)
-                                    end_str = self.format_time(end_time)
-                                    f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{chunk_text}\n\n")
-                                    subtitle_index += 1
-                        else:
-                            # Fallback: use segment timestamps
-                            words_list = text.split()
-                            if len(words_list) == 0:
-                                continue
-                                
-                            # Calculate duration per word
-                            segment_duration = segment["end"] - segment["start"]
-                            duration_per_word = segment_duration / len(words_list)
-                            
-                            for i in range(0, len(words_list), number_per_line):
-                                chunk = words_list[i:i + number_per_line]
-                                chunk_text = " ".join(chunk)
-                                start_time = segment["start"] + (i * duration_per_word)
-                                end_time = segment["start"] + ((i + len(chunk)) * duration_per_word)
-                                
-                                # Ensure minimum duration
-                                if end_time - start_time < MIN_DURATION:
-                                    end_time = start_time + MIN_DURATION
-                                
-                                start_str = self.format_time(start_time)
-                                end_str = self.format_time(end_time)
-                                f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{chunk_text}\n\n")
-                                subtitle_index += 1
-                    else:
-                        # Letters per line - use segment timestamps
-                        formatted_text = self.limit_letters_per_line(text, number_per_line)
-                        start_time = segment["start"]
-                        end_time = segment["end"]
-                        
-                        # Ensure minimum duration
-                        if end_time - start_time < MIN_DURATION:
-                            end_time = start_time + MIN_DURATION
-                        
-                        start_str = self.format_time(start_time)
-                        end_str = self.format_time(end_time)
-                        f.write(f"{subtitle_index}\n{start_str} --> {end_str}\n{formatted_text}\n\n")
-                        subtitle_index += 1
-                    
+                for sub in subtitles:
+                    start_str = self.format_time(sub["start"].total_seconds())
+                    end_str = self.format_time(sub["end"].total_seconds())
+                    f.write(f"{sub['index']}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
+            
+            # Clean up temp audio
+            if audio_path != media_path and audio_path and audio_path.exists():
+                try:
+                    audio_path.unlink()
+                except:
+                    pass
+            
             self.print_success(f"Captions saved to: {output_path}")
-            self.print_info(f"Generated {subtitle_index - 1} subtitle entries")
+            self.print_info(f"Generated {len(subtitles)} subtitle entries")
             return True
             
         except Exception as e:
@@ -459,10 +478,13 @@ class NotYCaptionGenerator:
         # Try to import whisper to verify it works
         try:
             import whisper
+            import torch
             self.print_success("Whisper loaded successfully")
+            self.print_info(f"PyTorch version: {torch.__version__}")
+            self.print_info(f"CUDA available: {torch.cuda.is_available()}")
         except ImportError as e:
             self.print_error(f"Whisper import failed: {e}")
-            self.print_info("Please ensure openai-whisper is installed")
+            self.print_info("Please install: pip install openai-whisper torch moviepy numpy")
             input("\nPress Enter to exit...")
             return
             
@@ -499,27 +521,19 @@ class NotYCaptionGenerator:
                 language_code = self.selected_language[1]
                 language_name = self.selected_language[0]
                 
-                # Select mode (only show appropriate modes based on language)
+                # Select mode
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
                 print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
                 
-                mode_options = []
-                if language_name in ["Hindi", "Japanese"]:
-                    mode_options = [f"{m[0]} - {m[2]}" for m in self.modes]
-                else:
-                    mode_options = [f"{self.modes[0][0]} - {self.modes[0][2]}", f"{self.modes[1][0]} - {self.modes[1][2]}"]
-                
+                mode_options = [f"{m[0]} - {m[2]}" for m in self.modes]
                 mode_choice = self.show_menu("SELECT MODE", mode_options)
                 if mode_choice == -1:
                     continue
                     
-                if language_name in ["Hindi", "Japanese"]:
-                    self.selected_mode = self.modes[mode_choice]
-                else:
-                    self.selected_mode = self.modes[mode_choice]
+                self.selected_mode = self.modes[mode_choice]
                 mode = self.selected_mode[1]
                 
                 # Choose line preference
@@ -530,7 +544,7 @@ class NotYCaptionGenerator:
                 print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}")
                 print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}\n")
                 
-                line_options = ["Words", "Letters"]
+                line_options = ["Words (Word-level timing)", "Letters (Character limit)"]
                 line_choice = self.show_menu("LINE PREFERENCE", line_options)
                 if line_choice == -1:
                     continue

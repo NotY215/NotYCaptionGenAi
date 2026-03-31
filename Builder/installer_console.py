@@ -17,7 +17,12 @@ import tkinter as tk
 from tkinter import filedialog
 import tempfile
 
+APP_VERSION = "4.5"
+APP_AUTHOR = "NotY215"
+APP_TELEGRAM = "https://t.me/NotY_215"
+
 # Colors for console output
+
 class Colors:
     RESET = '\033[0m'
     RED = '\033[91m'
@@ -471,6 +476,33 @@ def install():
         print_error(f"Installation failed: {e}")
         import traceback
         traceback.print_exc()
+        return False
+
+def register_with_windows(install_dir):
+    """Register application in Windows Add/Remove Programs"""
+    try:
+        import winreg
+        
+        # Create registry key
+        key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NotYCaptionGenAI"
+        
+        with winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+            winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, "NotY Caption Generator AI")
+            winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, APP_VERSION)
+            winreg.SetValueEx(key, "Publisher", 0, winreg.REG_SZ, APP_AUTHOR)
+            winreg.SetValueEx(key, "URLInfoAbout", 0, winreg.REG_SZ, APP_TELEGRAM)
+            winreg.SetValueEx(key, "DisplayIcon", 0, winreg.REG_SZ, str(install_dir / "NotYCaptionGenAI.exe"))
+            winreg.SetValueEx(key, "InstallLocation", 0, winreg.REG_SZ, str(install_dir))
+            winreg.SetValueEx(key, "UninstallString", 0, winreg.REG_SZ, str(install_dir / "NotYCaptionGenAI_Uninstaller.exe"))
+            winreg.SetValueEx(key, "QuietUninstallString", 0, winreg.REG_SZ, f'"{install_dir / "NotYCaptionGenAI_Uninstaller.exe"}" /S')
+            winreg.SetValueEx(key, "NoModify", 0, winreg.REG_DWORD, 1)
+            winreg.SetValueEx(key, "NoRepair", 0, winreg.REG_DWORD, 1)
+            
+        print_success("Application registered in Windows")
+        return True
+    except Exception as e:
+        print_warning(f"Could not register in Windows: {e}")
+        print_info("You may need to run as administrator for full registration")
         return False
 
 if __name__ == "__main__":

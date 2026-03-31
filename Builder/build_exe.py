@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build NotY Caption Generator AI Executable v4.4
+Build NotY Caption Generator AI Executable v4.5
 Copyright (c) 2026 NotY215
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 def build_exe():
     print("=" * 60)
-    print("Building NotY Caption Generator AI Executable v4.4")
+    print("Building NotY Caption Generator AI Executable v4.5")
     print("=" * 60)
     
     base_dir = Path(__file__).parent.parent
@@ -28,7 +28,6 @@ def build_exe():
     source_path = str(base_dir / "noty_caption_gen.py").replace('\\', '/')
     icon_path = str(resources_dir / "app.ico").replace('\\', '/')
     
-    # Create spec file
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
@@ -59,7 +58,12 @@ a = Analysis(
         'tiktoken',
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
-        'regex'
+        'regex',
+        'moviepy',
+        'moviepy.editor',
+        'moviepy.video',
+        'moviepy.audio',
+        'pydub'
     ],
     hookspath=[],
     hooksconfig={{}},
@@ -72,7 +76,9 @@ a = Analysis(
         'PIL',
         'tensorboard',
         'torchvision',
-        'torchaudio'
+        'torchaudio',
+        'PyQt5',
+        'PyQt6'
     ],
     noarchive=False,
 )

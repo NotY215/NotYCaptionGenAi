@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Setup script for building NotY Caption Generator AI v4.4
+Setup script for building NotY Caption Generator AI v4.5
 Copyright (c) 2026 NotY215
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 def build_all():
     print("=" * 60)
-    print("Building NotY Caption Generator AI v4.4")
+    print("Building NotY Caption Generator AI v4.5")
     print("Copyright (c) 2026 NotY215")
     print("=" * 60)
     
@@ -105,7 +105,7 @@ def build_all():
     
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--name=NotYCaptionGenAI_Installer_v4.4",
+        "--name=NotYCaptionGenAI_Installer_v4.5",
         "--onefile",
         f"--add-data={temp_dir / 'NotYCaptionGenAI.exe'}{os.pathsep}.",
         f"--add-data={temp_dir / 'NotYCaptionGenAI_Uninstaller.exe'}{os.pathsep}.",
@@ -137,9 +137,9 @@ def build_all():
         print(f"\n[ERROR] Installer build failed: {e}")
         sys.exit(1)
     
-    installer_exe = temp_dir / "dist" / "NotYCaptionGenAI_Installer_v4.4.exe"
+    installer_exe = temp_dir / "dist" / "NotYCaptionGenAI_Installer_v4.5.exe"
     if installer_exe.exists():
-        final_installer = base_dir / "NotYCaptionGenAI_Installer_v4.4.exe"
+        final_installer = base_dir / "NotYCaptionGenAI_Installer_v4.5.exe"
         shutil.copy2(installer_exe, final_installer)
         size = final_installer.stat().st_size / 1024 / 1024
         print(f"\n[OK] Installer created: {final_installer} ({size:.2f} MB)")
@@ -152,7 +152,7 @@ def build_all():
     
     print("\n" + "=" * 60)
     print("Build complete!")
-    print(f"Installer: {base_dir / 'NotYCaptionGenAI_Installer_v4.4.exe'}")
+    print(f"Installer: {base_dir / 'NotYCaptionGenAI_Installer_v4.5.exe'}")
     print("=" * 60)
 
 if __name__ == "__main__":
