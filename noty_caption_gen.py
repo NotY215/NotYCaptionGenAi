@@ -20,8 +20,6 @@ from pathlib import Path
 from typing import List, Tuple
 from datetime import timedelta
 
-import torch
-
 # Fix Windows console encoding
 if platform.system() == "Windows":
     import io
@@ -272,26 +270,26 @@ class NotYCaptionGenerator:
             
     def check_ffmpeg(self) -> bool:
         """Check if ffmpeg is available"""
+        # Check local ffmpeg first
         if self.ffmpeg_exe.exists():
-            self.print_success(f"Found ffmpeg at: {self.ffmpeg_exe}")
+            self.print_success(f"Found local ffmpeg")
             return True
         
-        # Try to find ffmpeg in PATH
+        # Try system ffmpeg
         try:
             result = subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=5)
             if result.returncode == 0:
-                self.print_success("Found ffmpeg in system PATH")
+                self.print_success("Found system ffmpeg")
                 return True
         except:
             pass
         
         self.print_error("FFmpeg not found!")
         self.print_info(f"Please place ffmpeg.exe in: {self.ffmpeg_dir}")
-        self.print_info("Or install FFmpeg and add to PATH")
         return False
             
     def extract_audio(self, video_path: Path) -> Path:
-        """Extract audio from video file using local ffmpeg"""
+        """Extract audio from video file using ffmpeg"""
         if not self.check_ffmpeg():
             return None
             
@@ -300,7 +298,7 @@ class NotYCaptionGenerator:
         
         self.print_info(f"Extracting audio from {video_path.name}...")
         
-        # Use local ffmpeg
+        # Use local ffmpeg if available
         ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
         
         cmd = [
@@ -313,39 +311,14 @@ class NotYCaptionGenerator:
         ]
         
         try:
-            self.print_info("Running ffmpeg...")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
             
             if result.returncode == 0 and audio_path.exists() and audio_path.stat().st_size > 0:
                 self.print_success(f"Audio extracted successfully ({audio_path.stat().st_size / 1024 / 1024:.2f} MB)")
                 return audio_path
             else:
-                self.print_error(f"FFmpeg error: {result.stderr[:200]}")
-                
-                # Try with mp3 as fallback
-                mp3_path = audio_path.with_suffix('.mp3')
-                cmd_mp3 = [
-                    ffmpeg_cmd, '-i', str(video_path),
-                    '-q:a', '0', '-map', 'a',
-                    '-y', str(mp3_path)
-                ]
-                subprocess.run(cmd_mp3, capture_output=True, timeout=120)
-                
-                if mp3_path.exists() and mp3_path.stat().st_size > 0:
-                    self.print_info("Converting MP3 to WAV...")
-                    cmd_convert = [
-                        ffmpeg_cmd, '-i', str(mp3_path),
-                        '-acodec', 'pcm_s16le',
-                        '-ar', '16000',
-                        '-ac', '1',
-                        '-y', str(audio_path)
-                    ]
-                    subprocess.run(cmd_convert, capture_output=True, timeout=60)
-                    mp3_path.unlink()
-                    
-                    if audio_path.exists() and audio_path.stat().st_size > 0:
-                        self.print_success(f"Audio extracted successfully ({audio_path.stat().st_size / 1024 / 1024:.2f} MB)")
-                        return audio_path
+                self.print_error(f"FFmpeg error")
+                return None
                 
         except subprocess.TimeoutExpired:
             self.print_error("FFmpeg timed out")
@@ -461,10 +434,6 @@ class NotYCaptionGenerator:
             task = "translate" if mode == "translate" else "transcribe"
             language = language_code if language_code != "auto" else None
             
-            # Get device
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.print_info(f"Using device: {device}")
-            
             result = self.model.transcribe(
                 str(audio_path),
                 task=task,
@@ -557,6 +526,16 @@ class NotYCaptionGenerator:
             return False
             
     def run(self):
+        # Check numpy version
+        try:
+            import numpy as np
+            self.print_info(f"NumPy version: {np.__version__}")
+            if np.__version__.startswith('2.'):
+                self.print_warning("NumPy 2.x detected - some features may not work properly")
+                self.print_info("Consider downgrading to NumPy 1.x: pip install 'numpy<2'")
+        except:
+            pass
+        
         # Check ffmpeg
         self.check_ffmpeg()
         
