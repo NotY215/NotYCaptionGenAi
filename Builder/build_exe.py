@@ -19,6 +19,7 @@ def build_exe():
     base_dir = Path(__file__).parent.parent
     builder_dir = Path(__file__).parent
     resources_dir = base_dir / "resources"
+    ffmpeg_dir = base_dir / "ffmpeg"
     dist_dir = base_dir / "dist"
     
     if dist_dir.exists():
@@ -28,15 +29,25 @@ def build_exe():
     source_path = str(base_dir / "noty_caption_gen.py").replace('\\', '/')
     icon_path = str(resources_dir / "app.ico").replace('\\', '/')
     
+    # Collect ffmpeg files
+    ffmpeg_datas = []
+    if ffmpeg_dir.exists():
+        for file in ffmpeg_dir.glob("*"):
+            if file.is_file():
+                ffmpeg_datas.append((str(file), 'ffmpeg'))
+    
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+# Collect ffmpeg files
+ffmpeg_datas = {ffmpeg_datas}
 
 a = Analysis(
     [r'{source_path}'],
     pathex=[],
     binaries=[],
-    datas=collect_data_files('whisper') + collect_data_files('torch') + [(r'{icon_path}', '.')],
+    datas=collect_data_files('whisper') + collect_data_files('torch') + ffmpeg_datas + [(r'{icon_path}', '.')],
     hiddenimports=[
         'whisper',
         'whisper.__main__',
@@ -58,12 +69,7 @@ a = Analysis(
         'tiktoken',
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
-        'regex',
-        'moviepy',
-        'moviepy.editor',
-        'moviepy.video',
-        'moviepy.audio',
-        'pydub'
+        'regex'
     ],
     hookspath=[],
     hooksconfig={{}},
@@ -145,6 +151,14 @@ exe = EXE(
             for model_file in source_models.glob("*.pt"):
                 shutil.copy2(model_file, models_dir / model_file.name)
                 print(f"  Copied model: {model_file.name}")
+        
+        # Copy ffmpeg folder
+        dest_ffmpeg = dist_dir / "ffmpeg"
+        if ffmpeg_dir.exists():
+            if dest_ffmpeg.exists():
+                shutil.rmtree(dest_ffmpeg)
+            shutil.copytree(ffmpeg_dir, dest_ffmpeg)
+            print("  Copied ffmpeg folder")
         
         dest_resources = dist_dir / "resources"
         if resources_dir.exists():

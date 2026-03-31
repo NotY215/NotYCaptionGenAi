@@ -94,6 +94,14 @@ def build_all():
         shutil.copytree(resources_dir, temp_dir / "resources")
         print("  Copied resources")
     
+    # Copy ffmpeg folder
+    ffmpeg_dir = base_dir / "ffmpeg"
+    if ffmpeg_dir.exists() and any(ffmpeg_dir.iterdir()):
+        print("  Including ffmpeg...")
+        shutil.copytree(ffmpeg_dir, temp_dir / "ffmpeg")
+        ffmpeg_count = len(list((temp_dir / "ffmpeg").glob("*")))
+        print(f"    Added {ffmpeg_count} ffmpeg files")
+    
     models_dir = base_dir / "models"
     if models_dir.exists() and any(models_dir.iterdir()):
         print("  Including models...")
@@ -122,6 +130,9 @@ def build_all():
         "--noconfirm",
         installer_py
     ]
+    
+    if (temp_dir / "ffmpeg").exists():
+        cmd.insert(4, f"--add-data={temp_dir / 'ffmpeg'}{os.pathsep}ffmpeg")
     
     if (temp_dir / "models").exists():
         cmd.insert(4, f"--add-data={temp_dir / 'models'}{os.pathsep}models")

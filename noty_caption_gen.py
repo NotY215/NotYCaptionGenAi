@@ -115,7 +115,20 @@ class NotYCaptionGenerator:
             self.base_dir = Path(__file__).parent
             
         self.models_dir = self.base_dir / "models"
+        self.ffmpeg_dir = self.base_dir / "ffmpeg"
         self.models_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Setup ffmpeg path
+        if platform.system() == "Windows":
+            self.ffmpeg_exe = self.ffmpeg_dir / "ffmpeg.exe"
+            self.ffprobe_exe = self.ffmpeg_dir / "ffprobe.exe"
+        else:
+            self.ffmpeg_exe = self.ffmpeg_dir / "ffmpeg"
+            self.ffprobe_exe = self.ffmpeg_dir / "ffprobe"
+        
+        # Add ffmpeg to PATH for this process
+        if self.ffmpeg_dir.exists():
+            os.environ['PATH'] = str(self.ffmpeg_dir) + os.pathsep + os.environ['PATH']
         
         self.models = [
             ("tiny", WHISPER_MODELS["tiny"]["size"], WHISPER_MODELS["tiny"]["desc"]),
@@ -257,24 +270,89 @@ class NotYCaptionGenerator:
                 
             return path
             
-    def extract_audio(self, video_path: Path) -> Path:
-        """Extract audio from video file using moviepy"""
+    def check_ffmpeg(self) -> bool:
+        """Check if ffmpeg is available"""
+        if self.ffmpeg_exe.exists():
+            self.print_success(f"Found ffmpeg at: {self.ffmpeg_exe}")
+            return True
+        
+        # Try to find ffmpeg in PATH
         try:
-            from moviepy.editor import VideoFileClip
+            result = subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=5)
+            if result.returncode == 0:
+                self.print_success("Found ffmpeg in system PATH")
+                return True
+        except:
+            pass
+        
+        self.print_error("FFmpeg not found!")
+        self.print_info(f"Please place ffmpeg.exe in: {self.ffmpeg_dir}")
+        self.print_info("Or install FFmpeg and add to PATH")
+        return False
             
-            temp_dir = Path(os.environ.get('TEMP', '.'))
-            audio_path = temp_dir / f"{video_path.stem}_temp_audio.wav"
-            
-            self.print_info(f"Extracting audio from {video_path.name}...")
-            video = VideoFileClip(str(video_path))
-            video.audio.write_audiofile(str(audio_path), codec='pcm_s16_le', verbose=False, logger=None)
-            video.close()
-            
-            self.print_success("Audio extracted successfully")
-            return audio_path
-        except Exception as e:
-            self.print_error(f"Failed to extract audio: {e}")
+    def extract_audio(self, video_path: Path) -> Path:
+        """Extract audio from video file using local ffmpeg"""
+        if not self.check_ffmpeg():
             return None
+            
+        temp_dir = Path(os.environ.get('TEMP', '.'))
+        audio_path = temp_dir / f"{video_path.stem}_temp_audio.wav"
+        
+        self.print_info(f"Extracting audio from {video_path.name}...")
+        
+        # Use local ffmpeg
+        ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
+        
+        cmd = [
+            ffmpeg_cmd, '-i', str(video_path),
+            '-acodec', 'pcm_s16le',
+            '-ar', '16000',
+            '-ac', '1',
+            '-y',
+            str(audio_path)
+        ]
+        
+        try:
+            self.print_info("Running ffmpeg...")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            
+            if result.returncode == 0 and audio_path.exists() and audio_path.stat().st_size > 0:
+                self.print_success(f"Audio extracted successfully ({audio_path.stat().st_size / 1024 / 1024:.2f} MB)")
+                return audio_path
+            else:
+                self.print_error(f"FFmpeg error: {result.stderr[:200]}")
+                
+                # Try with mp3 as fallback
+                mp3_path = audio_path.with_suffix('.mp3')
+                cmd_mp3 = [
+                    ffmpeg_cmd, '-i', str(video_path),
+                    '-q:a', '0', '-map', 'a',
+                    '-y', str(mp3_path)
+                ]
+                subprocess.run(cmd_mp3, capture_output=True, timeout=120)
+                
+                if mp3_path.exists() and mp3_path.stat().st_size > 0:
+                    self.print_info("Converting MP3 to WAV...")
+                    cmd_convert = [
+                        ffmpeg_cmd, '-i', str(mp3_path),
+                        '-acodec', 'pcm_s16le',
+                        '-ar', '16000',
+                        '-ac', '1',
+                        '-y', str(audio_path)
+                    ]
+                    subprocess.run(cmd_convert, capture_output=True, timeout=60)
+                    mp3_path.unlink()
+                    
+                    if audio_path.exists() and audio_path.stat().st_size > 0:
+                        self.print_success(f"Audio extracted successfully ({audio_path.stat().st_size / 1024 / 1024:.2f} MB)")
+                        return audio_path
+                
+        except subprocess.TimeoutExpired:
+            self.print_error("FFmpeg timed out")
+        except Exception as e:
+            self.print_error(f"Extraction failed: {e}")
+        
+        return None
             
     def load_model(self, model_name: str):
         try:
@@ -370,6 +448,8 @@ class NotYCaptionGenerator:
             if media_path.suffix.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm']:
                 audio_path = self.extract_audio(media_path)
                 if not audio_path:
+                    self.print_error("Could not extract audio from video file")
+                    self.print_info("Try using a direct audio file (MP3, WAV, etc.) instead")
                     return False
             
             if self.model is None:
@@ -477,6 +557,9 @@ class NotYCaptionGenerator:
             return False
             
     def run(self):
+        # Check ffmpeg
+        self.check_ffmpeg()
+        
         # Try to import whisper to verify it works
         try:
             import whisper
@@ -486,7 +569,7 @@ class NotYCaptionGenerator:
             self.print_info(f"CUDA available: {torch.cuda.is_available()}")
         except ImportError as e:
             self.print_error(f"Whisper import failed: {e}")
-            self.print_info("Please install: pip install openai-whisper torch moviepy numpy")
+            self.print_info("Please install: pip install openai-whisper torch numpy")
             input("\nPress Enter to exit...")
             return
             
