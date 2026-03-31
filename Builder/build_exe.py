@@ -11,9 +11,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
+APP_NAME = "NotYCaptionGenAI"
+APP_VERSION = "4.5"
+APP_AUTHOR = "NotY215"
+APP_COPYRIGHT = f"Copyright (c) 2026 {APP_AUTHOR}"
+
 def build_exe():
     print("=" * 60)
-    print("Building NotY Caption Generator AI Executable v4.5")
+    print(f"Building {APP_NAME} Executable v{APP_VERSION}")
     print("=" * 60)
     
     base_dir = Path(__file__).parent.parent
@@ -35,6 +40,43 @@ def build_exe():
         for file in ffmpeg_dir.glob("*"):
             if file.is_file():
                 ffmpeg_datas.append((str(file), 'ffmpeg'))
+    
+    # Create version info for Windows
+    version_info = f'''
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=({APP_VERSION.replace('.', ',')}, 0),
+    prodvers=({APP_VERSION.replace('.', ',')}, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          u'040904B0',
+          [
+            StringStruct(u'CompanyName', u'{APP_AUTHOR}'),
+            StringStruct(u'FileDescription', u'{APP_NAME}'),
+            StringStruct(u'FileVersion', u'{APP_VERSION}'),
+            StringStruct(u'InternalName', u'{APP_NAME}'),
+            StringStruct(u'LegalCopyright', u'{APP_COPYRIGHT}'),
+            StringStruct(u'OriginalFilename', u'{APP_NAME}.exe'),
+            StringStruct(u'ProductName', u'{APP_NAME}'),
+            StringStruct(u'ProductVersion', u'{APP_VERSION}'),
+            StringStruct(u'Comments', u'Caption Generator using OpenAI Whisper')
+          ]
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+  ]
+)
+'''
     
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 
@@ -69,7 +111,8 @@ a = Analysis(
         'tiktoken',
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
-        'regex'
+        'regex',
+        'winreg'
     ],
     hookspath=[],
     hooksconfig={{}},
@@ -97,7 +140,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='NotYCaptionGenAI',
+    name='{APP_NAME}',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -110,13 +153,19 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=r'{icon_path}'
+    icon=r'{icon_path}',
+    version='version_info.txt'
 )
 '''
     
-    spec_path = builder_dir / "NotYCaptionGenAI.spec"
+    spec_path = builder_dir / f"{APP_NAME}.spec"
     with open(spec_path, 'w', encoding='utf-8') as f:
         f.write(spec_content)
+    
+    # Write version info
+    version_path = builder_dir / "version_info.txt"
+    with open(version_path, 'w', encoding='utf-8') as f:
+        f.write(version_info)
     
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -136,9 +185,10 @@ exe = EXE(
         sys.exit(1)
     
     spec_path.unlink(missing_ok=True)
+    version_path.unlink(missing_ok=True)
     shutil.rmtree(builder_dir / "build", ignore_errors=True)
     
-    exe_file = dist_dir / "NotYCaptionGenAI.exe"
+    exe_file = dist_dir / f"{APP_NAME}.exe"
     if exe_file.exists():
         size = exe_file.stat().st_size / 1024 / 1024
         print(f"\n[OK] Executable built: {exe_file} ({size:.2f} MB)")
@@ -152,7 +202,6 @@ exe = EXE(
                 shutil.copy2(model_file, models_dir / model_file.name)
                 print(f"  Copied model: {model_file.name}")
         
-        # Copy ffmpeg folder
         dest_ffmpeg = dist_dir / "ffmpeg"
         if ffmpeg_dir.exists():
             if dest_ffmpeg.exists():

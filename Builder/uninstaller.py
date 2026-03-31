@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NotY Caption Generator AI Uninstaller v4.4 (Console)
+NotY Caption Generator AI Uninstaller v4.5 (Console)
 Copyright (c) 2026 NotY215
 """
 
@@ -11,7 +11,14 @@ import shutil
 import subprocess
 import time
 import platform
+import ctypes
 from pathlib import Path
+import winreg
+
+# Application metadata
+APP_NAME = "NotY Caption Generator AI"
+APP_VERSION = "4.5"
+APP_AUTHOR = "NotY215"
 
 class Colors:
     RESET = '\033[0m'
@@ -27,11 +34,28 @@ class Colors:
 if platform.system() == "Windows":
     os.system('color')
 
+def is_admin():
+    """Check if running as administrator"""
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+def run_as_admin():
+    """Re-run the script as administrator"""
+    try:
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", sys.executable, " ".join(sys.argv), None, 1
+        )
+        return True
+    except:
+        return False
+
 def print_header():
     print(f"{Colors.CYAN}{Colors.BOLD}")
     print("+" + "=" * 58 + "+")
-    print("|" + "NotY Caption Generator AI Uninstaller v4.4".center(58) + "|")
-    print("|" + "Copyright (c) 2026 NotY215".center(58) + "|")
+    print("|" + f"{APP_NAME} Uninstaller v{APP_VERSION}".center(58) + "|")
+    print("|" + f"Copyright (c) 2026 {APP_AUTHOR}".center(58) + "|")
     print("+" + "=" * 58 + "+")
     print(f"{Colors.RESET}")
 
@@ -47,13 +71,30 @@ def print_info(message):
 def get_install_path():
     """Get install path from registry"""
     try:
-        ps = 'Get-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "InstallPath" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty InstallPath'
-        result = subprocess.run(["powershell", "-Command", ps], capture_output=True, text=True)
-        if result.stdout.strip():
-            return Path(result.stdout.strip())
+        key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NotYCaptionGenAI"
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path, 0, winreg.KEY_READ)
+        install_path, _ = winreg.QueryValueEx(key, "InstallLocation")
+        winreg.CloseKey(key)
+        return Path(install_path)
     except:
-        pass
-    return None
+        return None
+
+def remove_registry():
+    """Remove registry entries"""
+    try:
+        key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NotYCaptionGenAI"
+        winreg.DeleteKey(winreg.HKEY_LOCAL_MACHINE, key_path)
+        print_success("Registry entries removed")
+        return True
+    except FileNotFoundError:
+        print_info("Registry entries not found")
+        return True
+    except PermissionError:
+        print_error("Permission denied - run as administrator")
+        return False
+    except Exception as e:
+        print_error(f"Failed to remove registry: {e}")
+        return False
 
 def get_directory_size(path):
     """Get directory size in MB"""
@@ -67,6 +108,17 @@ def get_directory_size(path):
     return total / (1024 * 1024)
 
 def uninstall():
+    # Check for admin privileges
+    if not is_admin():
+        print_warning = lambda x: print(f"{Colors.YELLOW}[WARNING] {x}{Colors.RESET}")
+        print_warning("Administrator privileges required for complete uninstallation!")
+        print_info("The uninstaller will now restart with administrator privileges...")
+        time.sleep(2)
+        if run_as_admin():
+            sys.exit(0)
+        else:
+            print_error("Failed to elevate privileges. Uninstallation will continue but registry may not be removed.")
+    
     print_header()
     print_info("Starting uninstallation process...")
     print()
@@ -74,8 +126,7 @@ def uninstall():
     install_path = get_install_path()
     
     if not install_path or not install_path.exists():
-        print_error("Installation not found!")
-        print_info("No registry entry found for NotY Caption Generator AI.")
+        print_error("Installation not found in registry!")
         print_info("If the application was installed manually, please delete the folder manually.")
         return False
     
@@ -83,7 +134,7 @@ def uninstall():
     print_info(f"Installation size: {get_directory_size(install_path):.2f} MB")
     print()
     
-    print(f"{Colors.YELLOW}[WARNING] This will permanently remove NotY Caption Generator AI{Colors.RESET}")
+    print(f"{Colors.YELLOW}[WARNING] This will permanently remove {APP_NAME}{Colors.RESET}")
     print(f"{Colors.YELLOW}   and all its components from your computer.{Colors.RESET}")
     print()
     
@@ -95,15 +146,17 @@ def uninstall():
     print()
     
     try:
+        # Remove installation directory
         print_info("Removing application files...")
         shutil.rmtree(install_path, ignore_errors=True)
         print_success("Application files removed")
         
+        # Remove shortcuts
         print_info("Removing shortcuts...")
         shortcuts = [
-            Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAi.lnk",
-            Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAi.lnk",
-            Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo" / "NotYCaptionGenAi.lnk"
+            Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAI.lnk",
+            Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAI.lnk",
+            Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo" / "NotYCaptionGenAI.lnk"
         ]
         for shortcut in shortcuts:
             if shortcut.exists():
@@ -111,17 +164,15 @@ def uninstall():
                 print(f"  Removed: {shortcut.name}")
         print_success("Shortcuts removed")
         
+        # Remove registry entries
         print_info("Removing registry entries...")
-        subprocess.run(
-            ["powershell", "-Command", 'Remove-Item -Path "HKCU:\\Software\\NotYCaptionGenAi" -Recurse -Force -ErrorAction SilentlyContinue'],
-            capture_output=True
-        )
-        print_success("Registry entries removed")
+        remove_registry()
         
         print()
         print_success("Uninstallation complete!")
-        print_info("NotY Caption Generator AI has been removed from your computer.")
+        print_info(f"{APP_NAME} has been removed from your computer.")
         
+        # Self-delete
         if getattr(sys, 'frozen', False):
             uninstaller_path = Path(sys.executable)
             print_info("The uninstaller will now delete itself...")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NotY Caption Generator AI Installer v4.4 (Console)
+NotY Caption Generator AI Installer v4.5 (Console)
 Copyright (c) 2026 NotY215
 """
 
@@ -16,13 +16,17 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog
 import tempfile
+import winreg
 
+# Application metadata
+APP_NAME = "NotY Caption Generator AI"
 APP_VERSION = "4.5"
 APP_AUTHOR = "NotY215"
-APP_TELEGRAM = "https://t.me/NotY_215"
+APP_YEAR = "2026"
+MAIN_EXE = "NotYCaptionGenAI.exe"
+UNINSTALL_EXE = "NotYCaptionGenAI_Uninstaller.exe"
 
 # Colors for console output
-
 class Colors:
     RESET = '\033[0m'
     RED = '\033[91m'
@@ -37,13 +41,30 @@ class Colors:
 if platform.system() == "Windows":
     os.system('color')
 
+def is_admin():
+    """Check if running as administrator"""
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+def run_as_admin():
+    """Re-run the script as administrator"""
+    try:
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", sys.executable, " ".join(sys.argv), None, 1
+        )
+        return True
+    except:
+        return False
+
 def print_header():
     """Print application header"""
     print(f"{Colors.CYAN}{Colors.BOLD}")
     print("+" + "=" * 58 + "+")
-    print("|" + "NotY Caption Generator AI Installer v4.4".center(58) + "|")
-    print("|" + "Copyright (c) 2026 NotY215".center(58) + "|")
-    print("|" + "License: LGPL-3.0".center(58) + "|")
+    print("|" + f"{APP_NAME} Installer v{APP_VERSION}".center(58) + "|")
+    print("|" + f"Copyright (c) {APP_YEAR} {APP_AUTHOR}".center(58) + "|")
+    print("|" + f"License: LGPL-3.0".center(58) + "|")
     print("+" + "=" * 58 + "+")
     print(f"{Colors.RESET}")
 
@@ -91,6 +112,63 @@ def select_folder_dialog():
         print_error(f"Could not open folder dialog: {e}")
         return None
 
+def register_uninstall(install_path):
+    """Register application in Windows Add/Remove Programs"""
+    try:
+        key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NotYCaptionGenAI"
+        
+        # Try to open/create registry key
+        key = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, key_path)
+        
+        # Set registry values
+        winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, APP_NAME)
+        winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, APP_VERSION)
+        winreg.SetValueEx(key, "Publisher", 0, winreg.REG_SZ, APP_AUTHOR)
+        winreg.SetValueEx(key, "URLInfoAbout", 0, winreg.REG_SZ, "https://t.me/Noty_215")
+        winreg.SetValueEx(key, "DisplayIcon", 0, winreg.REG_SZ, str(install_path / MAIN_EXE))
+        winreg.SetValueEx(key, "InstallLocation", 0, winreg.REG_SZ, str(install_path))
+        winreg.SetValueEx(key, "UninstallString", 0, winreg.REG_SZ, str(install_path / UNINSTALL_EXE))
+        winreg.SetValueEx(key, "QuietUninstallString", 0, winreg.REG_SZ, f'"{install_path / UNINSTALL_EXE}" /S')
+        winreg.SetValueEx(key, "NoModify", 0, winreg.REG_DWORD, 1)
+        winreg.SetValueEx(key, "NoRepair", 0, winreg.REG_DWORD, 1)
+        winreg.SetValueEx(key, "EstimatedSize", 0, winreg.REG_DWORD, 0)
+        
+        winreg.CloseKey(key)
+        print_success("Application registered in Windows Add/Remove Programs")
+        return True
+    except PermissionError:
+        print_error("Permission denied - registry write failed (run as administrator)")
+        return False
+    except Exception as e:
+        print_error(f"Registry error: {e}")
+        return False
+
+def create_shortcut(path, target, description=""):
+    """Create Windows shortcut with description"""
+    ps = f'''$s = New-Object -ComObject WScript.Shell
+$l = $s.CreateShortcut("{path}")
+$l.TargetPath = "{target}"
+$l.Description = "{description}"
+$l.WorkingDirectory = "{Path(target).parent}"
+$l.Save()'''
+    subprocess.run(["powershell", "-Command", ps], capture_output=True)
+
+def create_start_menu_shortcut(install_dir):
+    """Create Start Menu shortcut"""
+    start = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAI.lnk"
+    create_shortcut(str(start), str(install_dir / MAIN_EXE), f"{APP_NAME} v{APP_VERSION}")
+
+def create_desktop_shortcut(install_dir):
+    """Create Desktop shortcut"""
+    desktop = Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAI.lnk"
+    create_shortcut(str(desktop), str(install_dir / MAIN_EXE), f"{APP_NAME} v{APP_VERSION}")
+
+def register_sendto_menu(install_dir):
+    """Register to Send To menu"""
+    sendto = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo" / "NotYCaptionGenAI.lnk"
+    sendto.parent.mkdir(parents=True, exist_ok=True)
+    create_shortcut(str(sendto), str(install_dir / MAIN_EXE), f"{APP_NAME} v{APP_VERSION}")
+
 def get_free_space(path):
     """Get free disk space in bytes"""
     try:
@@ -100,55 +178,25 @@ def get_free_space(path):
                 drive = "C:"
             
             free_bytes = ctypes.c_ulonglong(0)
+            total_bytes = ctypes.c_ulonglong(0)
             ret = ctypes.windll.kernel32.GetDiskFreeSpaceExW(
                 ctypes.c_wchar_p(drive + "\\"),
                 ctypes.byref(free_bytes),
-                None,
+                ctypes.byref(total_bytes),
                 None
             )
             if ret:
                 return free_bytes.value
             else:
                 import shutil
-                return shutil.disk_usage(drive).free
+                free_bytes = shutil.disk_usage(drive).free
+                return free_bytes
         else:
             import shutil
             return shutil.disk_usage(path).free
     except Exception as e:
         print_warning(f"Could not get free space: {e}")
         return 1024 * 1024 * 1024 * 100
-
-def get_total_ram():
-    """Get total RAM in bytes"""
-    try:
-        if platform.system() == "Windows":
-            class MEMORYSTATUSEX(ctypes.Structure):
-                _fields_ = [
-                    ("dwLength", ctypes.c_ulong),
-                    ("dwMemoryLoad", ctypes.c_ulong),
-                    ("ullTotalPhys", ctypes.c_ulonglong),
-                    ("ullAvailPhys", ctypes.c_ulonglong),
-                    ("ullTotalPageFile", ctypes.c_ulonglong),
-                    ("ullAvailPageFile", ctypes.c_ulonglong),
-                    ("ullTotalVirtual", ctypes.c_ulonglong),
-                    ("ullAvailVirtual", ctypes.c_ulonglong),
-                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
-                ]
-            
-            memory_status = MEMORYSTATUSEX()
-            memory_status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(memory_status)):
-                return memory_status.ullTotalPhys
-            else:
-                return 8 * 1024 * 1024 * 1024
-        else:
-            with open('/proc/meminfo', 'r') as f:
-                for line in f:
-                    if line.startswith('MemTotal:'):
-                        return int(line.split()[1]) * 1024
-    except Exception as e:
-        print_warning(f"Could not get RAM info: {e}")
-        return 8 * 1024 * 1024 * 1024
 
 def check_requirements(install_path):
     """Check system requirements"""
@@ -170,19 +218,6 @@ def check_requirements(install_path):
             print_success(f"Disk space OK (3 GB required)")
     except Exception as e:
         print_warning(f"Could not check disk space: {e}")
-    
-    try:
-        total_ram = get_total_ram()
-        total_ram_gb = total_ram / (1024 ** 3)
-        print_info(f"Total RAM: {total_ram_gb:.2f} GB")
-        
-        if total_ram_gb < 2:
-            print_error(f"Insufficient RAM! Need 2 GB, but only {total_ram_gb:.2f} GB available.")
-            all_requirements_met = False
-        else:
-            print_success(f"RAM OK (2 GB required)")
-    except Exception as e:
-        print_warning(f"Could not check RAM: {e}")
     
     return all_requirements_met
 
@@ -207,38 +242,53 @@ def copy_directory(src, dst):
     
     print(f"\r  Progress: 100%")
 
-def register_application(install_dir):
-    """Register application in Windows registry"""
-    reg = f'''
-New-Item -Path "HKCU:\\Software\\NotYCaptionGenAi" -Force | Out-Null
-Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "InstallPath" -Value "{install_dir}"
-Set-ItemProperty -Path "HKCU:\\Software\\NotYCaptionGenAi" -Name "Version" -Value "4.4"
-'''
-    subprocess.run(["powershell", "-Command", reg], capture_output=True)
+def get_executable_path(installer_dir):
+    """Find the main executable in the installer directory or temp extraction"""
+    exe_path = installer_dir / MAIN_EXE
+    if exe_path.exists():
+        return exe_path
+    
+    exe_path = Path.cwd() / MAIN_EXE
+    if exe_path.exists():
+        return exe_path
+    
+    temp_dir = Path(tempfile.gettempdir())
+    for temp_subdir in temp_dir.iterdir():
+        if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
+            exe_path = temp_subdir / MAIN_EXE
+            if exe_path.exists():
+                return exe_path
+    
+    if getattr(sys, 'frozen', False):
+        exe_path = Path(sys.executable).parent / MAIN_EXE
+        if exe_path.exists():
+            return exe_path
+    
+    return None
 
-def create_shortcut(path, target):
-    """Create Windows shortcut"""
-    ps = f'''$s = New-Object -ComObject WScript.Shell
-$l = $s.CreateShortcut("{path}")
-$l.TargetPath = "{target}"
-$l.Save()'''
-    subprocess.run(["powershell", "-Command", ps], capture_output=True)
-
-def create_start_menu_shortcut(install_dir):
-    """Create Start Menu shortcut"""
-    start = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAi.lnk"
-    create_shortcut(str(start), str(install_dir / "NotYCaptionGenAI.exe"))
-
-def create_desktop_shortcut(install_dir):
-    """Create Desktop shortcut"""
-    desktop = Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAi.lnk"
-    create_shortcut(str(desktop), str(install_dir / "NotYCaptionGenAI.exe"))
-
-def register_sendto_menu(install_dir):
-    """Register to Send To menu"""
-    sendto = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo" / "NotYCaptionGenAi.lnk"
-    sendto.parent.mkdir(parents=True, exist_ok=True)
-    create_shortcut(str(sendto), str(install_dir / "NotYCaptionGenAI.exe"))
+def get_uninstaller_path(installer_dir):
+    """Find the uninstaller executable"""
+    uninstaller_path = installer_dir / UNINSTALL_EXE
+    if uninstaller_path.exists():
+        return uninstaller_path
+    
+    uninstaller_path = Path.cwd() / UNINSTALL_EXE
+    if uninstaller_path.exists():
+        return uninstaller_path
+    
+    temp_dir = Path(tempfile.gettempdir())
+    for temp_subdir in temp_dir.iterdir():
+        if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
+            uninstaller_path = temp_subdir / UNINSTALL_EXE
+            if uninstaller_path.exists():
+                return uninstaller_path
+    
+    if getattr(sys, 'frozen', False):
+        uninstaller_path = Path(sys.executable).parent / UNINSTALL_EXE
+        if uninstaller_path.exists():
+            return uninstaller_path
+    
+    return None
 
 def get_directory_size(path):
     """Get directory size in MB"""
@@ -248,86 +298,17 @@ def get_directory_size(path):
             total += item.stat().st_size
     return total / (1024 * 1024)
 
-def get_executable_path(installer_dir):
-    """Find the main executable in the installer directory or temp extraction"""
-    exe_path = installer_dir / "NotYCaptionGenAI.exe"
-    if exe_path.exists():
-        return exe_path
-    
-    exe_path = Path.cwd() / "NotYCaptionGenAI.exe"
-    if exe_path.exists():
-        return exe_path
-    
-    temp_dir = Path(tempfile.gettempdir())
-    for temp_subdir in temp_dir.iterdir():
-        if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
-            exe_path = temp_subdir / "NotYCaptionGenAI.exe"
-            if exe_path.exists():
-                return exe_path
-    
-    if getattr(sys, 'frozen', False):
-        exe_path = Path(sys.executable).parent / "NotYCaptionGenAI.exe"
-        if exe_path.exists():
-            return exe_path
-    
-    return None
-
-def get_uninstaller_path(installer_dir):
-    """Find the uninstaller executable"""
-    uninstaller_path = installer_dir / "NotYCaptionGenAI_Uninstaller.exe"
-    if uninstaller_path.exists():
-        return uninstaller_path
-    
-    uninstaller_path = Path.cwd() / "NotYCaptionGenAI_Uninstaller.exe"
-    if uninstaller_path.exists():
-        return uninstaller_path
-    
-    temp_dir = Path(tempfile.gettempdir())
-    for temp_subdir in temp_dir.iterdir():
-        if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
-            uninstaller_path = temp_subdir / "NotYCaptionGenAI_Uninstaller.exe"
-            if uninstaller_path.exists():
-                return uninstaller_path
-    
-    if getattr(sys, 'frozen', False):
-        uninstaller_path = Path(sys.executable).parent / "NotYCaptionGenAI_Uninstaller.exe"
-        if uninstaller_path.exists():
-            return uninstaller_path
-    
-    return None
-
-def create_uninstaller_batch(install_dir):
-    """Create batch uninstaller as fallback"""
-    uninstaller_content = f'''@echo off
-echo ============================================================
-echo   NotY Caption Generator AI Uninstaller v4.4
-echo   Copyright (c) 2026 NotY215
-echo ============================================================
-echo.
-
-echo Removing files...
-rmdir /s /q "{install_dir}" 2>nul
-
-echo Removing shortcuts...
-del "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\NotYCaptionGenAi.lnk" 2>nul
-del "%USERPROFILE%\\Desktop\\NotYCaptionGenAi.lnk" 2>nul
-del "%APPDATA%\\Microsoft\\Windows\\SendTo\\NotYCaptionGenAi.lnk" 2>nul
-
-echo Removing registry entries...
-reg delete "HKCU\\Software\\NotYCaptionGenAi" /f 2>nul
-
-echo.
-echo ============================================================
-echo Uninstallation complete!
-echo ============================================================
-echo.
-pause
-'''
-    uninstaller_path = install_dir / "uninstall.bat"
-    with open(uninstaller_path, 'w', encoding='utf-8') as f:
-        f.write(uninstaller_content)
-
 def install():
+    # Check for admin privileges
+    if not is_admin():
+        print_warning("Administrator privileges required for registry registration!")
+        print_info("The installer will now restart with administrator privileges...")
+        time.sleep(2)
+        if run_as_admin():
+            sys.exit(0)
+        else:
+            print_error("Failed to elevate privileges. Installation will continue but registry may not be registered.")
+    
     print_header()
     
     if getattr(sys, 'frozen', False):
@@ -382,7 +363,7 @@ def install():
     print_header()
     if not check_requirements(install_path):
         print_error("\nSystem requirements not met!")
-        print_info("Requirements: 3 GB free disk space, 2 GB RAM")
+        print_info("Requirements: 3 GB free disk space")
         print_info("You can still continue, but the application may not work properly.")
         response = input(f"{Colors.CYAN}Continue anyway? (y/n): {Colors.RESET}").lower()
         if response not in ['y', 'yes']:
@@ -400,7 +381,7 @@ def install():
         if exe_file and exe_file.exists():
             print_info(f"Found main executable: {exe_file}")
             print_info("Copying main executable...")
-            shutil.copy2(exe_file, install_path / "NotYCaptionGenAI.exe")
+            shutil.copy2(exe_file, install_path / MAIN_EXE)
             print_success("Main executable copied")
         else:
             print_error("Main executable not found!")
@@ -409,12 +390,10 @@ def install():
         uninstaller_file = get_uninstaller_path(installer_dir)
         if uninstaller_file and uninstaller_file.exists():
             print_info("Copying uninstaller...")
-            shutil.copy2(uninstaller_file, install_path / "NotYCaptionGenAI_Uninstaller.exe")
+            shutil.copy2(uninstaller_file, install_path / UNINSTALL_EXE)
             print_success("Uninstaller copied")
-        else:
-            print_warning("Uninstaller not found, creating batch uninstaller")
-            create_uninstaller_batch(install_path)
         
+        # Copy resources
         resources_dir = installer_dir / "resources"
         if not resources_dir.exists():
             temp_dir = Path(tempfile.gettempdir())
@@ -431,9 +410,26 @@ def install():
                 shutil.rmtree(dest_resources)
             copy_directory(resources_dir, dest_resources)
             print_success("Resources copied")
-        else:
-            print_warning("Resources not found")
         
+        # Copy ffmpeg
+        ffmpeg_dir = installer_dir / "ffmpeg"
+        if not ffmpeg_dir.exists():
+            temp_dir = Path(tempfile.gettempdir())
+            for temp_subdir in temp_dir.iterdir():
+                if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
+                    ffmpeg_dir = temp_subdir / "ffmpeg"
+                    if ffmpeg_dir.exists():
+                        break
+        
+        if ffmpeg_dir and ffmpeg_dir.exists():
+            print_info("Copying ffmpeg...")
+            dest_ffmpeg = install_path / "ffmpeg"
+            if dest_ffmpeg.exists():
+                shutil.rmtree(dest_ffmpeg)
+            copy_directory(ffmpeg_dir, dest_ffmpeg)
+            print_success("ffmpeg copied")
+        
+        # Copy models
         models_dir = installer_dir / "models"
         if not models_dir.exists():
             temp_dir = Path(tempfile.gettempdir())
@@ -451,24 +447,26 @@ def install():
             copy_directory(models_dir, dest_models)
             print_success("Models copied")
         
+        # Create shortcuts
         print_info("Creating shortcuts...")
         create_start_menu_shortcut(install_path)
         create_desktop_shortcut(install_path)
         register_sendto_menu(install_path)
         print_success("Shortcuts created")
         
-        print_info("Registering application...")
-        register_application(install_path)
-        print_success("Application registered")
+        # Register in Windows
+        print_info("Registering in Windows...")
+        register_uninstall(install_path)
         
         print_header()
         print_success(f"Installation Complete!")
         print_info(f"Installed to: {install_path}")
         print_info(f"Size: {get_directory_size(install_path):.2f} MB")
         print()
+        print_info(f"Application: {install_path / MAIN_EXE}")
         print_info("You can now run NotYCaptionGenAI.exe from the installation directory")
         print_info("Or right-click any video/audio file and select 'Send To' > 'NotYCaptionGenAi'")
-        print_info("To uninstall, run NotYCaptionGenAI_Uninstaller.exe from the installation directory")
+        print_info("To uninstall, use Windows Add/Remove Programs or run NotYCaptionGenAI_Uninstaller.exe")
         
         return True
         
@@ -476,33 +474,6 @@ def install():
         print_error(f"Installation failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
-
-def register_with_windows(install_dir):
-    """Register application in Windows Add/Remove Programs"""
-    try:
-        import winreg
-        
-        # Create registry key
-        key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NotYCaptionGenAI"
-        
-        with winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
-            winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, "NotY Caption Generator AI")
-            winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, APP_VERSION)
-            winreg.SetValueEx(key, "Publisher", 0, winreg.REG_SZ, APP_AUTHOR)
-            winreg.SetValueEx(key, "URLInfoAbout", 0, winreg.REG_SZ, APP_TELEGRAM)
-            winreg.SetValueEx(key, "DisplayIcon", 0, winreg.REG_SZ, str(install_dir / "NotYCaptionGenAI.exe"))
-            winreg.SetValueEx(key, "InstallLocation", 0, winreg.REG_SZ, str(install_dir))
-            winreg.SetValueEx(key, "UninstallString", 0, winreg.REG_SZ, str(install_dir / "NotYCaptionGenAI_Uninstaller.exe"))
-            winreg.SetValueEx(key, "QuietUninstallString", 0, winreg.REG_SZ, f'"{install_dir / "NotYCaptionGenAI_Uninstaller.exe"}" /S')
-            winreg.SetValueEx(key, "NoModify", 0, winreg.REG_DWORD, 1)
-            winreg.SetValueEx(key, "NoRepair", 0, winreg.REG_DWORD, 1)
-            
-        print_success("Application registered in Windows")
-        return True
-    except Exception as e:
-        print_warning(f"Could not register in Windows: {e}")
-        print_info("You may need to run as administrator for full registration")
         return False
 
 if __name__ == "__main__":

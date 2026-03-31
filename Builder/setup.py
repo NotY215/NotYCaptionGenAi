@@ -11,10 +11,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
+APP_NAME = "NotYCaptionGenAI"
+APP_VERSION = "4.5"
+APP_AUTHOR = "NotY215"
+INSTALLER_NAME = f"NotYCaptionGenAI_Installer_v{APP_VERSION}.exe"
+
 def build_all():
     print("=" * 60)
-    print("Building NotY Caption Generator AI v4.5")
-    print("Copyright (c) 2026 NotY215")
+    print(f"Building {APP_NAME} v{APP_VERSION}")
+    print(f"Copyright (c) 2026 {APP_AUTHOR}")
     print("=" * 60)
     
     base_dir = Path(__file__).parent.parent
@@ -40,7 +45,7 @@ def build_all():
         print(f"[ERROR] Build failed: {e}")
         sys.exit(1)
     
-    main_exe = dist_dir / "NotYCaptionGenAI.exe"
+    main_exe = dist_dir / f"{APP_NAME}.exe"
     if not main_exe.exists():
         print("[ERROR] Main executable not found!")
         sys.exit(1)
@@ -86,7 +91,7 @@ def build_all():
         shutil.rmtree(temp_dir)
     temp_dir.mkdir(parents=True, exist_ok=True)
     
-    shutil.copy2(main_exe, temp_dir / "NotYCaptionGenAI.exe")
+    shutil.copy2(main_exe, temp_dir / f"{APP_NAME}.exe")
     shutil.copy2(uninstaller_exe, temp_dir / "NotYCaptionGenAI_Uninstaller.exe")
     
     resources_dir = base_dir / "resources"
@@ -94,7 +99,6 @@ def build_all():
         shutil.copytree(resources_dir, temp_dir / "resources")
         print("  Copied resources")
     
-    # Copy ffmpeg folder
     ffmpeg_dir = base_dir / "ffmpeg"
     if ffmpeg_dir.exists() and any(ffmpeg_dir.iterdir()):
         print("  Including ffmpeg...")
@@ -113,9 +117,9 @@ def build_all():
     
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--name=NotYCaptionGenAI_Installer_v4.5",
+        f"--name={APP_NAME}_Installer_v{APP_VERSION}",
         "--onefile",
-        f"--add-data={temp_dir / 'NotYCaptionGenAI.exe'}{os.pathsep}.",
+        f"--add-data={temp_dir / f'{APP_NAME}.exe'}{os.pathsep}.",
         f"--add-data={temp_dir / 'NotYCaptionGenAI_Uninstaller.exe'}{os.pathsep}.",
         f"--add-data={temp_dir / 'resources'}{os.pathsep}resources",
         "--hidden-import=ctypes",
@@ -126,6 +130,7 @@ def build_all():
         "--hidden-import=tkinter",
         "--hidden-import=tkinter.filedialog",
         "--hidden-import=tempfile",
+        "--hidden-import=winreg",
         "--console",
         "--noconfirm",
         installer_py
@@ -148,9 +153,9 @@ def build_all():
         print(f"\n[ERROR] Installer build failed: {e}")
         sys.exit(1)
     
-    installer_exe = temp_dir / "dist" / "NotYCaptionGenAI_Installer_v4.5.exe"
+    installer_exe = temp_dir / "dist" / f"{APP_NAME}_Installer_v{APP_VERSION}.exe"
     if installer_exe.exists():
-        final_installer = base_dir / "NotYCaptionGenAI_Installer_v4.5.exe"
+        final_installer = base_dir / INSTALLER_NAME
         shutil.copy2(installer_exe, final_installer)
         size = final_installer.stat().st_size / 1024 / 1024
         print(f"\n[OK] Installer created: {final_installer} ({size:.2f} MB)")
@@ -163,7 +168,7 @@ def build_all():
     
     print("\n" + "=" * 60)
     print("Build complete!")
-    print(f"Installer: {base_dir / 'NotYCaptionGenAI_Installer_v4.5.exe'}")
+    print(f"Installer: {base_dir / INSTALLER_NAME}")
     print("=" * 60)
 
 if __name__ == "__main__":
