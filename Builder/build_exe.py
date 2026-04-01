@@ -41,12 +41,17 @@ def build_exe():
             if file.is_file():
                 ffmpeg_datas.append((str(file), 'ffmpeg'))
     
-    # Create version info for Windows
+    # Parse version numbers
+    version_parts = [int(x) for x in APP_VERSION.split('.')]
+    while len(version_parts) < 4:
+        version_parts.append(0)
+    
+    # Create version info for Windows with correct format
     version_info = f'''
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=({APP_VERSION.replace('.', ',')}, 0),
-    prodvers=({APP_VERSION.replace('.', ',')}, 0),
+    filevers=({version_parts[0]}, {version_parts[1]}, {version_parts[2]}, {version_parts[3]}),
+    prodvers=({version_parts[0]}, {version_parts[1]}, {version_parts[2]}, {version_parts[3]}),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
