@@ -152,6 +152,11 @@ class NotYCaptionGenerator:
             ("Song Mode", "song", "Enhanced lyrics with online search for songs")
         ]
         
+        self.song_search_options = [
+            ("Auto Detect Song", "auto", "Automatically detect song name from filename"),
+            ("Manual Song Name", "manual", "Enter song name manually for accurate lyrics search")
+        ]
+        
         self.line_types = [
             ("Words", "words", "Break by word count"),
             ("Letters", "letters", "Break by character limit"),
@@ -161,7 +166,9 @@ class NotYCaptionGenerator:
         self.selected_model = None
         self.selected_language = None
         self.selected_mode = None
+        self.selected_song_search = None
         self.selected_line_type = None
+        self.manual_song_name = None
         self.media_path_arg = media_path
         self.model = None
         self.temp_audio = None
@@ -369,7 +376,7 @@ class NotYCaptionGenerator:
         song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
         song_name = re.sub(r'\s+', ' ', song_name).strip()
         
-        # Method 1: Try Genius API
+        # Method 1: Try Genius
         try:
             encoded_query = urllib.parse.quote(song_name)
             url = f"https://genius.com/search?q={encoded_query}"
@@ -422,6 +429,29 @@ class NotYCaptionGenerator:
         self.print_warning("Could not find lyrics online")
         return None
         
+    def search_lyrics_youtube(self, song_name: str) -> str:
+        """Search for lyrics using YouTube API"""
+        self.print_progress(f"Searching YouTube for: {song_name}", 55)
+        
+        try:
+            # Use youtube-dl or yt-dlp to search (simplified)
+            encoded_query = urllib.parse.quote(f"{song_name} lyrics")
+            url = f"https://www.youtube.com/results?search_query={encoded_query}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8')
+                
+                # Extract first video URL
+                match = re.search(r'/watch\?v=([a-zA-Z0-9_-]{11})', html)
+                if match:
+                    video_id = match.group(1)
+                    # For lyrics, we'll use the existing search results
+                    self.print_info(f"Found video: https://youtube.com/watch?v={video_id}")
+        except:
+            pass
+        
+        return None
+        
     def load_model(self, model_name: str):
         try:
             import whisper
@@ -438,34 +468,24 @@ class NotYCaptionGenerator:
         if language_code == "hi":
             # Complete Hindi to English transliteration
             hindi_map = {
-                # Vowels
                 'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
                 'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
-                'ऋ': 'ri', 'ॠ': 'ree',
-                # Consonants
-                'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
+                'ऋ': 'ri', 'ॠ': 'ree', 'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
                 'च': 'cha', 'छ': 'chha', 'ज': 'ja', 'झ': 'jha', 'ञ': 'nya',
                 'ट': 'ta', 'ठ': 'tha', 'ड': 'da', 'ढ': 'dha', 'ण': 'na',
                 'त': 'ta', 'थ': 'tha', 'द': 'da', 'ध': 'dha', 'न': 'na',
                 'प': 'pa', 'फ': 'pha', 'ब': 'ba', 'भ': 'bha', 'म': 'ma',
                 'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha',
                 'ष': 'sha', 'स': 'sa', 'ह': 'ha', 'क्ष': 'ksha', 'त्र': 'tra',
-                'ज्ञ': 'gya', 'श्र': 'shra',
-                # Vowel signs
-                'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
-                'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h',
-                '्': '',
-                # Numbers
-                '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
-                '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
+                'ज्ञ': 'gya', 'श्र': 'shra', 'ा': 'a', 'ि': 'i', 'ी': 'ee',
+                'ु': 'u', 'ू': 'oo', 'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au',
+                'ं': 'n', 'ः': 'h', '्': '', '०': '0', '१': '1', '२': '2',
+                '३': '3', '४': '4', '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
             }
             for hindi, english in hindi_map.items():
                 text = text.replace(hindi, english)
-                
         elif language_code == "ja":
-            # Japanese to Romaji conversion
             ja_map = {
-                # Hiragana
                 'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
                 'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
                 'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
@@ -473,10 +493,8 @@ class NotYCaptionGenerator:
                 'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
                 'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
                 'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
-                'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
-                'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
-                'わ': 'wa', 'を': 'wo', 'ん': 'n',
-                # Katakana
+                'や': 'ya', 'ゆ': 'yu', 'よ': 'yo', 'ら': 'ra', 'り': 'ri',
+                'る': 'ru', 'れ': 're', 'ろ': 'ro', 'わ': 'wa', 'を': 'wo', 'ん': 'n',
                 'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
                 'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
                 'サ': 'sa', 'シ': 'shi', 'ス': 'su', 'セ': 'se', 'ソ': 'so',
@@ -484,20 +502,14 @@ class NotYCaptionGenerator:
                 'ナ': 'na', 'ニ': 'ni', 'ヌ': 'nu', 'ネ': 'ne', 'ノ': 'no',
                 'ハ': 'ha', 'ヒ': 'hi', 'フ': 'fu', 'ヘ': 'he', 'ホ': 'ho',
                 'マ': 'ma', 'ミ': 'mi', 'ム': 'mu', 'メ': 'me', 'モ': 'mo',
-                'ヤ': 'ya', 'ユ': 'yu', 'ヨ': 'yo',
-                'ラ': 'ra', 'リ': 'ri', 'ル': 'ru', 'レ': 're', 'ロ': 'ro',
-                'ワ': 'wa', 'ヲ': 'wo', 'ン': 'n',
-                # Small characters
-                'ゃ': 'ya', 'ゅ': 'yu', 'ょ': 'yo',
-                'ャ': 'ya', 'ュ': 'yu', 'ョ': 'yo',
+                'ヤ': 'ya', 'ユ': 'yu', 'ヨ': 'yo', 'ラ': 'ra', 'リ': 'ri',
+                'ル': 'ru', 'レ': 're', 'ロ': 'ro', 'ワ': 'wa', 'ヲ': 'wo', 'ン': 'n',
+                'ゃ': 'ya', 'ゅ': 'yu', 'ょ': 'yo', 'ャ': 'ya', 'ュ': 'yu', 'ョ': 'yo',
                 'っ': 't', 'ッ': 't'
             }
             for japanese, romaji in ja_map.items():
                 text = text.replace(japanese, romaji)
-                
-            # Handle double consonants
             text = re.sub(r'([bcdfghjklmnpqrstvwxyz])\1+', r'\1\1', text)
-            
         return text
         
     def format_time(self, seconds: float) -> str:
@@ -552,7 +564,6 @@ class NotYCaptionGenerator:
             start_time = segment["start"]
             end_time = segment["end"]
             
-            # Check for natural break
             if text.endswith(('.', '!', '?')):
                 subtitles.append({
                     "index": index,
@@ -572,7 +583,6 @@ class NotYCaptionGenerator:
                 index += 1
                 i += 1
             else:
-                # Merge with next segments
                 merged_text = text
                 merged_end = end_time
                 j = i + 1
@@ -601,7 +611,8 @@ class NotYCaptionGenerator:
                 
         return subtitles
         
-    def generate_song_lyrics(self, media_path: Path, model_name: str, language_code: str) -> bool:
+    def generate_song_lyrics(self, media_path: Path, model_name: str, language_code: str, 
+                              song_search_type: str, manual_song_name: str = None) -> bool:
         """Generate lyrics using song mode with online search"""
         try:
             import whisper
@@ -618,10 +629,15 @@ class NotYCaptionGenerator:
             # Separate vocals for better lyrics
             vocal_path = self.separate_vocals(audio_path)
             
-            # Get song name from filename
-            song_name = media_path.stem
-            song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
-            song_name = re.sub(r'\s+', ' ', song_name).strip()
+            # Get song name
+            if song_search_type == "manual" and manual_song_name:
+                song_name = manual_song_name.strip()
+                self.print_info(f"Searching for: {song_name}")
+            else:
+                song_name = media_path.stem
+                song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
+                song_name = re.sub(r'\s+', ' ', song_name).strip()
+                self.print_info(f"Auto-detected song: {song_name}")
             
             # Search for lyrics online
             online_lyrics = self.search_lyrics_online(song_name)
@@ -657,7 +673,6 @@ class NotYCaptionGenerator:
                 for i, segment in enumerate(segments):
                     if i < len(lyrics_lines):
                         text = lyrics_lines[i]
-                        # Apply transliteration if needed
                         if language_code in ["hi", "ja"]:
                             text = self.transliterate_text(text, language_code)
                         subtitles.append({
@@ -672,7 +687,6 @@ class NotYCaptionGenerator:
             else:
                 # Use transcribed text with auto break
                 segments = result.get("segments", [])
-                # Apply transliteration if needed
                 if language_code in ["hi", "ja"]:
                     for seg in segments:
                         seg["text"] = self.transliterate_text(seg["text"], language_code)
@@ -720,7 +734,6 @@ class NotYCaptionGenerator:
             import whisper
             from datetime import timedelta
             
-            # Handle video files - extract audio
             audio_path = media_path
             if media_path.suffix.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm']:
                 audio_path = self.extract_audio(media_path)
@@ -745,7 +758,6 @@ class NotYCaptionGenerator:
             
             self.print_progress("Processing transcription...", 80)
             
-            # Determine output filename
             output_path = media_path.parent / f"{media_path.stem}"
             if language_code != "auto":
                 output_path = output_path.with_name(f"{media_path.stem}_{language_code}")
@@ -767,7 +779,6 @@ class NotYCaptionGenerator:
                     segment_start = segment.get("start", 0)
                     segment_end = segment.get("end", segment_start + 1)
                     
-                    # Apply transliteration if needed
                     if language_code in ["hi", "ja"]:
                         segment_text = self.transliterate_text(segment_text, language_code)
                     
@@ -805,7 +816,6 @@ class NotYCaptionGenerator:
                         })
                         index += 1
             
-            # Write SRT file
             self.print_progress("Writing subtitle file...", 90)
             with open(output_path, 'w', encoding='utf-8') as f:
                 for sub in subtitles:
@@ -813,7 +823,6 @@ class NotYCaptionGenerator:
                     end_str = self.format_time(sub["end"].total_seconds())
                     f.write(f"{sub['index']}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
             
-            # Clean up temp files
             if audio_path != media_path and audio_path and audio_path.exists():
                 try:
                     audio_path.unlink()
@@ -879,7 +888,7 @@ class NotYCaptionGenerator:
                 language_code = self.selected_language[1]
                 language_name = self.selected_language[0]
                 
-                # Select mode (only show Normal and Song Mode)
+                # Select mode
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
@@ -894,16 +903,40 @@ class NotYCaptionGenerator:
                 self.selected_mode = self.modes[mode_choice]
                 mode = self.selected_mode[1]
                 
-                # If Song Mode, skip line type selection
+                # If Song Mode, select search option
                 if mode == "song":
+                    self.clear_screen()
+                    print_header()
+                    print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
+                    print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
+                    print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
+                    
+                    song_options = [f"{s[0]} - {s[2]}" for s in self.song_search_options]
+                    song_choice = self.show_menu("SONG SEARCH OPTION", song_options)
+                    if song_choice == -1:
+                        continue
+                    
+                    self.selected_song_search = self.song_search_options[song_choice]
+                    song_search_type = self.selected_song_search[1]
+                    
+                    manual_song_name = None
+                    if song_search_type == "manual":
+                        print(f"\n{Colors.CYAN}Enter song name (e.g., Artist - Song Name):{Colors.RESET}")
+                        manual_song_name = self.get_input("> ").strip()
+                        if not manual_song_name:
+                            self.print_error("Song name cannot be empty!")
+                            continue
+                    
                     # Confirm and generate lyrics
                     self.clear_screen()
                     print_header()
+                    search_display = "Auto Detect" if song_search_type == "auto" else f"Manual: {manual_song_name}"
                     self.print_box([
                         f"Media File: {media_path}",
                         f"Model: {self.selected_model.upper()}",
                         f"Language: {language_name}",
-                        f"Mode: SONG MODE - Enhanced lyrics with online search"
+                        f"Mode: SONG MODE",
+                        f"Search: {search_display}"
                     ])
                     
                     if not self.confirm("Generate lyrics?"):
@@ -913,7 +946,9 @@ class NotYCaptionGenerator:
                     success = self.generate_song_lyrics(
                         media_path,
                         self.selected_model,
-                        language_code
+                        language_code,
+                        song_search_type,
+                        manual_song_name
                     )
                 else:
                     # Normal mode - select line type
