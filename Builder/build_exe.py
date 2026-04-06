@@ -73,7 +73,7 @@ VSVersionInfo(
             StringStruct(u'OriginalFilename', u'{APP_NAME}.exe'),
             StringStruct(u'ProductName', u'{APP_NAME}'),
             StringStruct(u'ProductVersion', u'{APP_VERSION}'),
-            StringStruct(u'Comments', u'AI-Powered Caption Generator with Vocal Separation & Song Mode')
+            StringStruct(u'Comments', u'AI-Powered Subtitle & Lyrics Generator with Vocal Separation')
           ]
         )
       ]
@@ -178,6 +178,7 @@ a = Analysis(
         'keras',
         'transformers',
         'datasets',
+        'spleeter',
         
         # Exclude GUI frameworks
         'PyQt5',
