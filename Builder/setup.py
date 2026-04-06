@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Setup script for building NotY Caption Generator AI v5.1
+Setup script for building NotY Caption Generator AI v5.2
 Copyright (c) 2026 NotY215
 """
 
@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 
 APP_NAME = "NotYCaptionGenAI"
-APP_VERSION = "5.1"
+APP_VERSION = "5.2"
 APP_AUTHOR = "NotY215"
 INSTALLER_NAME = f"NotYCaptionGenAI_Installer_v{APP_VERSION}.exe"
 

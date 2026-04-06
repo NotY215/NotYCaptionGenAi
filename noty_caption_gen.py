@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-NotY Caption Generator AI v5.1
+NotY Caption Generator AI v5.2
 Using OpenAI Whisper (PyTorch) with FFmpeg Vocal Separation & Smart Lyrics Matching
 Copyright (c) 2026 NotY215
 """
@@ -96,7 +96,7 @@ def print_header(title: str = None):
 
 # Application metadata
 APP_NAME = "NotY Caption Generator AI"
-APP_VERSION = "5.1"
+APP_VERSION = "5.2"
 APP_AUTHOR = "NotY215"
 APP_YEAR = "2026"
 APP_LICENSE = "LGPL-3.0"
@@ -420,51 +420,83 @@ class NotYCaptionGenerator:
         song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
         song_name = re.sub(r'\s+', ' ', song_name).strip()
         
-        # Try Genius.com
+        # Method 1: Try Lyrics.ovh API first (most reliable)
         try:
-            self.print_info("Searching Genius for exact match...")
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-            encoded = urllib.parse.quote(song_name)
-            search_url = f"https://genius.com/search?q={encoded}"
-            
-            req = urllib.request.Request(search_url, headers=headers)
-            with urllib.request.urlopen(req, timeout=15) as response:
-                html = response.read().decode('utf-8')
+            self.print_info("Trying Lyrics.ovh API...")
+            # Try to extract artist from filename if format is "Artist - Song"
+            parts = song_name.split('-')
+            if len(parts) >= 2:
+                artist = parts[0].strip()
+                song = parts[1].strip()
+                api_url = f"https://api.lyrics.ovh/v1/{urllib.parse.quote(artist)}/{urllib.parse.quote(song)}"
                 
-                song_links = re.findall(r'href="([^"]*)"[^>]*>([^<]+)</a>', html)
-                
-                for link, title in song_links:
-                    if song_name.lower() in title.lower() or title.lower() in song_name.lower():
-                        if 'lyrics' in link:
-                            song_url = link if link.startswith('http') else 'https://genius.com' + link
-                            
-                            req2 = urllib.request.Request(song_url, headers=headers)
-                            with urllib.request.urlopen(req2, timeout=15) as response2:
-                                lyrics_html = response2.read().decode('utf-8')
-                                
-                                patterns = [
-                                    r'<div[^>]*data-lyrics-container="true"[^>]*>(.*?)</div>',
-                                    r'<div[^>]*class="[^"]*Lyrics__Container[^"]*"[^>]*>(.*?)</div>',
-                                ]
-                                
-                                for pattern in patterns:
-                                    matches = re.findall(pattern, lyrics_html, re.DOTALL)
-                                    if matches:
-                                        lyrics = ' '.join(matches)
-                                        lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
-                                        lyrics = re.sub(r'<[^>]+>', '', lyrics)
-                                        lyrics = re.sub(r'&amp;', '&', lyrics)
-                                        lyrics = lyrics.strip()
-                                        
-                                        if len(lyrics) > 200 and not re.search(r'contributors?|reimagined|remix', lyrics.lower()):
-                                            cleaned_lyrics = self.clean_lyrics_text(lyrics)
-                                            if len(cleaned_lyrics) > 100:
-                                                self.print_progress("Found lyrics on Genius", 50)
-                                                return cleaned_lyrics, "Genius"
+                req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+                    if 'lyrics' in data and data['lyrics']:
+                        lyrics = data['lyrics'].strip()
+                        if len(lyrics) > 100:
+                            cleaned_lyrics = self.clean_lyrics_text(lyrics)
+                            self.print_progress("Found lyrics via Lyrics.ovh", 50)
+                            return cleaned_lyrics, "Lyrics.ovh"
         except:
             pass
         
-        # Try AZLyrics
+        # Method 2: Try Genius.com
+        try:
+            self.print_info("Searching Genius...")
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            
+            # Try multiple search variations
+            search_variations = [
+                song_name,
+                song_name.replace(' ', '-'),
+                song_name.replace(' ', '')
+            ]
+            
+            for variation in search_variations[:3]:
+                encoded = urllib.parse.quote(variation)
+                search_url = f"https://genius.com/search?q={encoded}"
+                
+                req = urllib.request.Request(search_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    html = response.read().decode('utf-8')
+                    
+                    # Find song URLs
+                    song_links = re.findall(r'href="([^"]*)"[^>]*>([^<]+)</a>', html)
+                    
+                    for link, title in song_links:
+                        if song_name.lower() in title.lower() or title.lower() in song_name.lower():
+                            if 'lyrics' in link:
+                                song_url = link if link.startswith('http') else 'https://genius.com' + link
+                                
+                                req2 = urllib.request.Request(song_url, headers=headers)
+                                with urllib.request.urlopen(req2, timeout=15) as response2:
+                                    lyrics_html = response2.read().decode('utf-8')
+                                    
+                                    patterns = [
+                                        r'<div[^>]*data-lyrics-container="true"[^>]*>(.*?)</div>',
+                                        r'<div[^>]*class="[^"]*Lyrics__Container[^"]*"[^>]*>(.*?)</div>',
+                                    ]
+                                    
+                                    for pattern in patterns:
+                                        matches = re.findall(pattern, lyrics_html, re.DOTALL)
+                                        if matches:
+                                            lyrics = ' '.join(matches)
+                                            lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
+                                            lyrics = re.sub(r'<[^>]+>', '', lyrics)
+                                            lyrics = re.sub(r'&amp;', '&', lyrics)
+                                            lyrics = lyrics.strip()
+                                            
+                                            if len(lyrics) > 200 and not re.search(r'contributors?|reimagined|remix', lyrics.lower()):
+                                                cleaned_lyrics = self.clean_lyrics_text(lyrics)
+                                                if len(cleaned_lyrics) > 100:
+                                                    self.print_progress("Found lyrics on Genius", 50)
+                                                    return cleaned_lyrics, "Genius"
+        except:
+            pass
+        
+        # Method 3: Try AZLyrics
         try:
             self.print_info("Searching AZLyrics...")
             search_name = re.sub(r'[^\w\s]', '', song_name).lower().replace(' ', '')
@@ -491,7 +523,10 @@ class NotYCaptionGenerator:
             pass
         
         self.print_warning(f"Could not find exact lyrics for: {song_name}")
-        self.print_info("Please use Manual Song Name with format: Artist - Song Name")
+        self.print_info("Tips for better results:")
+        self.print_info("  1. Use Manual Song Name with format: Artist - Song Name")
+        self.print_info("  2. Example: Coldplay - Hymn for the Weekend")
+        self.print_info("  3. Check spelling - the correct song is 'Hymn for the Weekend'")
         return None, None
         
     def load_model(self, model_name: str):
@@ -656,6 +691,7 @@ class NotYCaptionGenerator:
             import whisper
             from datetime import timedelta
             
+            # Extract audio
             audio_path = media_path
             if media_path.suffix.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm']:
                 audio_path = self.extract_audio(media_path)
@@ -663,6 +699,7 @@ class NotYCaptionGenerator:
                     self.print_error("Could not extract audio from video file")
                     return False
             
+            # Get song name
             if song_search_type == "manual" and manual_song_name:
                 song_name = manual_song_name.strip()
                 self.print_info(f"Searching for: {song_name}")
@@ -673,8 +710,10 @@ class NotYCaptionGenerator:
                 song_name = clean_name
                 self.print_info(f"Auto-detected: {song_name}")
             
+            # Search for lyrics
             online_lyrics, lyrics_source = self.search_lyrics_online(song_name)
             
+            # Vocal separation
             vocal_path = self.separate_vocals_ffmpeg(audio_path)
             
             if self.model is None:
@@ -743,6 +782,7 @@ class NotYCaptionGenerator:
                     end_str = self.format_time(sub["end"].total_seconds())
                     f.write(f"{sub['index']}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
             
+            # Clean up
             if audio_path != media_path and audio_path and audio_path.exists():
                 try:
                     audio_path.unlink()
@@ -891,10 +931,11 @@ class NotYCaptionGenerator:
         # Try to import whisper (handle missing torch.cuda gracefully)
         try:
             import whisper
-            self.print_success("Whisper loaded successfully")
+            self.print_success("Whisper loaded successfully (CPU mode)")
         except ImportError as e:
             if 'torch.cuda' in str(e):
                 self.print_warning("CUDA not available, using CPU mode")
+                # Try importing again - whisper will use CPU automatically
                 try:
                     import whisper
                     self.print_success("Whisper loaded successfully (CPU mode)")
