@@ -1,10 +1,11 @@
+
 <p align="center">
   <img src="./resources/app.ico" alt="NotYCaptionGenAi Logo" width="128">
 </p>
 
 <h1 align="center">🎬 NotYCaptionGenAi</h1>
 <p align="center">
-  <strong>AI-Powered Subtitle Generator - No Installation Required</strong>
+  <strong>AI-Powered Subtitle & Lyrics Generator - No Installation Required</strong>
 </p>
 
 <p align="center">
@@ -19,22 +20,22 @@
 
 ## 📋 Overview
 
-**NotYCaptionGenAi** is a powerful command-line subtitle generator that automatically creates SRT subtitles for video and audio files using OpenAI's Whisper AI model with advanced features like vocal separation and online lyrics search. **No installation required** - just download and run the EXE!
+**NotYCaptionGenAi** is a powerful command-line tool that automatically creates SRT subtitles or song lyrics for video and audio files using OpenAI's Whisper AI. It features **vocal separation**, **online lyrics search**, **intelligent sentence detection**, and **complete transliteration** for Hindi and Japanese. **No installation required** – just download and run the EXE!
 
-### ✨ Features
+### ✨ Key Features
 
 - 🎥 **Multi-format Support**: MP4, MKV, AVI, MOV, MP3, WAV, M4A, FLAC, WEBM
 - 🤖 **AI-Powered**: Uses OpenAI Whisper for accurate transcription
-- 🌐 **Translation Mode**: Automatically translate subtitles to English
-- 🔤 **Transliteration**: Complete Japanese/Hindi to English/Romanized text conversion
-- 🎵 **Song Mode**: Enhanced lyrics with vocal separation and online lyrics search
-- 🔊 **Vocal Separation**: Extracts vocals from background music for cleaner lyrics
-- 📡 **Online Lyrics Search**: Searches Genius.com for matching song lyrics
-- 🔄 **Auto Line Break**: Intelligent sentence detection based on audio gaps
-- 📦 **Built-in Models**: Tiny, Base, Small, Medium, and Large models available
-- 📝 **Smart Line Breaking**: Choose between word, letter, or auto-detection
+- 🌐 **Translation Mode**: Automatically translate any language to English (only shown when source language is not English)
+- 🔤 **Complete Transliteration**: Full Hindi (Devanagari) and Japanese (Kana/Kanji) → English/Romanized text
+- 🎵 **Song Mode** (NEW): Enhanced lyrics generation with vocal separation and online lyrics search
+- 🔊 **Vocal Separation**: Isolates vocals from background music for cleaner lyrics
+- 📡 **Online Lyrics Search**: Searches Genius.com, AZLyrics, and other sources for matching lyrics
+- 🔄 **Auto Line Break**: Intelligent sentence detection based on audio gaps and punctuation
+- 📦 **Built-in Models**: Tiny, Base, Small, Medium, Large (choose speed vs accuracy)
+- 📝 **Flexible Line Breaking**: Word count, character limit, or automatic detection
 - 💾 **SRT Format**: Standard subtitle format compatible with all media players
-- 🚀 **Portable**: Single EXE file with bundled dependencies - no installation required
+- 🚀 **Portable**: Single EXE with all dependencies – no installation needed
 - 💬 **Automatic Links**: Opens Telegram and YouTube channels after completion
 - 🐍 **Python Version**: Also available as a Python script for cross-platform use
 
@@ -53,11 +54,11 @@
 ### Installation
 
 **Windows EXE Version:**
-1. **Download the EXE**: Get `NotYCaptionGenAI.exe` from the releases page
-2. **Run the Application**: Double-click to launch - that's it!
-3. **First-time Setup**:
-   - The app automatically extracts all required files
-   - Models download automatically when selected
+1. **Download the EXE** from the releases page
+2. **Run the Application** – double‑click to launch
+3. **First‑time Setup**:
+   - All required files are extracted automatically
+   - Whisper models download on demand when selected
    - No manual configuration needed
 
 **Python Version:**
@@ -74,13 +75,13 @@
 
 ```bash
 # Windows EXE
-Double-click NotYCaptionGenAI.exe
+Double‑click NotYCaptionGenAI.exe
 
 # Python Version
 python noty_caption_gen.py
 ```
 
-### Step-by-Step Instructions
+### Step‑by‑Step Walkthrough
 
 **1. Launch the Application**
 ```
@@ -92,13 +93,16 @@ python noty_caption_gen.py
 +==========================================================+
 ```
 
-**2. Enter Video/Audio File Path**
+**2. Select a Video or Audio File**
+- A file dialog opens showing all supported formats
+- Or you can drag & drop a file into the console
 ```
-[INFO] Opening file selection dialog...
-[OK] Selected: E:\Videos\myvideo.mp4
+Supported formats: .mp4, .avi, .mkv, .mov, .mp3, .wav, .m4a, .flac, .webm
+> E:\Music\my_song.mp3
+[OK] Selected: my_song.mp3
 ```
 
-**3. Select Model**
+**3. Choose Whisper Model**
 ```
 ┌──────────────────────────────────────────────────┐
 │                   SELECT MODEL                    │
@@ -127,74 +131,87 @@ Choose option (0-5): 3
 Choose option (0-4): 1
 ```
 
-**5. Select Mode**
+**5. Choose Mode**
+- **Normal Mode**: Standard subtitles in selected language
+- **Song Mode** (if selected): Enhanced lyrics with vocal separation and online search
+- **Translate to English** (only appears when language ≠ English)
 ```
 ┌──────────────────────────────────────────────────┐
 │                   SELECT MODE                     │
 ├──────────────────────────────────────────────────┤
-│  1) Normal - Generate subtitles in selected lang │
-│  2) Translate to English - Translate to English  │
-│  3) Song Mode - Enhanced lyrics with online search│
+│  1) Normal Mode - Generate subtitles from audio  │
+│  2) Song Mode - Enhanced lyrics with online search│
 │  0) Back                                         │
 └──────────────────────────────────────────────────┘
-Choose option (0-3): 1/2
+Choose option (0-2): 2
 ```
 
-**6. Select Line Type[Not Appear If choosen Song Mode]**
+**6. Song Search Option (only in Song Mode)**
+```
+┌──────────────────────────────────────────────────┐
+│               SONG SEARCH OPTION                  │
+├──────────────────────────────────────────────────┤
+│  1) Auto Detect Song - Automatically from filename│
+│  2) Manual Song Name - Enter artist - song name  │
+│  0) Back                                         │
+└──────────────────────────────────────────────────┘
+Choose option (0-2): 2
+> Enter song name: One Piece - Binks' Sake
+```
+
+**7. Line Type (Normal Mode only)**
+- **Words**: Break by word count (1‑30)
+- **Letters**: Break by character count (1‑30)
+- **Auto**: Intelligent sentence detection using audio gaps & punctuation
 ```
 ┌──────────────────────────────────────────────────┐
 │                   LINE TYPE                       │
 ├──────────────────────────────────────────────────┤
-│  1) Words - Break by word count                 │
-│  2) Letters - Break by character limit          │
-│  3) Auto - Auto-detect sentence breaks          │
+│  1) Words - Break by word count                  │
+│  2) Letters - Break by character limit           │
+│  3) Auto - Auto-detect sentence breaks           │
 │  0) Back                                         │
 └──────────────────────────────────────────────────┘
 Choose option (0-3): 1
+> How many words per line? (1-30): 8
 ```
 
-**7. Set WordsLetter/ per Line**
-```
-How many words/letters per line? (1-30): 8
-```
-
-**8. Confirm Generation**
+**8. Confirmation & Generation**
 ```
 +--------------------------------------------------+
-| Media File: E:\Videos\myvideo.mp4               |
+| Media File: E:\Music\my_song.mp3                |
 | Model: SMALL                                     |
 | Language: English                                |
 | Mode: Song Mode                                  |
-| Line Type: Words                                 |
-| Settings: 8                                      |
+| Search: Manual: One Piece - Binks' Sake         |
 +--------------------------------------------------+
 
-Generate captions? (y/n): y
+Generate lyrics? (y/n): y
 ```
 
-**9. Processing & Generation**
+**9. Processing Output**
 ```
-[INFO] Generating captions... This may take several minutes.
-[PROGRESS] ████████████████████████████████████████ 10% - Extracting audio from video...
-[PROGRESS] ████████████████████████████████████████ 30% - Separating vocals from background music...
-[PROGRESS] ████████████████████████████████████████ 45% - Searching lyrics for: myvideo
-[OK] Found lyrics online!
+[INFO] Generating lyrics with online search...
+[PROGRESS] ████████████████████████████████████████ 10% - Extracting audio...
+[PROGRESS] ████████████████████████████████████████ 30% - Separating vocals...
+[PROGRESS] ████████████████████████████████████████ 45% - Searching lyrics...
+[OK] Lyrics found on Genius!
 [PROGRESS] ████████████████████████████████████████ 60% - Loading SMALL model...
 [PROGRESS] ████████████████████████████████████████ 70% - Transcribing audio...
-[PROGRESS] ████████████████████████████████████████ 80% - Processing transcription...
-[PROGRESS] ████████████████████████████████████████ 90% - Writing subtitle file...
+[PROGRESS] ████████████████████████████████████████ 80% - Processing lyrics...
+[PROGRESS] ████████████████████████████████████████ 90% - Writing file...
 [PROGRESS] ████████████████████████████████████████ 100% - Complete!
 
-[OK] Captions saved to: E:\Videos\myvideo_lyrics.srt
-[INFO] Generated 156 subtitle entries
+[OK] Lyrics saved to: E:\Music\my_song_lyrics.srt (with online lyrics)
+[INFO] Generated 45 lyrics entries
 ```
 
-**10. Completion**
+**10. Completion & Next Steps**
 ```
 [OK] Thanks for using NotY Caption Generator AI!
 [OK] Your caption has been generated successfully!
 
-Process another video? (y/n): n
+Process another file? (y/n): n
 ```
 
 ---
@@ -203,118 +220,104 @@ Process another video? (y/n): n
 
 | Model | Size | Speed | Accuracy | Best For |
 |-------|------|-------|----------|----------|
-| Tiny | 75 MB | ⚡⚡⚡⚡⚡ | ⭐⭐ | Quick tests, short videos |
-| Base | 150 MB | ⚡⚡⚡⚡ | ⭐⭐⭐ | General use, balanced performance |
+| Tiny | 75 MB | ⚡⚡⚡⚡⚡ | ⭐⭐ | Quick tests, short clips |
+| Base | 150 MB | ⚡⚡⚡⚡ | ⭐⭐⭐ | General use, balanced |
 | Small | 500 MB | ⚡⚡⚡ | ⭐⭐⭐⭐ | Good accuracy, moderate speed |
-| Medium | 1.5 GB | ⚡⚡ | ⭐⭐⭐⭐⭐ | High accuracy, longer videos |
-| Large | 2.9 GB | ⚡ | ⭐⭐⭐⭐⭐ | Maximum accuracy, professional use |
+| Medium | 1.5 GB | ⚡⚡ | ⭐⭐⭐⭐⭐ | High accuracy, longer files |
+| Large | 2.9 GB | ⚡ | ⭐⭐⭐⭐⭐ | Professional, maximum accuracy |
 
 ---
 
-## 🌐 Subtitle Modes Explained
+## 🌐 Mode Explanations
 
 ### 1. **Normal Mode**
-- Generates subtitles in the original language script
-- Preserves native characters (Devanagari, Kanji, etc.)
-- Best for viewers who understand the original language
-- Example: Japanese text stays in Japanese characters
+- Generates subtitles in the chosen language (or auto‑detected)
+- Preserves original script (e.g., Devanagari, Kanji)
+- Best for general video/audio transcription
 
-### 2. **Translation Mode**
+### 2. **Translate to English** (only when source language ≠ English)
 - Automatically translates subtitles to English
-- Uses Whisper's built-in translation capability
-- Perfect for international audiences
-- Example: Japanese audio → English subtitles
+- Uses Whisper’s built‑in translation
+- Ideal for international audiences
 
 ### 3. **Song Mode** (NEW in v5.1)
-- **Vocal Separation**: Extracts vocals from background music using FFmpeg
-- **Online Lyrics Search**: Searches Genius.com for matching song lyrics
-- **Enhanced Accuracy**: Combines AI transcription with online lyrics
-- **Perfect for Music**: Creates professional-quality song lyrics
-- **Internet Required**: For online lyrics search feature
+- **Vocal Separation**: Extracts vocals using FFmpeg filters
+- **Online Lyrics Search**: Queries Genius.com, AZLyrics, and others
+- **Timing Alignment**: Syncs found lyrics with audio segments
+- **Fallback**: If no online lyrics found, uses AI transcription
+- **Internet required** for online search (falls back gracefully)
 
 ---
 
 ## 📝 Line Type Options
 
-### 1. **Words**
-- Breaks subtitles by word count
-- Customizable: 1-30 words per line
-- Best for: General videos, dialogue
-
-### 2. **Letters**
-- Breaks subtitles by character count
-- Customizable: 1-30 characters per line
-- Best for: Languages with long words, social media clips
-
-### 3. **Auto** (NEW in v5.1)
-- Intelligent sentence detection
-- Breaks at natural pauses and punctuation
-- Uses audio gap analysis
-- Best for: Natural speech, presentations
+| Option | Description | Best For |
+|--------|-------------|----------|
+| **Words** | Break by word count (1‑30) | Dialogue, general videos |
+| **Letters** | Break by character count (1‑30) | Languages with long words, social media clips |
+| **Auto** | Intelligent sentence detection using audio gaps & punctuation | Natural speech, presentations, podcasts |
 
 ---
 
-## 🎵 Song Mode Features
+## 🎵 Song Mode Deep Dive
 
 ### Vocal Separation
-- Extracts vocals using FFmpeg filters
+- Uses FFmpeg `highpass` and `lowpass` filters
 - Reduces background music interference
-- Improves lyric accuracy
+- Works best with clear vocals
 
-### Online Lyrics Search
-- Searches Genius.com database
-- Matches by song name from filename
-- Falls back to AI transcription if not found
-- Requires internet connection
+### Online Lyrics Sources
+- **Genius.com** (primary)
+- **AZLyrics** (fallback)
+- **Lyrics.ovh API** (fallback)
+- **ChartLyrics API** (fallback)
+- **YouTube descriptions** (as a last resort)
 
-### Lyrics Processing
-- Timestamp alignment with audio
-- Natural line breaking
-- Proper punctuation and formatting
+### Automatic Retry
+- If auto‑detection fails, the app suggests using manual entry with format:  
+  `Artist - Song Name`
+- Example: `"Taylor Swift - Shake It Off"`
 
 ---
 
 ## 📁 Output Files
 
-After successful generation, you'll find:
-
-| File | Description |
-|------|-------------|
+| Filename Pattern | Description |
+|------------------|-------------|
 | `[filename].srt` | Standard subtitles in original language |
 | `[filename]_en.srt` | English translated subtitles (Translation mode) |
-| `[filename]_lyrics.srt` | Song lyrics with enhanced formatting (Song mode) |
+| `[filename]_lyrics.srt` | Enhanced song lyrics (Song mode) |
 
-All SRT files are saved in the same folder as your source media file.
+All files are saved in the same directory as the source media.
 
 ---
 
 ## 🎯 Supported Formats
 
-| Type | Formats |
-|------|---------|
-| **Video** | MP4, AVI, MKV, MOV, WEBM, MPG, MPEG, M4V |
-| **Audio** | MP3, WAV, M4A, FLAC |
+| Type | Extensions |
+|------|------------|
+| **Video** | `.mp4`, `.avi`, `.mkv`, `.mov`, `.webm`, `.m4v`, `.mpg`, `.mpeg` |
+| **Audio** | `.mp3`, `.wav`, `.m4a`, `.flac` |
 
 ---
 
 ## ⚙️ System Requirements
 
-### Minimum Requirements
+### Minimum
 | Component | Requirement |
 |-----------|-------------|
-| **OS** | Windows 10/11 (64-bit) or Linux/Mac (Python version) |
-| **RAM** | 2GB (for Tiny/Base models) |
-| **Storage** | 500MB for application + models |
-| **CPU** | Any modern processor (Intel Core i3 or equivalent) |
-| **Internet** | Required for Song Mode (lyrics search) |
+| **OS** | Windows 10/11 (64‑bit) or Linux/macOS (Python version) |
+| **RAM** | 2 GB (Tiny/Base models) |
+| **Storage** | 500 MB (app + models) |
+| **CPU** | Intel Core i3 or equivalent |
+| **Internet** | Required for Song Mode lyrics search |
 
-### Recommended Requirements
-| Component | Requirement |
-|-----------|-------------|
-| **RAM** | 8GB (for Medium/Large models) |
-| **Storage** | 4GB free space |
+### Recommended
+| Component | Recommendation |
+|-----------|----------------|
+| **RAM** | 8 GB (Medium/Large models) |
+| **Storage** | 4 GB free space |
 | **CPU** | Intel Core i5/i7 or AMD Ryzen 5/7 |
-| **GPU** | Optional - no GPU required |
 | **Internet** | Stable connection for Song Mode |
 
 ---
@@ -324,86 +327,59 @@ All SRT files are saved in the same folder as your source media file.
 ### Common Issues & Solutions
 
 **Q: Application doesn't start?**
-- ✅ Ensure you have Visual C++ Redistributable installed
-- ✅ Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe
-- ✅ Run as administrator if needed
-- ✅ Check Windows Defender - allow the application
+- Install [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+- Run as administrator if needed
+- Temporarily disable Windows Defender
 
 **Q: File not found error?**
-- ✅ Enter the full file path correctly
-- ✅ Use double quotes if path contains spaces
-- ✅ Example: `"C:\My Videos\my video.mp4"`
-- ✅ Ensure file exists and is not corrupted
+- Use full path with double quotes if spaces: `"C:\My Files\video.mp4"`
+- Ensure the file exists and is not corrupted
 
 **Q: Model download fails?**
-- ✅ Check internet connection
-- ✅ Ensure sufficient disk space (at least 2x model size)
-- ✅ Try again - downloads resume automatically
-- ✅ Disable firewall temporarily if needed
+- Check internet connection
+- Free up disk space (at least 2× model size)
+- Disable firewall temporarily
 
-**Q: Song Mode not finding lyrics?**
-- ✅ Ensure file name contains the song name
-- ✅ Check internet connection
-- ✅ Try renaming file to actual song name
-- ✅ Song Mode falls back to AI transcription
+**Q: Song Mode doesn't find lyrics?**
+- Ensure file name contains the song name
+- Check internet connection
+- Try Manual Song Name with format `Artist - Song Name`
+- Song Mode falls back to AI transcription automatically
 
 **Q: Vocal separation not working?**
-- ✅ Ensure FFmpeg is included in the package
-- ✅ Check audio quality - clear vocals work best
-- ✅ Song Mode works without separation too
+- FFmpeg is bundled – should work out of the box
+- Works best with high‑quality audio (clear vocals)
+- Separation failure falls back to original audio
 
 **Q: Auto line break not working properly?**
-- ✅ Ensure audio has clear pauses
-- ✅ Adjust audio quality for better detection
-- ✅ Falls back to word/letter mode if needed
+- Ensure audio has natural pauses
+- Works best with clear speech or well‑spaced sentences
 
-**Q: Transliteration breaking words?**
-- ✅ Fixed in v5.1 - complete character mapping
-- ✅ Supports full Hindi and Japanese character sets
-- ✅ Proper word boundary detection
+**Q: Transliteration breaks words?**
+- Fixed in v5.1 – complete character mapping
+- Supports full Hindi and Japanese character sets
 
 **Q: Slow transcription?**
-- ✅ Use Tiny or Base model for faster processing
-- ✅ Close other applications to free up CPU
-- ✅ Split long videos into shorter segments
-- ✅ Use SSD instead of HDD for better performance
-
-**Q: Subtitles not accurate?**
-- ✅ Ensure clear audio quality (no background noise)
-- ✅ Try a larger model (Medium or Large)
-- ✅ Check if audio language is supported
-- ✅ Use Normal mode instead of Translation for better accuracy
+- Use Tiny or Base model for speed
+- Close other CPU‑intensive applications
+- Use SSD storage
 
 ---
 
 ## 📊 Performance Tips
 
-### For Best Results:
-1. **Use high-quality audio** - Clear speech improves accuracy dramatically
-2. **Choose the right model**:
-   - Tiny/Base: Quick previews, short videos
-   - Small/Medium: General use, good balance
-   - Large: Professional use, maximum accuracy
-3. **For songs**: Use Song Mode with clear file naming
-4. **For natural speech**: Use Auto line break mode
-5. **Optimize for speed**:
-   - Use SSD storage for faster processing
-   - Close unnecessary applications
-   - Process shorter segments
-6. **Language-specific tips**:
-   - English: Works well with all models
-   - Japanese/Hindi: Use transliteration for Latin script output
-   - Other languages: Use Normal or Translation mode
+- **For quick previews**: Use Tiny or Base model
+- **For best accuracy**: Use Large model (slower)
+- **For songs**: Use Song Mode with clear file naming
+- **For natural speech**: Use Auto line break mode
+- **For Japanese/Hindi**: Transliteration is automatic when those languages are selected
+- **For other languages**: Use Normal or Translate mode
 
 ---
 
 ## 💬 Support & Community
 
-Join our Telegram channel for:
-- 📢 Latest updates and releases
-- 🛠️ Technical support
-- 💡 Tips and tricks
-- 🤝 Community discussions
+Join our Telegram channel for updates, support, and discussions:
 
 <p align="center">
 <a href="https://t.me/NotY215">
@@ -414,8 +390,9 @@ Join our Telegram channel for:
 </a>
 </p>
 
-**Telegram Channel:** [https://t.me/NotY215](https://t.me/NotY215)  
-**YouTube Channel:** [https://www.youtube.com/@NotY215](https://www.youtube.com/@NotY215)
+- **Telegram**: [https://t.me/NotY215](https://t.me/NotY215)
+- **YouTube**: [https://www.youtube.com/@NotY215](https://www.youtube.com/@NotY215)
+- **GitHub**: [https://github.com/NotY215/NotYCaptionGenAi](https://github.com/NotY215/NotYCaptionGenAi)
 
 ---
 
@@ -423,104 +400,75 @@ Join our Telegram channel for:
 
 This project is licensed under the **GNU Lesser General Public License v3.0**.
 
-The LGPL license allows you to:
+You may:
 - ✅ Use this software commercially
 - ✅ Modify the source code
 - ✅ Distribute the software
-- ⚠️ Must disclose source code for modifications
-- ⚠️ Must include copyright notice
 
-For the full license text, visit: https://www.gnu.org/licenses/lgpl-3.0.en.html
+You must:
+- ⚠️ Disclose source code for modifications
+- ⚠️ Include the copyright notice
+
+Full license: [https://www.gnu.org/licenses/lgpl-3.0.en.html](https://www.gnu.org/licenses/lgpl-3.0.en.html)
 
 ---
 
 ## 👨‍💻 Credits
 
-- **Developed By**: NotY215
-- **AI Model**: OpenAI Whisper
-- **Model Format**: PyTorch Whisper
+- **Developer**: NotY215
+- **AI Model**: OpenAI Whisper (PyTorch)
 - **Media Processing**: FFmpeg
-- **Lyrics Source**: Genius.com
-- **Python Version**: Pure Python implementation with colorama
-
----
-
-## 📞 Contact
-
-- **Telegram**: https://t.me/Not_Y215
-- **YouTube**: https://www.youtube.com/@NotY215
-- **GitHub**: https://github.com/NotY215/NotYCaptionGenAi
+- **Lyrics Sources**: Genius, AZLyrics, Lyrics.ovh, ChartLyrics
 
 ---
 
 ## 🆕 What's New in Version 5.1
 
-### Added Features:
-- 🎵 **Song Mode** - Enhanced lyrics with vocal separation and online search
-- 🔊 **Vocal Separation** - Extracts vocals from background music
-- 📡 **Online Lyrics Search** - Searches Genius.com for matching lyrics
-- 🔄 **Auto Line Break** - Intelligent sentence detection based on audio gaps
-- ✨ **Complete Transliteration** - Full Hindi and Japanese character mapping
-- 📊 **Progress Bar** - Visual percentage-based progress display
+### Added
+- 🎵 **Song Mode** – vocal separation + online lyrics search
+- 🔊 **Vocal Separation** – isolates vocals for cleaner lyrics
+- 📡 **Online Lyrics Search** – queries multiple sources
+- 🔄 **Auto Line Break** – intelligent sentence detection
+- ✨ **Complete Transliteration** – full Hindi/Japanese character maps
+- 📊 **Progress Bar** – percentage‑based visual feedback
 
-### Improvements:
-- 🔧 **Fixed Transliteration** - No more word breaking issues
-- 🔧 **Better Error Handling** - More descriptive error messages
-- 🔧 **Optimized Build** - Smaller executable size
-- 🔧 **FFmpeg Integration** - Built-in FFmpeg for audio processing
-- 🔧 **Registry Registration** - Appears in Windows Add/Remove Programs
+### Improved
+- 🔧 **Transliteration** – no more word breaking
+- 🔧 **Error Handling** – clearer messages
+- 🔧 **Build Size** – smaller executable
+- 🔧 **FFmpeg Integration** – bundled with the app
+- 🔧 **Registry Registration** – appears in Windows Add/Remove Programs
 
-### Bug Fixes:
-- 🐛 Fixed transliteration breaking words into parts
-- 🐛 Fixed progress display showing frames instead of percentage
-- 🐛 Fixed audio extraction for all formats
-- 🐛 Fixed model loading issues
-- 🐛 Fixed Unicode encoding errors on Windows
+### Fixed
+- 🐛 Transliteration breaking words into parts
+- 🐛 Progress display showing frames instead of percentage
+- 🐛 Audio extraction for all formats
+- 🐛 Model loading issues
+- 🐛 Unicode encoding errors on Windows
 
 ---
 
-## 🗺️ Roadmap
+## 🗺️ Roadmap (Planned)
 
-### Future Plans:
 - [ ] GPU acceleration support
 - [ ] Batch processing for multiple files
-- [ ] GUI version with drag-and-drop
+- [ ] GUI version with drag‑and‑drop
 - [ ] Cloud model storage
 - [ ] More language support for transliteration
-- [ ] Custom vocabulary support
-- [ ] Real-time transcription
+- [ ] Real‑time transcription
 - [ ] Subtitle editing interface
-- [ ] Export to multiple formats (ASS, VTT, etc.)
-- [ ] Multiple lyrics sources (AZLyrics, MetroLyrics)
+- [ ] Export to ASS, VTT formats
 
 ---
 
 ## 📊 Version History
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 5.1 | 2026 | Song Mode, Vocal Separation, Online Lyrics, Auto Line Break |
-| 4.5 | 2026 | FFmpeg integration, Registry support, Admin check |
-| 4.4 | 2026 | Improved word timing, Translation mode |
-| 4.3 | 2026 | Initial release with Whisper.cpp |
-
----
-
-## ⭐ Star History
-
-If you find this project useful, please consider giving it a star on GitHub! It helps others discover the project and motivates further development.
-
-<p align="center">
-<a href="https://github.com/NotY215/NotYCaptionGenAi/stargazers">
-<img src="https://img.shields.io/github/stars/NotY215/NotYCaptionGenAi?style=social" alt="GitHub stars">
-</a>
-<a href="https://github.com/NotY215/NotYCaptionGenAi/network/members">
-<img src="https://img.shields.io/github/forks/NotY215/NotYCaptionGenAi?style=social" alt="GitHub forks">
-</a>
-<a href="https://github.com/NotY215/NotYCaptionGenAi/watchers">
-<img src="https://img.shields.io/github/watchers/NotY215/NotYCaptionGenAi?style=social" alt="GitHub watchers">
-</a>
-</p>
+| Version | Date | Major Changes |
+|---------|------|---------------|
+| 5.1 | 2026 | Song Mode, vocal separation, online lyrics, auto line break |
+| 4.5 | 2026 | FFmpeg bundling, registry support, admin check |
+| 4.4 | 2026 | Improved word timing, translation mode |
+| 4.3 | 2026 | Initial release |
 
 ---
 
@@ -529,10 +477,9 @@ If you find this project useful, please consider giving it a star on GitHub! It 
 <br>
 <sub>Copyright © 2026 NotY215. All rights reserved.</sub>
 <br>
-<sub>This software is provided under the GNU Lesser General Public License v3.0</sub>
+<sub>Licensed under GNU Lesser General Public License v3.0</sub>
 <br>
-<sub>No installation required - just download and run!</sub>
-<br>
-<br>
-<sub>🌟 If you like this project, don't forget to star it on GitHub! 🌟</sub>
+<sub>No installation required – just download and run!</sub>
+<br><br>
+<sub>⭐ If you like this project, please star it on GitHub! ⭐</sub>
 </p>
