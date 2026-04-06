@@ -3,7 +3,7 @@
 
 """
 NotY Caption Generator AI v5.1
-Using OpenAI Whisper (PyTorch) with Vocal Separation & Song Mode
+Using OpenAI Whisper (PyTorch) with Spleeter Vocal Separation & Smart Lyrics Matching
 Copyright (c) 2026 NotY215
 """
 
@@ -17,12 +17,15 @@ import subprocess
 import tkinter as tk
 from tkinter import filedialog
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from datetime import timedelta
 import re
 import json
 import urllib.request
 import urllib.parse
+import hashlib
+import tempfile
+import shutil
 
 # Fix Windows console encoding
 if platform.system() == "Windows":
@@ -33,6 +36,7 @@ if platform.system() == "Windows":
 # Set environment variables
 os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # ANSI color codes
 class Colors:
@@ -70,7 +74,7 @@ def select_file_dialog():
             ("All Files", "*.*")
         ]
         file_path = filedialog.askopenfilename(
-            title="Select Video/Audio File (Supported: MP4, AVI, MKV, MOV, MP3, WAV, M4A, FLAC)",
+            title="Select Video/Audio File",
             filetypes=file_types
         )
         root.destroy()
@@ -88,7 +92,7 @@ def print_header(title: str = None):
     print("|" + title.center(58) + "|")
     print("|" + f"Copyright (c) {APP_YEAR} {APP_AUTHOR}".center(58) + "|")
     print("|" + f"License: {APP_LICENSE}".center(58) + "|")
-    print("|" + "Powered by OpenAI Whisper".center(58) + "|")
+    print("|" + "Powered by OpenAI Whisper + Spleeter".center(58) + "|")
     print("+" + "=" * 58 + "+")
     print(f"{Colors.RESET}")
 
@@ -136,7 +140,7 @@ class NotYCaptionGenerator:
             self.ffmpeg_exe = self.ffmpeg_dir / "ffmpeg"
             self.ffprobe_exe = self.ffmpeg_dir / "ffprobe"
         
-        # Add ffmpeg to PATH for this process
+        # Add ffmpeg to PATH
         if self.ffmpeg_dir.exists():
             os.environ['PATH'] = str(self.ffmpeg_dir) + os.pathsep + os.environ['PATH']
         
@@ -156,13 +160,13 @@ class NotYCaptionGenerator:
         ]
         
         self.modes = [
-            ("Normal Mode", "normal", "Generate captions/subtitles from audio"),
-            ("Song Mode", "song", "Enhanced lyrics with online search for songs")
+            ("Normal Mode", "normal", "Generate subtitles from audio"),
+            ("Song Mode", "song", "Enhanced lyrics with Spleeter vocal separation")
         ]
         
         self.song_search_options = [
             ("Auto Detect Song", "auto", "Automatically detect song name from filename"),
-            ("Manual Song Name", "manual", "Enter song name manually for accurate lyrics search")
+            ("Manual Song Name", "manual", "Enter song name manually for accurate lyrics")
         ]
         
         self.line_types = [
@@ -271,9 +275,8 @@ class NotYCaptionGenerator:
                 self.print_success(f"Using file: {path}")
                 return path
         
-        # Show supported files by default in dialog
         self.print_info("Opening file selection dialog...")
-        self.print_info("Supported formats: MP4, AVI, MKV, MOV, MP3, WAV, M4A, FLAC, WEBM")
+        self.print_info(f"Supported formats: {', '.join(allowed_extensions)}")
         file_path = select_file_dialog()
         
         if file_path:
@@ -315,9 +318,78 @@ class NotYCaptionGenerator:
         except:
             pass
         return False
+        
+    def install_spleeter(self) -> bool:
+        """Install Spleeter for vocal separation"""
+        try:
+            self.print_info("Installing Spleeter for vocal separation...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "spleeter", "--quiet"])
+            self.print_success("Spleeter installed successfully")
+            return True
+        except Exception as e:
+            self.print_warning(f"Could not install Spleeter: {e}")
+            self.print_info("Will use FFmpeg filter as fallback")
+            return False
             
+    def separate_vocals_spleeter(self, audio_path: Path) -> Path:
+        """Separate vocals using Spleeter"""
+        try:
+            from spleeter.separator import Separator
+            
+            output_dir = Path(tempfile.gettempdir()) / f"spleeter_{int(time.time())}"
+            output_dir.mkdir(exist_ok=True)
+            
+            self.print_progress("Running Spleeter vocal separation...", 35)
+            
+            # Use 2 stems (vocals + accompaniment)
+            separator = Separator('spleeter:2stems', multiprocess=False)
+            separator.separate_to_file(str(audio_path), str(output_dir))
+            
+            vocal_path = output_dir / f"{audio_path.stem}_vocals.wav"
+            
+            # Find the vocals file
+            for file in output_dir.rglob("*.wav"):
+                if "vocals" in file.name.lower():
+                    vocal_path = file
+                    break
+                    
+            if vocal_path.exists() and vocal_path.stat().st_size > 0:
+                self.print_progress("Spleeter separation complete", 40)
+                return vocal_path
+        except Exception as e:
+            self.print_warning(f"Spleeter failed: {e}")
+        
+        return None
+        
+    def separate_vocals_ffmpeg(self, audio_path: Path) -> Path:
+        """Fallback: Separate vocals using FFmpeg filters"""
+        self.print_progress("Using FFmpeg vocal isolation...", 35)
+        
+        temp_dir = Path(os.environ.get('TEMP', '.'))
+        vocal_path = temp_dir / f"{audio_path.stem}_vocals_ffmpeg.wav"
+        
+        ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
+        
+        # Enhanced vocal isolation filters
+        cmd = [
+            ffmpeg_cmd, '-i', str(audio_path),
+            '-af', 'highpass=f=100, lowpass=f=8000, volume=2.0',
+            '-y',
+            str(vocal_path)
+        ]
+        
+        try:
+            subprocess.run(cmd, capture_output=True, timeout=180)
+            if vocal_path.exists() and vocal_path.stat().st_size > 0:
+                self.print_progress("FFmpeg vocal isolation complete", 40)
+                return vocal_path
+        except:
+            pass
+        
+        return audio_path
+        
     def extract_audio(self, video_path: Path) -> Path:
-        """Extract audio from video file using ffmpeg"""
+        """Extract audio from video file"""
         if not self.check_ffmpeg():
             self.print_error("FFmpeg not found!")
             return None
@@ -348,240 +420,177 @@ class NotYCaptionGenerator:
         
         return None
         
-    def separate_vocals(self, audio_path: Path) -> Path:
-        """Separate vocals from background music using ffmpeg"""
-        self.print_progress("Separating vocals from background music...", 30)
-        
-        temp_dir = Path(os.environ.get('TEMP', '.'))
-        vocal_path = temp_dir / f"{audio_path.stem}_vocals.wav"
-        
-        ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
-        
-        # Use ffmpeg's highpass/lowpass filter for vocal isolation
-        cmd = [
-            ffmpeg_cmd, '-i', str(audio_path),
-            '-af', 'highpass=f=200, lowpass=f=8000',
-            '-y',
-            str(vocal_path)
+    def clean_lyrics_text(self, lyrics: str) -> str:
+        """Remove unwanted metadata, hashtags, and promotional content from lyrics"""
+        if not lyrics:
+            return lyrics
+            
+        # Remove lines with common unwanted content
+        unwanted_patterns = [
+            r'(?i)^song:.*$',
+            r'(?i)^artist:.*$',
+            r'(?i)^album:.*$',
+            r'(?i)^copyright.*$',
+            r'(?i)^no copyright infringement.*$',
+            r'(?i)^all rights reserved.*$',
+            r'(?i)^subscribe.*$',
+            r'(?i)^like.*$',
+            r'(?i)^comment.*$',
+            r'(?i)^share.*$',
+            r'(?i)^follow.*$',
+            r'(?i)^instagram.*$',
+            r'(?i)^facebook.*$',
+            r'(?i)^twitter.*$',
+            r'(?i)^tiktok.*$',
+            r'(?i)^discord.*$',
+            r'(?i)^#.*$',
+            r'(?i)^@.*$',
+            r'(?i)^https?://.*$',
+            r'(?i)^www\..*$',
+            r'(?i)^if you.*$',
+            r'(?i)^please.*$',
+            r'(?i)^don\'t forget.*$',
+            r'(?i)^check out.*$',
+            r'^\s*\[\s*(?:verse|chorus|bridge|intro|outro|hook)\s*\].*$',
+            r'^\s*\(\s*(?:verse|chorus|bridge|intro|outro|hook)\s*\).*$',
         ]
         
-        try:
-            subprocess.run(cmd, capture_output=True, timeout=180)
-            if vocal_path.exists() and vocal_path.stat().st_size > 0:
-                self.print_progress("Vocal separation complete", 40)
-                return vocal_path
-        except:
-            pass
+        lines = lyrics.split('\n')
+        cleaned_lines = []
         
-        return audio_path  # Return original if separation fails
-        
-    def search_anime_lyrics(self, song_name: str) -> str:
-        """Specialized search for anime song lyrics"""
-        self.print_info(f"Searching anime lyrics for: {song_name}")
-        
-        # Common anime song patterns
-        anime_keywords = ['op', 'ed', 'ost', 'theme', 'opening', 'ending', 'soundtrack']
-        
-        search_terms = [
-            song_name,
-            f"{song_name} anime",
-            f"{song_name} opening",
-            f"{song_name} ending",
-            f"{song_name} lyrics anime"
-        ]
-        
-        for term in search_terms:
-            # Try AnimeLyrics
-            try:
-                encoded = urllib.parse.quote(term.lower().replace(' ', '-'))
-                url = f"https://www.animelyrics.com/search.php?q={encoded}"
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-                req = urllib.request.Request(url, headers=headers)
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    html = response.read().decode('utf-8', errors='ignore')
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Skip unwanted lines
+            should_skip = False
+            for pattern in unwanted_patterns:
+                if re.match(pattern, line, re.IGNORECASE):
+                    should_skip = True
+                    break
                     
-                    # Look for lyric links
-                    link_match = re.search(r'href="([^"]*)"[^>]*>(.*?)</a>', html)
-                    if link_match:
-                        lyrics_url = link_match.group(1)
-                        if not lyrics_url.startswith('http'):
-                            lyrics_url = 'https://www.animelyrics.com' + lyrics_url
-                        
-                        lyrics_req = urllib.request.Request(lyrics_url, headers=headers)
-                        with urllib.request.urlopen(lyrics_req, timeout=15) as lyrics_resp:
-                            lyrics_html = lyrics_resp.read().decode('utf-8', errors='ignore')
-                            
-                            # Extract lyrics
-                            lyrics_match = re.search(r'<div[^>]*class="[^"]*lyrics[^"]*"[^>]*>(.*?)</div>', lyrics_html, re.DOTALL)
-                            if lyrics_match:
-                                lyrics = lyrics_match.group(1)
-                                lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
-                                lyrics = re.sub(r'<[^>]+>', '', lyrics)
-                                lyrics = lyrics.strip()
-                                if len(lyrics) > 100:
-                                    self.print_progress("Anime lyrics found", 50)
-                                    return lyrics
-            except:
-                pass
+            if not should_skip and len(line) > 1:
+                cleaned_lines.append(line)
         
-        return None
+        return '\n'.join(cleaned_lines)
         
-    def search_lyrics_online(self, song_name: str) -> str:
-        """Search for lyrics online using multiple sources including anime-specific sites"""
+    def search_lyrics_online(self, song_name: str) -> Tuple[str, str]:
+        """Search for lyrics online and return (lyrics, source)"""
         self.print_progress(f"Searching lyrics for: {song_name}", 45)
         
         if not song_name:
-            return None
+            return None, None
             
-        # Clean up song name for better search
         song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
         song_name = re.sub(r'\s+', ' ', song_name).strip()
         
-        # First try anime-specific search
-        anime_lyrics = self.search_anime_lyrics(song_name)
-        if anime_lyrics:
-            return anime_lyrics
-        
-        # Method 1: Try YouTube search
+        # First try: Genius.com API
         try:
-            self.print_info("Searching YouTube for lyrics...")
-            search_terms = [
-                f"{song_name} lyrics",
-                f"{song_name} lyric video"
-            ]
+            self.print_info("Searching Genius...")
+            encoded = urllib.parse.quote(song_name)
+            search_url = f"https://genius.com/search?q={encoded}"
             
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            req = urllib.request.Request(search_url, headers=headers)
             
-            for term in search_terms:
-                encoded_query = urllib.parse.quote(term)
-                yt_search_url = f"https://www.youtube.com/results?search_query={encoded_query}"
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8')
                 
-                req = urllib.request.Request(yt_search_url, headers=headers)
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    html = response.read().decode('utf-8', errors='ignore')
+                # Find song URL
+                song_match = re.search(r'href="([^"]*lyrics[^"]*)"', html)
+                if song_match:
+                    song_url = song_match.group(1)
+                    if not song_url.startswith('http'):
+                        song_url = 'https://genius.com' + song_url
                     
-                    video_ids = re.findall(r'/watch\?v=([a-zA-Z0-9_-]{11})', html)
-                    
-                    for video_id in video_ids[:5]:
-                        try:
-                            video_url = f"https://www.youtube.com/watch?v={video_id}"
-                            video_req = urllib.request.Request(video_url, headers=headers)
-                            with urllib.request.urlopen(video_req, timeout=15) as video_resp:
-                                video_html = video_resp.read().decode('utf-8', errors='ignore')
-                                
-                                patterns = [
-                                    r'"shortDescription":"(.*?)"',
-                                    r'"description":"(.*?)"',
-                                ]
-                                
-                                for pattern in patterns:
-                                    desc_match = re.search(pattern, video_html)
-                                    if desc_match:
-                                        description = desc_match.group(1)
-                                        description = description.replace('\\n', '\n')
-                                        description = description.replace('\\"', '"')
-                                        
-                                        if 'lyrics' in description.lower() or len(description) > 300:
-                                            lyrics_lines = []
-                                            for line in description.split('\n'):
-                                                line = line.strip()
-                                                if line and not line.startswith('http') and not line.startswith('@'):
-                                                    if 'subscribe' not in line.lower() and 'follow' not in line.lower():
-                                                        lyrics_lines.append(line)
-                                            
-                                            if len(lyrics_lines) > 5:
-                                                found_lyrics = '\n'.join(lyrics_lines)
-                                                self.print_progress("Lyrics found in YouTube description", 50)
-                                                return found_lyrics
-                        except:
-                            continue
-        except Exception as e:
-            pass
-        
-        # Method 2: Try Genius
-        try:
-            self.print_info("Searching Genius for lyrics...")
-            formatted_name = song_name.lower().replace(' ', '-')
-            formatted_name = re.sub(r'[^\w\-]', '', formatted_name)
-            
-            genius_urls = [
-                f"https://genius.com/{formatted_name}-lyrics",
-                f"https://genius.com/search?q={urllib.parse.quote(song_name)}"
-            ]
-            
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-            
-            for url in genius_urls:
-                try:
-                    req = urllib.request.Request(url, headers=headers)
-                    with urllib.request.urlopen(req, timeout=15) as response:
-                        html = response.read().decode('utf-8', errors='ignore')
+                    # Fetch lyrics page
+                    req2 = urllib.request.Request(song_url, headers=headers)
+                    with urllib.request.urlopen(req2, timeout=15) as response2:
+                        lyrics_html = response2.read().decode('utf-8')
                         
+                        # Extract lyrics containers
                         patterns = [
                             r'<div[^>]*data-lyrics-container="true"[^>]*>(.*?)</div>',
                             r'<div[^>]*class="[^"]*Lyrics__Container[^"]*"[^>]*>(.*?)</div>',
                         ]
                         
                         for pattern in patterns:
-                            matches = re.findall(pattern, html, re.DOTALL | re.IGNORECASE)
+                            matches = re.findall(pattern, lyrics_html, re.DOTALL)
                             if matches:
                                 lyrics = ' '.join(matches)
                                 lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
                                 lyrics = re.sub(r'<[^>]+>', '', lyrics)
                                 lyrics = re.sub(r'&amp;', '&', lyrics)
-                                lyrics = re.sub(r'\n\s*\n', '\n\n', lyrics.strip())
-                                if len(lyrics) > 100:
+                                lyrics = re.sub(r'&quot;', '"', lyrics)
+                                lyrics = re.sub(r'&#39;', "'", lyrics)
+                                lyrics = lyrics.strip()
+                                
+                                cleaned_lyrics = self.clean_lyrics_text(lyrics)
+                                if len(cleaned_lyrics) > 200:
                                     self.print_progress("Lyrics found on Genius", 50)
-                                    return lyrics
-                except:
-                    continue
+                                    return cleaned_lyrics, "Genius"
         except Exception as e:
             pass
         
-        # Method 3: Try Lyrics.ovh API
+        # Second try: AZLyrics
+        try:
+            self.print_info("Searching AZLyrics...")
+            search_name = song_name.lower().replace(' ', '')
+            search_name = re.sub(r'[^\w]', '', search_name)
+            
+            az_urls = [
+                f"https://www.azlyrics.com/lyrics/{search_name}.html",
+                f"https://www.azlyrics.com/lyrics/{search_name[:3]}/{search_name}.html",
+            ]
+            
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            
+            for az_url in az_urls:
+                try:
+                    req = urllib.request.Request(az_url, headers=headers)
+                    with urllib.request.urlopen(req, timeout=15) as response:
+                        html = response.read().decode('utf-8', errors='ignore')
+                        
+                        match = re.search(r'<!-- start of lyrics -->(.*?)<!-- end of lyrics -->', html, re.DOTALL)
+                        if match:
+                            lyrics = match.group(1)
+                            lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
+                            lyrics = re.sub(r'<[^>]+>', '', lyrics)
+                            lyrics = re.sub(r'&nbsp;', ' ', lyrics)
+                            lyrics = lyrics.strip()
+                            
+                            cleaned_lyrics = self.clean_lyrics_text(lyrics)
+                            if len(cleaned_lyrics) > 200:
+                                self.print_progress("Lyrics found on AZLyrics", 50)
+                                return cleaned_lyrics, "AZLyrics"
+                except:
+                    continue
+        except:
+            pass
+        
+        # Third try: Lyrics.ovh API
         try:
             self.print_info("Trying Lyrics.ovh API...")
             if ' - ' in song_name:
                 parts = song_name.split(' - ', 1)
                 artist, song = parts[0], parts[1]
                 api_url = f"https://api.lyrics.ovh/v1/{urllib.parse.quote(artist)}/{urllib.parse.quote(song)}"
+                
                 req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req, timeout=10) as response:
                     data = json.loads(response.read().decode('utf-8'))
                     if 'lyrics' in data and data['lyrics']:
                         lyrics = data['lyrics'].strip()
-                        if len(lyrics) > 100:
-                            self.print_progress("Lyrics found via Lyrics.ovh API", 50)
-                            return lyrics
+                        cleaned_lyrics = self.clean_lyrics_text(lyrics)
+                        if len(cleaned_lyrics) > 200:
+                            self.print_progress("Lyrics found via Lyrics.ovh", 50)
+                            return cleaned_lyrics, "Lyrics.ovh"
         except:
             pass
         
-        # Method 4: Try ChartLyrics API
-        try:
-            self.print_info("Trying ChartLyrics API...")
-            api_url = f"http://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect?artist=&song={urllib.parse.quote(song_name)}"
-            req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=10) as response:
-                xml_data = response.read().decode('utf-8')
-                match = re.search(r'<Lyric>(.*?)</Lyric>', xml_data, re.DOTALL)
-                if match:
-                    lyrics = match.group(1)
-                    lyrics = lyrics.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
-                    lyrics = re.sub(r'<[^>]+>', '', lyrics)
-                    lyrics = lyrics.strip()
-                    if len(lyrics) > 100:
-                        self.print_progress("Lyrics found via ChartLyrics API", 50)
-                        return lyrics
-        except:
-            pass
-        
-        self.print_warning(f"Could not find lyrics online for: {song_name}")
-        self.print_info("Tips for better results:")
-        self.print_info("  1. Use format: 'Artist Name - Song Name'")
-        self.print_info("  2. For anime songs, try: 'Anime Name Song Name'")
-        self.print_info("  3. Try: 'Song Name anime lyrics'")
-        
-        return None
+        self.print_warning(f"No clean lyrics found for: {song_name}")
+        return None, None
         
     def load_model(self, model_name: str):
         try:
@@ -743,7 +752,7 @@ class NotYCaptionGenerator:
         
     def generate_song_lyrics(self, media_path: Path, model_name: str, language_code: str, 
                               song_search_type: str, manual_song_name: str = None) -> bool:
-        """Generate lyrics using song mode with online search"""
+        """Generate lyrics using song mode with Spleeter vocal separation"""
         try:
             import whisper
             from datetime import timedelta
@@ -755,9 +764,6 @@ class NotYCaptionGenerator:
                 if not audio_path:
                     self.print_error("Could not extract audio from video file")
                     return False
-            
-            # Separate vocals for better lyrics
-            vocal_path = self.separate_vocals(audio_path)
             
             # Get song name
             search_queries = []
@@ -771,20 +777,38 @@ class NotYCaptionGenerator:
                 clean_name = re.sub(r'\s+', ' ', clean_name).strip()
                 search_queries.append(clean_name)
                 
-                # Try variations for anime songs
-                for suffix in [' op', ' ed', ' ost', ' opening', ' ending', ' theme']:
+                # Try variations
+                for suffix in [' lyrics', ' song', ' ost', ' theme']:
                     search_queries.append(clean_name + suffix)
                 
                 search_queries = list(dict.fromkeys(search_queries))
                 self.print_info(f"Auto-detected song: {clean_name}")
             
-            # Search for lyrics with multiple queries
+            # Search for lyrics
             online_lyrics = None
+            lyrics_source = None
+            
             for query in search_queries:
                 self.print_info(f"Trying: {query}")
-                online_lyrics = self.search_lyrics_online(query)
-                if online_lyrics:
+                lyrics, source = self.search_lyrics_online(query)
+                if lyrics:
+                    online_lyrics = lyrics
+                    lyrics_source = source
                     break
+            
+            # Vocal separation for better accuracy
+            self.print_progress("Preparing vocal track...", 30)
+            
+            # Try Spleeter first
+            vocal_path = None
+            try:
+                vocal_path = self.separate_vocals_spleeter(audio_path)
+            except:
+                pass
+            
+            # Fallback to FFmpeg if Spleeter fails
+            if not vocal_path:
+                vocal_path = self.separate_vocals_ffmpeg(audio_path)
             
             if self.model is None:
                 if not self.load_model(model_name):
@@ -813,9 +837,9 @@ class NotYCaptionGenerator:
                 subtitles = []
                 index = 1
                 
-                # Calculate duration per segment
+                # Calculate average duration per line
                 total_duration = segments[-1]["end"] if segments else 0
-                avg_duration = total_duration / len(lyrics_lines) if lyrics_lines else 0
+                avg_duration = total_duration / max(len(lyrics_lines), 1)
                 
                 # Match lyrics lines to audio segments
                 for i, line in enumerate(lyrics_lines):
@@ -824,7 +848,6 @@ class NotYCaptionGenerator:
                         start_time = segment["start"]
                         end_time = segment["end"]
                     else:
-                        # Estimate timing for extra lines
                         start_time = avg_duration * i
                         end_time = start_time + avg_duration
                     
@@ -859,12 +882,15 @@ class NotYCaptionGenerator:
             # Clean up temp files
             if audio_path != media_path and audio_path and audio_path.exists():
                 try:
-                    audio_path.unlink()
+                    shutil.rmtree(audio_path.parent, ignore_errors=True)
                 except:
                     pass
-            if vocal_path != audio_path and vocal_path and vocal_path.exists():
+            if vocal_path and vocal_path != audio_path and vocal_path.exists():
                 try:
-                    vocal_path.unlink()
+                    if "spleeter" in str(vocal_path):
+                        shutil.rmtree(vocal_path.parent, ignore_errors=True)
+                    else:
+                        vocal_path.unlink()
                 except:
                     pass
             
@@ -872,7 +898,7 @@ class NotYCaptionGenerator:
             print()
             
             if online_lyrics:
-                self.print_success(f"Lyrics saved to: {output_path} (with online lyrics)")
+                self.print_success(f"Lyrics saved to: {output_path} (from {lyrics_source})")
             else:
                 self.print_success(f"Lyrics saved to: {output_path} (AI-generated)")
             self.print_info(f"Generated {len(subtitles)} lyrics entries")
@@ -1106,7 +1132,7 @@ class NotYCaptionGenerator:
                     if not self.confirm("Generate lyrics?"):
                         continue
                     
-                    self.print_info("Generating lyrics with online search...")
+                    self.print_info("Generating lyrics with Spleeter vocal separation...")
                     success = self.generate_song_lyrics(
                         media_path,
                         self.selected_model,
