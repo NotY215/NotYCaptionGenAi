@@ -23,7 +23,6 @@ import re
 import json
 import urllib.request
 import urllib.parse
-import hashlib
 import tempfile
 import shutil
 
@@ -382,33 +381,15 @@ class NotYCaptionGenerator:
         if not lyrics:
             return lyrics
             
-        # Remove lines with common unwanted content
         unwanted_patterns = [
-            r'(?i)^song:.*$',
-            r'(?i)^artist:.*$',
-            r'(?i)^album:.*$',
-            r'(?i)^copyright.*$',
-            r'(?i)^no copyright infringement.*$',
-            r'(?i)^all rights reserved.*$',
-            r'(?i)^subscribe.*$',
-            r'(?i)^like.*$',
-            r'(?i)^comment.*$',
-            r'(?i)^share.*$',
-            r'(?i)^follow.*$',
-            r'(?i)^instagram.*$',
-            r'(?i)^facebook.*$',
-            r'(?i)^twitter.*$',
-            r'(?i)^tiktok.*$',
-            r'(?i)^discord.*$',
-            r'(?i)^#.*$',
-            r'(?i)^@.*$',
-            r'(?i)^https?://.*$',
-            r'(?i)^www\..*$',
-            r'(?i)^if you.*$',
-            r'(?i)^please.*$',
-            r'(?i)^don\'t forget.*$',
-            r'(?i)^check out.*$',
-            r'^\s*\[\s*(?:verse|chorus|bridge|intro|outro|hook)\s*\].*$',
+            r'(?i)^song:.*$', r'(?i)^artist:.*$', r'(?i)^album:.*$',
+            r'(?i)^copyright.*$', r'(?i)^no copyright infringement.*$',
+            r'(?i)^all rights reserved.*$', r'(?i)^subscribe.*$',
+            r'(?i)^like.*$', r'(?i)^comment.*$', r'(?i)^share.*$',
+            r'(?i)^follow.*$', r'(?i)^instagram.*$', r'(?i)^facebook.*$',
+            r'(?i)^twitter.*$', r'(?i)^tiktok.*$', r'(?i)^discord.*$',
+            r'(?i)^#.*$', r'(?i)^@.*$', r'(?i)^https?://.*$',
+            r'(?i)^www\..*$', r'^\s*\[\s*(?:verse|chorus|bridge|intro|outro|hook)\s*\].*$',
             r'^\s*\(\s*(?:verse|chorus|bridge|intro|outro|hook)\s*\).*$',
         ]
         
@@ -419,14 +400,11 @@ class NotYCaptionGenerator:
             line = line.strip()
             if not line:
                 continue
-                
-            # Skip unwanted lines
             should_skip = False
             for pattern in unwanted_patterns:
                 if re.match(pattern, line, re.IGNORECASE):
                     should_skip = True
                     break
-                    
             if not should_skip and len(line) > 1:
                 cleaned_lines.append(line)
         
@@ -439,126 +417,76 @@ class NotYCaptionGenerator:
         if not song_name:
             return None, None
             
-        # Clean up song name for better search
-        original_song_name = song_name
         song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
         song_name = re.sub(r'\s+', ' ', song_name).strip()
         
-        # Create variations for better matching
-        search_variations = [
-            song_name,
-            song_name.lower(),
-            song_name.title(),
-            song_name.replace(' ', ''),
-            song_name.replace(' ', '-'),
-        ]
-        
-        # First try: Genius.com with exact title matching
+        # Try Genius.com
         try:
             self.print_info("Searching Genius for exact match...")
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            encoded = urllib.parse.quote(song_name)
+            search_url = f"https://genius.com/search?q={encoded}"
             
-            for variation in search_variations[:3]:
-                encoded = urllib.parse.quote(variation)
-                search_url = f"https://genius.com/search?q={encoded}"
+            req = urllib.request.Request(search_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8')
                 
-                req = urllib.request.Request(search_url, headers=headers)
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    html = response.read().decode('utf-8')
-                    
-                    # Extract all song links
-                    song_links = re.findall(r'href="([^"]*)"[^>]*>([^<]+)</a>', html)
-                    
-                    for link, title in song_links:
-                        # Check if title matches our song (case insensitive)
-                        if (original_song_name.lower() in title.lower() or 
-                            title.lower() in original_song_name.lower()):
-                            if 'lyrics' in link:
-                                song_url = link if link.startswith('http') else 'https://genius.com' + link
+                song_links = re.findall(r'href="([^"]*)"[^>]*>([^<]+)</a>', html)
+                
+                for link, title in song_links:
+                    if song_name.lower() in title.lower() or title.lower() in song_name.lower():
+                        if 'lyrics' in link:
+                            song_url = link if link.startswith('http') else 'https://genius.com' + link
+                            
+                            req2 = urllib.request.Request(song_url, headers=headers)
+                            with urllib.request.urlopen(req2, timeout=15) as response2:
+                                lyrics_html = response2.read().decode('utf-8')
                                 
-                                # Fetch lyrics page
-                                req2 = urllib.request.Request(song_url, headers=headers)
-                                with urllib.request.urlopen(req2, timeout=15) as response2:
-                                    lyrics_html = response2.read().decode('utf-8')
-                                    
-                                    # Extract lyrics
-                                    patterns = [
-                                        r'<div[^>]*data-lyrics-container="true"[^>]*>(.*?)</div>',
-                                        r'<div[^>]*class="[^"]*Lyrics__Container[^"]*"[^>]*>(.*?)</div>',
-                                    ]
-                                    
-                                    for pattern in patterns:
-                                        matches = re.findall(pattern, lyrics_html, re.DOTALL)
-                                        if matches:
-                                            lyrics = ' '.join(matches)
-                                            lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
-                                            lyrics = re.sub(r'<[^>]+>', '', lyrics)
-                                            lyrics = re.sub(r'&amp;', '&', lyrics)
-                                            lyrics = re.sub(r'&quot;', '"', lyrics)
-                                            lyrics = re.sub(r'&#39;', "'", lyrics)
-                                            lyrics = lyrics.strip()
-                                            
-                                            # Verify lyrics contain expected content (not random)
-                                            if len(lyrics) > 200 and not re.search(r'contributors?|reimagined|remix', lyrics.lower()):
-                                                cleaned_lyrics = self.clean_lyrics_text(lyrics)
-                                                if len(cleaned_lyrics) > 100:
-                                                    self.print_progress(f"Found exact match on Genius", 50)
-                                                    return cleaned_lyrics, "Genius"
-        except Exception as e:
+                                patterns = [
+                                    r'<div[^>]*data-lyrics-container="true"[^>]*>(.*?)</div>',
+                                    r'<div[^>]*class="[^"]*Lyrics__Container[^"]*"[^>]*>(.*?)</div>',
+                                ]
+                                
+                                for pattern in patterns:
+                                    matches = re.findall(pattern, lyrics_html, re.DOTALL)
+                                    if matches:
+                                        lyrics = ' '.join(matches)
+                                        lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
+                                        lyrics = re.sub(r'<[^>]+>', '', lyrics)
+                                        lyrics = re.sub(r'&amp;', '&', lyrics)
+                                        lyrics = lyrics.strip()
+                                        
+                                        if len(lyrics) > 200 and not re.search(r'contributors?|reimagined|remix', lyrics.lower()):
+                                            cleaned_lyrics = self.clean_lyrics_text(lyrics)
+                                            if len(cleaned_lyrics) > 100:
+                                                self.print_progress("Found lyrics on Genius", 50)
+                                                return cleaned_lyrics, "Genius"
+        except:
             pass
         
-        # Second try: AZLyrics with exact matching
+        # Try AZLyrics
         try:
-            self.print_info("Searching AZLyrics for exact match...")
+            self.print_info("Searching AZLyrics...")
             search_name = re.sub(r'[^\w\s]', '', song_name).lower().replace(' ', '')
-            
             az_url = f"https://www.azlyrics.com/lyrics/{search_name}.html"
             
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
             req = urllib.request.Request(az_url, headers=headers)
             
-            try:
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    html = response.read().decode('utf-8', errors='ignore')
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8', errors='ignore')
+                match = re.search(r'<!-- start of lyrics -->(.*?)<!-- end of lyrics -->', html, re.DOTALL)
+                if match:
+                    lyrics = match.group(1)
+                    lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
+                    lyrics = re.sub(r'<[^>]+>', '', lyrics)
+                    lyrics = re.sub(r'&nbsp;', ' ', lyrics)
+                    lyrics = lyrics.strip()
                     
-                    # Check if page contains the song title
-                    if song_name.lower() in html.lower():
-                        match = re.search(r'<!-- start of lyrics -->(.*?)<!-- end of lyrics -->', html, re.DOTALL)
-                        if match:
-                            lyrics = match.group(1)
-                            lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
-                            lyrics = re.sub(r'<[^>]+>', '', lyrics)
-                            lyrics = re.sub(r'&nbsp;', ' ', lyrics)
-                            lyrics = lyrics.strip()
-                            
-                            if len(lyrics) > 200:
-                                cleaned_lyrics = self.clean_lyrics_text(lyrics)
-                                self.print_progress(f"Found exact match on AZLyrics", 50)
-                                return cleaned_lyrics, "AZLyrics"
-            except:
-                pass
-        except:
-            pass
-        
-        # Third try: Lyrics.ovh API with exact artist/song
-        try:
-            self.print_info("Trying Lyrics.ovh API...")
-            # Try to extract artist from filename
-            parts = song_name.split('-')
-            if len(parts) >= 2:
-                artist = parts[0].strip()
-                song = parts[1].strip()
-                api_url = f"https://api.lyrics.ovh/v1/{urllib.parse.quote(artist)}/{urllib.parse.quote(song)}"
-                
-                req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=10) as response:
-                    data = json.loads(response.read().decode('utf-8'))
-                    if 'lyrics' in data and data['lyrics']:
-                        lyrics = data['lyrics'].strip()
-                        if len(lyrics) > 200:
-                            cleaned_lyrics = self.clean_lyrics_text(lyrics)
-                            self.print_progress(f"Found exact match via Lyrics.ovh", 50)
-                            return cleaned_lyrics, "Lyrics.ovh"
+                    if len(lyrics) > 200:
+                        cleaned_lyrics = self.clean_lyrics_text(lyrics)
+                        self.print_progress("Found lyrics on AZLyrics", 50)
+                        return cleaned_lyrics, "AZLyrics"
         except:
             pass
         
@@ -578,7 +506,6 @@ class NotYCaptionGenerator:
             return False
             
     def transliterate_text(self, text: str, language_code: str) -> str:
-        """Complete transliteration for Hindi and Japanese"""
         if language_code == "hi":
             hindi_map = {
                 'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
@@ -661,7 +588,6 @@ class NotYCaptionGenerator:
         return '\n'.join(lines)
         
     def auto_break_sentences(self, segments) -> List[dict]:
-        """Auto-detect sentence breaks based on audio gaps and punctuation"""
         subtitles = []
         index = 1
         min_gap = 0.3
@@ -726,12 +652,10 @@ class NotYCaptionGenerator:
         
     def generate_song_lyrics(self, media_path: Path, model_name: str, language_code: str, 
                               song_search_type: str, manual_song_name: str = None) -> bool:
-        """Generate lyrics using song mode with exact matching"""
         try:
             import whisper
             from datetime import timedelta
             
-            # Extract audio
             audio_path = media_path
             if media_path.suffix.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm']:
                 audio_path = self.extract_audio(media_path)
@@ -739,30 +663,18 @@ class NotYCaptionGenerator:
                     self.print_error("Could not extract audio from video file")
                     return False
             
-            # Get song name with exact matching
             if song_search_type == "manual" and manual_song_name:
                 song_name = manual_song_name.strip()
                 self.print_info(f"Searching for: {song_name}")
             else:
-                # Auto detect - clean filename
                 original_name = media_path.stem
-                # Remove common patterns
-                clean_name = re.sub(r'\[.*?\]|\(.*?\)|\{.*?\}', '', original_name)
-                clean_name = re.sub(r'[_\-]', ' ', clean_name)
+                clean_name = re.sub(r'[_\-\[\]\(\)]', ' ', original_name)
                 clean_name = re.sub(r'\s+', ' ', clean_name).strip()
-                
-                # Try to extract artist and song
-                if ' - ' in clean_name:
-                    song_name = clean_name
-                else:
-                    song_name = clean_name
-                
+                song_name = clean_name
                 self.print_info(f"Auto-detected: {song_name}")
             
-            # Search for lyrics with exact matching
             online_lyrics, lyrics_source = self.search_lyrics_online(song_name)
             
-            # Vocal separation for better accuracy
             vocal_path = self.separate_vocals_ffmpeg(audio_path)
             
             if self.model is None:
@@ -785,21 +697,17 @@ class NotYCaptionGenerator:
             output_path = media_path.parent / f"{media_path.stem}_lyrics.srt"
             
             if online_lyrics:
-                # Use online lyrics with timing from audio
                 lyrics_lines = [line.strip() for line in online_lyrics.split('\n') if line.strip() and len(line.strip()) > 2]
                 segments = result.get("segments", [])
                 
                 subtitles = []
                 index = 1
                 
-                # Filter out non-lyrics lines
                 lyrics_lines = [line for line in lyrics_lines if not re.match(r'^[\d\W]+$', line)]
                 
-                # Calculate average duration per line
                 total_duration = segments[-1]["end"] if segments else 0
                 avg_duration = total_duration / max(len(lyrics_lines), 1)
                 
-                # Match lyrics lines to audio segments
                 for i, line in enumerate(lyrics_lines):
                     if i < len(segments):
                         segment = segments[i]
@@ -821,7 +729,6 @@ class NotYCaptionGenerator:
                     })
                     index += 1
             else:
-                # Use transcribed text with auto break
                 self.print_warning("No online lyrics found, using AI transcription")
                 segments = result.get("segments", [])
                 if language_code in ["hi", "ja"]:
@@ -829,7 +736,6 @@ class NotYCaptionGenerator:
                         seg["text"] = self.transliterate_text(seg["text"], language_code)
                 subtitles = self.auto_break_sentences(segments)
             
-            # Write SRT file
             self.print_progress("Writing lyrics file...", 90)
             with open(output_path, 'w', encoding='utf-8') as f:
                 for sub in subtitles:
@@ -837,7 +743,6 @@ class NotYCaptionGenerator:
                     end_str = self.format_time(sub["end"].total_seconds())
                     f.write(f"{sub['index']}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
             
-            # Clean up temp files
             if audio_path != media_path and audio_path and audio_path.exists():
                 try:
                     audio_path.unlink()
@@ -983,20 +888,29 @@ class NotYCaptionGenerator:
         if not self.check_ffmpeg():
             self.print_warning("FFmpeg not found! Video extraction may fail.")
         
-        # Try to import whisper
+        # Try to import whisper (handle missing torch.cuda gracefully)
         try:
             import whisper
-            import torch
             self.print_success("Whisper loaded successfully")
         except ImportError as e:
-            self.print_error(f"Whisper import failed: {e}")
-            self.print_info("Please install: pip install openai-whisper torch numpy")
-            input("\nPress Enter to exit...")
-            return
+            if 'torch.cuda' in str(e):
+                self.print_warning("CUDA not available, using CPU mode")
+                try:
+                    import whisper
+                    self.print_success("Whisper loaded successfully (CPU mode)")
+                except ImportError as e2:
+                    self.print_error(f"Whisper import failed: {e2}")
+                    self.print_info("Please install: pip install openai-whisper torch numpy")
+                    input("\nPress Enter to exit...")
+                    return
+            else:
+                self.print_error(f"Whisper import failed: {e}")
+                self.print_info("Please install: pip install openai-whisper torch numpy")
+                input("\nPress Enter to exit...")
+                return
             
         while True:
             try:
-                # Show supported formats at start
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.CYAN}Supported Formats:{Colors.RESET}")
@@ -1008,7 +922,6 @@ class NotYCaptionGenerator:
                 media_path = self.get_media_path(allowed_extensions)
                 self.print_success(f"Selected: {media_path}")
                 
-                # Select model
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}\n")
@@ -1019,7 +932,6 @@ class NotYCaptionGenerator:
                     continue
                 self.selected_model = self.models[model_choice][0]
                 
-                # Select language
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
@@ -1033,7 +945,6 @@ class NotYCaptionGenerator:
                 language_code = self.selected_language[1]
                 language_name = self.selected_language[0]
                 
-                # Select mode
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
@@ -1048,7 +959,6 @@ class NotYCaptionGenerator:
                 self.selected_mode = self.modes[mode_choice]
                 mode = self.selected_mode[1]
                 
-                # If Song Mode, select search option
                 if mode == "song":
                     self.clear_screen()
                     print_header()
@@ -1072,7 +982,6 @@ class NotYCaptionGenerator:
                             self.print_error("Song name cannot be empty!")
                             continue
                     
-                    # Confirm and generate lyrics
                     self.clear_screen()
                     print_header()
                     search_display = "Auto Detect" if song_search_type == "auto" else f"Manual: {manual_song_name}"
@@ -1096,7 +1005,6 @@ class NotYCaptionGenerator:
                         manual_song_name
                     )
                 else:
-                    # Normal mode - select line type
                     self.clear_screen()
                     print_header()
                     print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
@@ -1117,7 +1025,6 @@ class NotYCaptionGenerator:
                             f"How many {line_type} per line? (1-30): ", 1, 30
                         )
                     
-                    # Confirm and generate
                     self.clear_screen()
                     print_header()
                     self.print_box([
