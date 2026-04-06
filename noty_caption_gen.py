@@ -148,11 +148,9 @@ class NotYCaptionGenerator:
         ]
         
         self.modes = [
-            ("Normal", "transcribe", "Generate subtitles in selected language"),
-            ("Translate to English", "translate", "Translate any language to English")
+            ("Normal Mode", "normal", "Generate captions/subtitles from audio"),
+            ("Song Mode", "song", "Enhanced lyrics with online search for songs")
         ]
-        
-        self.song_mode = ("Song Mode", "song", "Enhanced lyrics with online search")
         
         self.line_types = [
             ("Words", "words", "Break by word count"),
@@ -421,26 +419,6 @@ class NotYCaptionGenerator:
         except:
             pass
         
-        # Method 3: Try MetroLyrics format
-        try:
-            artist_song = song_name.split('-')
-            if len(artist_song) >= 2:
-                artist = artist_song[0].strip().lower().replace(' ', '')
-                song = artist_song[1].strip().lower().replace(' ', '')
-                url = f"https://www.metrolyrics.com/{song}-lyrics-{artist}.html"
-                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    html = response.read().decode('utf-8')
-                    match = re.search(r'<p[^>]*class="verse"[^>]*>(.*?)</p>', html, re.DOTALL)
-                    if match:
-                        lyrics = re.sub(r'<[^>]+>', '', match.group(1))
-                        lyrics = re.sub(r'\n\s*\n', '\n\n', lyrics.strip())
-                        if len(lyrics) > 100:
-                            self.print_progress("Lyrics found on MetroLyrics", 50)
-                            return lyrics
-        except:
-            pass
-        
         self.print_warning("Could not find lyrics online")
         return None
         
@@ -679,6 +657,9 @@ class NotYCaptionGenerator:
                 for i, segment in enumerate(segments):
                     if i < len(lyrics_lines):
                         text = lyrics_lines[i]
+                        # Apply transliteration if needed
+                        if language_code in ["hi", "ja"]:
+                            text = self.transliterate_text(text, language_code)
                         subtitles.append({
                             "index": index,
                             "start": timedelta(seconds=segment["start"]),
@@ -691,6 +672,10 @@ class NotYCaptionGenerator:
             else:
                 # Use transcribed text with auto break
                 segments = result.get("segments", [])
+                # Apply transliteration if needed
+                if language_code in ["hi", "ja"]:
+                    for seg in segments:
+                        seg["text"] = self.transliterate_text(seg["text"], language_code)
                 subtitles = self.auto_break_sentences(segments)
             
             # Write SRT file
@@ -730,7 +715,7 @@ class NotYCaptionGenerator:
             return False
             
     def generate_captions(self, media_path: Path, model_name: str, line_type: str, 
-                          number_per_line: int, language_code: str, mode: str) -> bool:
+                          number_per_line: int, language_code: str) -> bool:
         try:
             import whisper
             from datetime import timedelta
@@ -749,12 +734,10 @@ class NotYCaptionGenerator:
                     
             self.print_progress("Transcribing audio...", 70)
             
-            task = "translate" if mode == "translate" else "transcribe"
             language = language_code if language_code != "auto" else None
             
             result = self.model.transcribe(
                 str(audio_path),
-                task=task,
                 language=language,
                 verbose=False,
                 word_timestamps=True
@@ -764,9 +747,7 @@ class NotYCaptionGenerator:
             
             # Determine output filename
             output_path = media_path.parent / f"{media_path.stem}"
-            if mode == "translate":
-                output_path = output_path.with_name(f"{media_path.stem}_en")
-            elif language_code != "auto":
+            if language_code != "auto":
                 output_path = output_path.with_name(f"{media_path.stem}_{language_code}")
             output_path = output_path.with_suffix(".srt")
             
@@ -898,46 +879,23 @@ class NotYCaptionGenerator:
                 language_code = self.selected_language[1]
                 language_name = self.selected_language[0]
                 
-                # Select mode (filter based on language)
+                # Select mode (only show Normal and Song Mode)
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
                 print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
                 
-                # Build mode options based on language
-                mode_options = []
-                mode_values = []
-                
-                # Normal mode always available
-                mode_options.append(f"{self.modes[0][0]} - {self.modes[0][2]}")
-                mode_values.append(self.modes[0])
-                
-                # Translate mode - only show if language is not English
-                if language_code != "en":
-                    mode_options.append(f"{self.modes[1][0]} - {self.modes[1][2]}")
-                    mode_values.append(self.modes[1])
-                
-                # Song mode always available as separate option
-                is_song_mode = False
-                print(f"\n{Colors.CYAN}Additional Option:{Colors.RESET}")
-                print(f"  {len(mode_options) + 1}) {self.song_mode[0]} - {self.song_mode[2]}")
-                
-                choice = self.get_number_input(f"\nChoose option (0-{len(mode_options) + 1}): ", 0, len(mode_options) + 1)
-                
-                if choice == 0:
+                mode_options = [f"{m[0]} - {m[2]}" for m in self.modes]
+                mode_choice = self.show_menu("SELECT MODE", mode_options)
+                if mode_choice == -1:
                     continue
-                elif choice == len(mode_options) + 1:
-                    # Song mode selected
-                    is_song_mode = True
-                    mode = "song"
-                else:
-                    is_song_mode = False
-                    self.selected_mode = mode_values[choice - 1]
-                    mode = self.selected_mode[1]
+                    
+                self.selected_mode = self.modes[mode_choice]
+                mode = self.selected_mode[1]
                 
                 # If Song Mode, skip line type selection
-                if is_song_mode:
+                if mode == "song":
                     # Confirm and generate lyrics
                     self.clear_screen()
                     print_header()
@@ -958,7 +916,7 @@ class NotYCaptionGenerator:
                         language_code
                     )
                 else:
-                    # Select line type
+                    # Normal mode - select line type
                     self.clear_screen()
                     print_header()
                     print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
@@ -1000,8 +958,7 @@ class NotYCaptionGenerator:
                         self.selected_model,
                         line_type,
                         number_per_line,
-                        language_code,
-                        mode
+                        language_code
                     )
                 
                 if success:
