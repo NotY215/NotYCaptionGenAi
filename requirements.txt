@@ -22,5 +22,5 @@ pyinstaller>=6.0.0
 pyinstaller-hooks-contrib>=2024.0
 
 # Optional dependencies for enhanced features
-spleeter>=2.3.0
-tensorflow>=2.0.0
+spleeter
+tensorflow
