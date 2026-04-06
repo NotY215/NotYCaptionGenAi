@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build NotY Caption Generator AI Executable v4.5
+Build NotY Caption Generator AI Executable v5.1
 Copyright (c) 2026 NotY215
 """
 
@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 
 APP_NAME = "NotYCaptionGenAI"
-APP_VERSION = "4.5"
+APP_VERSION = "5.1"
 APP_AUTHOR = "NotY215"
 APP_COPYRIGHT = f"Copyright (c) 2026 {APP_AUTHOR}"
 
@@ -46,7 +46,7 @@ def build_exe():
     while len(version_parts) < 4:
         version_parts.append(0)
     
-    # Create version info for Windows with correct format
+    # Create version info for Windows
     version_info = f'''
 VSVersionInfo(
   ffi=FixedFileInfo(
@@ -73,7 +73,7 @@ VSVersionInfo(
             StringStruct(u'OriginalFilename', u'{APP_NAME}.exe'),
             StringStruct(u'ProductName', u'{APP_NAME}'),
             StringStruct(u'ProductVersion', u'{APP_VERSION}'),
-            StringStruct(u'Comments', u'Caption Generator using OpenAI Whisper')
+            StringStruct(u'Comments', u'AI-Powered Caption Generator with Vocal Separation & Song Mode')
           ]
         )
       ]
@@ -96,6 +96,7 @@ a = Analysis(
     binaries=[],
     datas=collect_data_files('whisper') + collect_data_files('torch') + ffmpeg_datas + [(r'{icon_path}', '.')],
     hiddenimports=[
+        # Whisper core
         'whisper',
         'whisper.__main__',
         'whisper.audio',
@@ -105,34 +106,167 @@ a = Analysis(
         'whisper.utils',
         'whisper.normalizers',
         'whisper.transcribe',
+        'whisper.timing',
+        
+        # PyTorch essentials
         'torch',
         'torch._C',
+        'torch._ops',
+        'torch._utils',
         'torch.nn',
         'torch.nn.functional',
+        'torch.serialization',
+        'torch.storage',
+        'torch.types',
+        'torch.version',
+        
+        # NumPy
         'numpy',
         'numpy.core',
+        'numpy.core._methods',
+        'numpy.core.fromnumeric',
+        'numpy.core.umath',
         'numpy.lib',
+        'numpy.lib.format',
+        
+        # CLI & UI
         'colorama',
+        'argparse',
+        'webbrowser',
+        'subprocess',
+        'threading',
+        'time',
+        'pathlib',
+        'platform',
+        'tkinter',
+        'tkinter.filedialog',
+        'ctypes',
+        'importlib',
+        'importlib.metadata',
+        
+        # Text processing
+        'packaging',
+        'packaging.version',
+        'regex',
         'tiktoken',
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
-        'regex',
+        'more_itertools',
+        
+        # HTTP requests (for lyrics search)
+        'requests',
+        'urllib3',
+        'certifi',
+        'charset_normalizer',
+        'idna',
+        
+        # Audio processing
+        'torchaudio',
+        'torchaudio.backend',
+        'torchaudio.functional',
+        'torchaudio.transforms',
+        
+        # Windows registry
         'winreg'
     ],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
     excludes=[
-        'matplotlib',
-        'scipy',
-        'sklearn',
-        'pandas',
-        'PIL',
-        'tensorboard',
-        'torchvision',
-        'torchaudio',
+        # Exclude heavy ML frameworks not needed
+        'tensorflow',
+        'keras',
+        'transformers',
+        'datasets',
+        
+        # Exclude GUI frameworks
         'PyQt5',
-        'PyQt6'
+        'PyQt6',
+        'PySide2',
+        'PySide6',
+        'wxPython',
+        
+        # Exclude visualization
+        'matplotlib',
+        'plotly',
+        'seaborn',
+        'bokeh',
+        
+        # Exclude scientific computing (keep numpy only)
+        'scipy',
+        'pandas',
+        'sklearn',
+        'statsmodels',
+        
+        # Exclude image processing
+        'PIL',
+        'opencv',
+        'imageio',
+        
+        # Exclude other large packages
+        'jupyter',
+        'notebook',
+        'ipython',
+        'numba',
+        'llvmlite',
+        'setuptools',
+        'pkg_resources',
+        'jinja2',
+        'markupsafe',
+        'tensorboard',
+        'tqdm',
+        
+        # Exclude CUDA/GPU (CPU only)
+        'torch.cuda',
+        'torch.cuda.amp',
+        'torch.distributed',
+        'torch.testing',
+        'torch.jit',
+        'torch.onnx',
+        'torch.ao',
+        'torch.fx',
+        'torch._dynamo',
+        'torch._inductor',
+        'torch._export',
+        'torch._functorch',
+        'torch._lazy',
+        'torch._numpy',
+        'torch._prims',
+        'torch._subclasses',
+        'torch.backends',
+        'torch.contrib',
+        'torch.distributions',
+        'torch.fft',
+        'torch.futures',
+        'torch.linalg',
+        'torch.mps',
+        'torch.optim',
+        'torch.package',
+        'torch.profiler',
+        'torch.quantization',
+        'torch.special',
+        'torch.sparse',
+        'torch.utils.benchmark',
+        'torch.utils.checkpoint',
+        'torch.utils.cpp_extension',
+        'torch.utils.data',
+        'torch.utils.dlpack',
+        'torch.utils.hooks',
+        'torch.utils.model_zoo',
+        'torch.utils.tensorboard',
+        
+        # Exclude heavy torch submodules
+        'torchvision',
+        'torchtext',
+        
+        # Exclude numpy submodules
+        'numpy.random',
+        'numpy.ma',
+        'numpy.fft',
+        'numpy.linalg',
+        'numpy.polynomial',
+        'numpy.testing',
+        'numpy.distutils'
     ],
     noarchive=False,
 )
@@ -183,12 +317,20 @@ exe = EXE(
     
     try:
         print("Building executable...")
-        subprocess.check_call(cmd, timeout=1800)
+        print("This may take 5-10 minutes...")
+        subprocess.check_call(cmd, timeout=3600)
         print("\n[OK] Build completed successfully!")
-    except Exception as e:
+    except subprocess.TimeoutExpired:
+        print("\n[ERROR] Build timed out!")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
         print(f"\n[ERROR] Build failed: {e}")
         sys.exit(1)
+    except KeyboardInterrupt:
+        print("\n[WARNING] Build interrupted!")
+        sys.exit(1)
     
+    # Clean up spec and version files
     spec_path.unlink(missing_ok=True)
     version_path.unlink(missing_ok=True)
     shutil.rmtree(builder_dir / "build", ignore_errors=True)
@@ -198,15 +340,18 @@ exe = EXE(
         size = exe_file.stat().st_size / 1024 / 1024
         print(f"\n[OK] Executable built: {exe_file} ({size:.2f} MB)")
         
+        # Create models directory
         models_dir = dist_dir / "models"
         models_dir.mkdir(exist_ok=True)
         
+        # Copy models if they exist
         source_models = base_dir / "models"
         if source_models.exists():
             for model_file in source_models.glob("*.pt"):
                 shutil.copy2(model_file, models_dir / model_file.name)
                 print(f"  Copied model: {model_file.name}")
         
+        # Copy ffmpeg folder
         dest_ffmpeg = dist_dir / "ffmpeg"
         if ffmpeg_dir.exists():
             if dest_ffmpeg.exists():
@@ -214,6 +359,7 @@ exe = EXE(
             shutil.copytree(ffmpeg_dir, dest_ffmpeg)
             print("  Copied ffmpeg folder")
         
+        # Copy resources
         dest_resources = dist_dir / "resources"
         if resources_dir.exists():
             if dest_resources.exists():

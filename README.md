@@ -1,4 +1,3 @@
-
 <p align="center">
   <img src="./resources/app.ico" alt="NotYCaptionGenAi Logo" width="128">
 </p>
@@ -9,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-4.3-brightgreen.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-5.1-brightgreen.svg" alt="Version">
   <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-blue.svg" alt="Platform">
   <img src="https://img.shields.io/badge/Type-Console%20Application-orange.svg" alt="Type">
   <img src="https://img.shields.io/badge/License-LGPL%20v3-blue.svg" alt="License">
@@ -20,16 +19,20 @@
 
 ## 📋 Overview
 
-**NotYCaptionGenAi** is a powerful command-line subtitle generator that automatically creates SRT subtitles for video and audio files using OpenAI's Whisper AI model. **No installation required** - just download and run the EXE!
+**NotYCaptionGenAi** is a powerful command-line subtitle generator that automatically creates SRT subtitles for video and audio files using OpenAI's Whisper AI model with advanced features like vocal separation and online lyrics search. **No installation required** - just download and run the EXE!
 
 ### ✨ Features
 
 - 🎥 **Multi-format Support**: MP4, MKV, AVI, MOV, MP3, WAV, M4A, FLAC, WEBM
 - 🤖 **AI-Powered**: Uses OpenAI Whisper for accurate transcription
 - 🌐 **Translation Mode**: Automatically translate subtitles to English
-- 🔤 **Transliteration**: Convert Japanese/Hindi scripts to English/Romanized text
+- 🔤 **Transliteration**: Complete Japanese/Hindi to English/Romanized text conversion
+- 🎵 **Song Mode**: Enhanced lyrics with vocal separation and online lyrics search
+- 🔊 **Vocal Separation**: Extracts vocals from background music for cleaner lyrics
+- 📡 **Online Lyrics Search**: Searches Genius.com for matching song lyrics
+- 🔄 **Auto Line Break**: Intelligent sentence detection based on audio gaps
 - 📦 **Built-in Models**: Tiny, Base, Small, Medium, and Large models available
-- 📝 **Smart Line Breaking**: Choose between word or letter-based line breaking (1-30 per line)
+- 📝 **Smart Line Breaking**: Choose between word, letter, or auto-detection
 - 💾 **SRT Format**: Standard subtitle format compatible with all media players
 - 🚀 **Portable**: Single EXE file with bundled dependencies - no installation required
 - 💬 **Automatic Links**: Opens Telegram and YouTube channels after completion
@@ -42,7 +45,7 @@
 ### Download Options
 
 **Option 1: Windows EXE (Recommended)**
-🔗 **[Download NotYCaptionGenAi.exe](https://github.com/NotY215/NotYCaptionGenAi/releases/latest)**
+🔗 **[Download NotYCaptionGenAI.exe](https://github.com/NotY215/NotYCaptionGenAi/releases/latest)**
 
 **Option 2: Python Script (Cross-Platform)**
 🔗 **[Download Python Version](https://github.com/NotY215/NotYCaptionGenAi/archive/refs/heads/main.zip)**
@@ -50,7 +53,7 @@
 ### Installation
 
 **Windows EXE Version:**
-1. **Download the EXE**: Get `NotYCaptionGenAi.exe` from the releases page
+1. **Download the EXE**: Get `NotYCaptionGenAI.exe` from the releases page
 2. **Run the Application**: Double-click to launch - that's it!
 3. **First-time Setup**:
    - The app automatically extracts all required files
@@ -60,8 +63,8 @@
 **Python Version:**
 1. **Install Python 3.7+** from [python.org](https://python.org)
 2. **Extract the files** to any folder
-3. **Run** `run.bat` (Windows) or `run.sh` (Linux/Mac)
-4. **First run** installs required dependencies automatically
+3. **Install dependencies**: `pip install -r requirements.txt`
+4. **Run**: `python noty_caption_gen.py`
 
 ---
 
@@ -71,7 +74,7 @@
 
 ```bash
 # Windows EXE
-Double-click NotYCaptionGenAi.exe
+Double-click NotYCaptionGenAI.exe
 
 # Python Version
 python noty_caption_gen.py
@@ -81,154 +84,117 @@ python noty_caption_gen.py
 
 **1. Launch the Application**
 ```
-╔═══════════════════════════════════════════╗
-║     NOTY CAPTION GENERATOR AI v1.0       ║
-║     Powered by Whisper.cpp               ║
-╚═══════════════════════════════════════════╝
++==========================================================+
+|              NotY Caption Generator AI v5.1              |
+|                Copyright (c) 2026 NotY215                |
+|                    License: LGPL-3.0                     |
+|                Powered by OpenAI Whisper                 |
++==========================================================+
 ```
 
 **2. Enter Video/Audio File Path**
 ```
-📂 Provide Video/Audio Path
-Allowed extensions: .mp4, .avi, .mkv, .mov, .mp3, .wav, .m4a, .flac, .webm
-➤ C:\Videos\myvideo.mp4
+[INFO] Opening file selection dialog...
+[OK] Selected: E:\Videos\myvideo.mp4
 ```
 
-**3. Choose Model Option**
+**3. Select Model**
 ```
-┌─────────────────────────────────┐
-│         MAIN MENU               │
-├─────────────────────────────────┤
-│  1) Choose Model               │
-│  0) Go Back (Resend video path)│
-└─────────────────────────────────┘
-➤ Choose option (0-1): 1
-```
-
-**4. Select Whisper Model**
-```
-┌─────────────────────────────────┐
-│       SELECT MODEL             │
-├─────────────────────────────────┤
-│  1) Tiny (75 MB) - Fastest     │
-│  2) Base (150 MB) - Balanced   │
-│  3) Small (500 MB) - Good      │
-│  4) Medium (1.5 GB) - Accurate │
-│  5) Large (2.9 GB) - Best      │
-│  0) Back                       │
-└─────────────────────────────────┘
-➤ Choose model (0-5): 1
+┌──────────────────────────────────────────────────┐
+│                   SELECT MODEL                    │
+├──────────────────────────────────────────────────┤
+│  1) TINY (75 MB) - Fastest                       │
+│  2) BASE (150 MB) - Balanced                     │
+│  3) SMALL (500 MB) - Good                        │
+│  4) MEDIUM (1.5 GB) - Accurate                   │
+│  5) LARGE (2.9 GB) - Best                        │
+│  0) Back                                         │
+└──────────────────────────────────────────────────┘
+Choose option (0-5): 3
 ```
 
-**5. Model Status & Download**
+**4. Select Language**
 ```
-┌─────────────────────────────────┐
-│       MODEL STATUS             │
-├─────────────────────────────────┤
-│  Selected: TINY (75 MB)        │
-├─────────────────────────────────┤
-│  ✗ Model not found!            │
-│  1) Download Model             │
-│     (≈ 75 MB)                  │
-│  0) Back                       │
-└─────────────────────────────────┘
-➤ Choose option (0-1): 1
-
-📥 Downloading TINY model...
-🔗 URL: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
-📦 Total size: 75 MB
-[==================================================>] 100.0% 75.0 MB/75.0 MB
-✅ Model downloaded successfully!
+┌──────────────────────────────────────────────────┐
+│                 SELECT LANGUAGE                   │
+├──────────────────────────────────────────────────┤
+│  1) English (en)                                 │
+│  2) Hindi (hi)                                   │
+│  3) Japanese (ja)                                │
+│  4) Auto Detect (auto)                           │
+│  0) Back                                         │
+└──────────────────────────────────────────────────┘
+Choose option (0-4): 1
 ```
 
-**6. Choose Line Breaking Method**
+**5. Select Mode**
 ```
-┌─────────────────────────────────┐
-│       LINE PREFERENCE          │
-├─────────────────────────────────┤
-│  1) Words                      │
-│  2) Letters                    │
-│  0) Back                       │
-└─────────────────────────────────┘
-➤ Choose preference (0-2): 1
-```
-
-**7. Choose Subtitle Mode**
-```
-┌─────────────────────────────────────────┐
-│         SUBTITLE MODE                   │
-├─────────────────────────────────────────┤
-│  1) Normal                              │
-│     (Generate in original language)     │
-│                                         │
-│  2) Translation                         │
-│     (Translate subtitle to English)     │
-│                                         │
-│  3) Transliteration                    │
-│     (Convert Japanese/Hindi to English)│
-│     ⚠️  Works only for Japanese/Hindi  │
-│                                         │
-│  0) Back                                │
-└─────────────────────────────────────────┘
-➤ Choose mode (0-3): 1
+┌──────────────────────────────────────────────────┐
+│                   SELECT MODE                     │
+├──────────────────────────────────────────────────┤
+│  1) Normal - Generate subtitles in selected lang │
+│  2) Translate to English - Translate to English  │
+│  3) Song Mode - Enhanced lyrics with online search│
+│  0) Back                                         │
+└──────────────────────────────────────────────────┘
+Choose option (0-3): 3
 ```
 
-**8. Enter Number per Line**
+**6. Select Line Type**
 ```
-┌─────────────────────────────────┐
-│  How many words per line?      │
-├─────────────────────────────────┤
-│  Range: 1-30                   │
-│  0) Back                       │
-└─────────────────────────────────┘
-➤ Enter number (0-30): 12
-```
-
-**9. Confirm Generation**
-```
-╔═══════════════════════════════════════════╗
-║         CONFIRM GENERATION                ║
-╠═══════════════════════════════════════════╣
-║ 📁 Media File: C:\Videos\myvideo.mp4     ║
-║ 🤖 Model: TINY                            ║
-║ 🎯 Subtitle Mode: Normal (Original)      ║
-║ 📝 Line Type: words                       ║
-║ 🔢 Words per line: 12                     ║
-║ 💾 Output: C:\Videos\myvideo.srt         ║
-╠═══════════════════════════════════════════╣
-║  1) Continue                             ║
-║  0) Back                                 ║
-╚═══════════════════════════════════════════╝
-➤ Are you sure? (0-1): 1
+┌──────────────────────────────────────────────────┐
+│                   LINE TYPE                       │
+├──────────────────────────────────────────────────┤
+│  1) Words - Break by word count                 │
+│  2) Letters - Break by character limit          │
+│  3) Auto - Auto-detect sentence breaks          │
+│  0) Back                                         │
+└──────────────────────────────────────────────────┘
+Choose option (0-3): 1
 ```
 
-**10. Processing & Generation**
+**7. Set Words per Line (if Words selected)**
 ```
-🎬 Starting caption generation...
-📝 This may take a while depending on media length...
-
-🔧 Running command: resources/whisper/whisper-cli.exe -m resources/models/ggml-tiny.bin -f C:\Videos\myvideo.mp4 -of C:\Videos\myvideo -t 8 -p 4 --output-srt --print-progress
-
-[==================================================>] 100.0%
-✅ Captions generated and saved to: C:\Videos\myvideo.srt
+How many words per line? (1-30): 8
 ```
 
-**11. Completion**
+**8. Confirm Generation**
 ```
-✅ Thanks For using NotY Caption Generator AI!
-Your caption has been generated successfully!
++--------------------------------------------------+
+| Media File: E:\Videos\myvideo.mp4               |
+| Model: SMALL                                     |
+| Language: English                                |
+| Mode: Song Mode                                  |
+| Line Type: Words                                 |
+| Settings: 8                                      |
++--------------------------------------------------+
 
-🌐 Opening links...
-✓ Telegram opened
-✓ YouTube opened
+Generate captions? (y/n): y
+```
 
-┌─────────────────────────────────┐
-│         WHAT'S NEXT?           │
-├─────────────────────────────────┤
-│  1) Quit App                   │
-│  0) Next Video                 │
-└─────────────────────────────────┘
-➤ Choose option (0-1): 0
+**9. Processing & Generation**
+```
+[INFO] Generating captions... This may take several minutes.
+[PROGRESS] ████████████████████████████████████████ 10% - Extracting audio from video...
+[PROGRESS] ████████████████████████████████████████ 30% - Separating vocals from background music...
+[PROGRESS] ████████████████████████████████████████ 45% - Searching lyrics for: myvideo
+[OK] Found lyrics online!
+[PROGRESS] ████████████████████████████████████████ 60% - Loading SMALL model...
+[PROGRESS] ████████████████████████████████████████ 70% - Transcribing audio...
+[PROGRESS] ████████████████████████████████████████ 80% - Processing transcription...
+[PROGRESS] ████████████████████████████████████████ 90% - Writing subtitle file...
+[PROGRESS] ████████████████████████████████████████ 100% - Complete!
+
+[OK] Captions saved to: E:\Videos\myvideo_lyrics.srt
+[INFO] Generated 156 subtitle entries
+```
+
+**10. Completion**
+```
+[OK] Thanks for using NotY Caption Generator AI!
+[OK] Your caption has been generated successfully!
+
+Process another video? (y/n): n
 ```
 
 ---
@@ -242,18 +208,6 @@ Your caption has been generated successfully!
 | Small | 500 MB | ⚡⚡⚡ | ⭐⭐⭐⭐ | Good accuracy, moderate speed |
 | Medium | 1.5 GB | ⚡⚡ | ⭐⭐⭐⭐⭐ | High accuracy, longer videos |
 | Large | 2.9 GB | ⚡ | ⭐⭐⭐⭐⭐ | Maximum accuracy, professional use |
-
----
-
-## 🌐 Model Download Links
-
-| Model | Size | Download URL |
-|-------|------|--------------|
-| Tiny | 75 MB |    https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt |
-| Base | 150 MB | https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt |
-| Small | 500 MB | https://openaipublic.azureedge.net/main/whisper/models/9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794/small.pt |
-| Medium | 1.5 GB | https://openaipublic.azureedge.net/main/whisper/models/345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674b08dcb1/medium.pt |
-| Large | 2.9 GB | https://openaipublic.azureedge.net/main/whisper/models/e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb/large-v3.pt |
 
 ---
 
@@ -271,11 +225,52 @@ Your caption has been generated successfully!
 - Perfect for international audiences
 - Example: Japanese audio → English subtitles
 
-### 3. **Transliteration Mode**
-- Converts Japanese and Hindi scripts to English/Romanized text
-- Japanese: Kanji/Kana → Romaji (e.g., "こんにちは" → "konnichiwa")
-- Hindi: Devanagari → Romanized Hindi (e.g., "नमस्ते" → "namaste")
-- Ideal for learners or viewers who prefer Latin script
+### 3. **Song Mode** (NEW in v5.1)
+- **Vocal Separation**: Extracts vocals from background music using FFmpeg
+- **Online Lyrics Search**: Searches Genius.com for matching song lyrics
+- **Enhanced Accuracy**: Combines AI transcription with online lyrics
+- **Perfect for Music**: Creates professional-quality song lyrics
+- **Internet Required**: For online lyrics search feature
+
+---
+
+## 📝 Line Type Options
+
+### 1. **Words**
+- Breaks subtitles by word count
+- Customizable: 1-30 words per line
+- Best for: General videos, dialogue
+
+### 2. **Letters**
+- Breaks subtitles by character count
+- Customizable: 1-30 characters per line
+- Best for: Languages with long words, social media clips
+
+### 3. **Auto** (NEW in v5.1)
+- Intelligent sentence detection
+- Breaks at natural pauses and punctuation
+- Uses audio gap analysis
+- Best for: Natural speech, presentations
+
+---
+
+## 🎵 Song Mode Features
+
+### Vocal Separation
+- Extracts vocals using FFmpeg filters
+- Reduces background music interference
+- Improves lyric accuracy
+
+### Online Lyrics Search
+- Searches Genius.com database
+- Matches by song name from filename
+- Falls back to AI transcription if not found
+- Requires internet connection
+
+### Lyrics Processing
+- Timestamp alignment with audio
+- Natural line breaking
+- Proper punctuation and formatting
 
 ---
 
@@ -287,7 +282,7 @@ After successful generation, you'll find:
 |------|-------------|
 | `[filename].srt` | Standard subtitles in original language |
 | `[filename]_en.srt` | English translated subtitles (Translation mode) |
-| `[filename]_translit.srt` | Romanized subtitles (Transliteration mode) |
+| `[filename]_lyrics.srt` | Song lyrics with enhanced formatting (Song mode) |
 
 All SRT files are saved in the same folder as your source media file.
 
@@ -311,6 +306,7 @@ All SRT files are saved in the same folder as your source media file.
 | **RAM** | 2GB (for Tiny/Base models) |
 | **Storage** | 500MB for application + models |
 | **CPU** | Any modern processor (Intel Core i3 or equivalent) |
+| **Internet** | Required for Song Mode (lyrics search) |
 
 ### Recommended Requirements
 | Component | Requirement |
@@ -319,6 +315,7 @@ All SRT files are saved in the same folder as your source media file.
 | **Storage** | 4GB free space |
 | **CPU** | Intel Core i5/i7 or AMD Ryzen 5/7 |
 | **GPU** | Optional - no GPU required |
+| **Internet** | Stable connection for Song Mode |
 
 ---
 
@@ -343,7 +340,27 @@ All SRT files are saved in the same folder as your source media file.
 - ✅ Ensure sufficient disk space (at least 2x model size)
 - ✅ Try again - downloads resume automatically
 - ✅ Disable firewall temporarily if needed
-- ✅ Download models manually from the links above
+
+**Q: Song Mode not finding lyrics?**
+- ✅ Ensure file name contains the song name
+- ✅ Check internet connection
+- ✅ Try renaming file to actual song name
+- ✅ Song Mode falls back to AI transcription
+
+**Q: Vocal separation not working?**
+- ✅ Ensure FFmpeg is included in the package
+- ✅ Check audio quality - clear vocals work best
+- ✅ Song Mode works without separation too
+
+**Q: Auto line break not working properly?**
+- ✅ Ensure audio has clear pauses
+- ✅ Adjust audio quality for better detection
+- ✅ Falls back to word/letter mode if needed
+
+**Q: Transliteration breaking words?**
+- ✅ Fixed in v5.1 - complete character mapping
+- ✅ Supports full Hindi and Japanese character sets
+- ✅ Proper word boundary detection
 
 **Q: Slow transcription?**
 - ✅ Use Tiny or Base model for faster processing
@@ -357,24 +374,6 @@ All SRT files are saved in the same folder as your source media file.
 - ✅ Check if audio language is supported
 - ✅ Use Normal mode instead of Translation for better accuracy
 
-**Q: Transliteration not working?**
-- ✅ Transliteration works only for Japanese and Hindi
-- ✅ Ensure audio contains these languages
-- ✅ Try Normal mode first to verify language detection
-- ✅ Use Translation mode for other languages
-
-**Q: FFmpeg or Whisper errors?**
-- ✅ Re-download the latest EXE version
-- ✅ Extract to a new folder (avoid old files)
-- ✅ Run as administrator
-- ✅ Check antivirus - may quarantine required files
-
-**Q: Python version not working?**
-- ✅ Ensure Python 3.7+ is installed
-- ✅ Run `pip install -r requirements.txt`
-- ✅ Check that colorama is installed
-- ✅ Run from command prompt to see error messages
-
 ---
 
 ## 📊 Performance Tips
@@ -385,11 +384,13 @@ All SRT files are saved in the same folder as your source media file.
    - Tiny/Base: Quick previews, short videos
    - Small/Medium: General use, good balance
    - Large: Professional use, maximum accuracy
-3. **Optimize for speed**:
+3. **For songs**: Use Song Mode with clear file naming
+4. **For natural speech**: Use Auto line break mode
+5. **Optimize for speed**:
    - Use SSD storage for faster processing
    - Close unnecessary applications
    - Process shorter segments
-4. **Language-specific tips**:
+6. **Language-specific tips**:
    - English: Works well with all models
    - Japanese/Hindi: Use transliteration for Latin script output
    - Other languages: Use Normal or Translation mode
@@ -437,8 +438,9 @@ For the full license text, visit: https://www.gnu.org/licenses/lgpl-3.0.en.html
 
 - **Developed By**: NotY215
 - **AI Model**: OpenAI Whisper
-- **Model Format**: Whisper.cpp by ggerganov
+- **Model Format**: PyTorch Whisper
 - **Media Processing**: FFmpeg
+- **Lyrics Source**: Genius.com
 - **Python Version**: Pure Python implementation with colorama
 
 ---
@@ -451,30 +453,29 @@ For the full license text, visit: https://www.gnu.org/licenses/lgpl-3.0.en.html
 
 ---
 
-## 🆕 What's New in Version 3.0
+## 🆕 What's New in Version 5.1
 
 ### Added Features:
-- ✨ **Translation Mode** - Translate subtitles to English automatically
-- ✨ **Transliteration Mode** - Convert Japanese/Hindi to Romanized text
-- ✨ **Small model option** (500 MB) for better balance
-- ✨ **Language selection** - Choose from 5 languages (English, Hindi, Japanese, Chinese, Urdu)
-- ✨ **Improved progress bar** with download speed display
-- ✨ **Python version** for cross-platform compatibility
+- 🎵 **Song Mode** - Enhanced lyrics with vocal separation and online search
+- 🔊 **Vocal Separation** - Extracts vocals from background music
+- 📡 **Online Lyrics Search** - Searches Genius.com for matching lyrics
+- 🔄 **Auto Line Break** - Intelligent sentence detection based on audio gaps
+- ✨ **Complete Transliteration** - Full Hindi and Japanese character mapping
+- 📊 **Progress Bar** - Visual percentage-based progress display
 
 ### Improvements:
-- 🔧 Better error handling and user feedback
-- 🔧 UTF-8 encoding support for all languages
-- 🔧 Faster model downloads with resume capability
-- 🔧 Enhanced command-line interface with better formatting
-- 🔧 Model preservation - existing models are never deleted
-- 🔧 Smart resource extraction and management
+- 🔧 **Fixed Transliteration** - No more word breaking issues
+- 🔧 **Better Error Handling** - More descriptive error messages
+- 🔧 **Optimized Build** - Smaller executable size
+- 🔧 **FFmpeg Integration** - Built-in FFmpeg for audio processing
+- 🔧 **Registry Registration** - Appears in Windows Add/Remove Programs
 
 ### Bug Fixes:
-- 🐛 Fixed model path issues for large models
-- 🐛 Fixed resource extraction on first run
-- 🐛 Fixed input validation for all options
-- 🐛 Fixed progress bar display on Windows
-- 🐛 Fixed file path handling with spaces
+- 🐛 Fixed transliteration breaking words into parts
+- 🐛 Fixed progress display showing frames instead of percentage
+- 🐛 Fixed audio extraction for all formats
+- 🐛 Fixed model loading issues
+- 🐛 Fixed Unicode encoding errors on Windows
 
 ---
 
@@ -485,12 +486,23 @@ For the full license text, visit: https://www.gnu.org/licenses/lgpl-3.0.en.html
 - [ ] Batch processing for multiple files
 - [ ] GUI version with drag-and-drop
 - [ ] Cloud model storage
-- [ ] More language support
+- [ ] More language support for transliteration
 - [ ] Custom vocabulary support
 - [ ] Real-time transcription
 - [ ] Subtitle editing interface
 - [ ] Export to multiple formats (ASS, VTT, etc.)
-- [ ] Audio extraction from video
+- [ ] Multiple lyrics sources (AZLyrics, MetroLyrics)
+
+---
+
+## 📊 Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 5.1 | 2026 | Song Mode, Vocal Separation, Online Lyrics, Auto Line Break |
+| 4.5 | 2026 | FFmpeg integration, Registry support, Admin check |
+| 4.4 | 2026 | Improved word timing, Translation mode |
+| 4.3 | 2026 | Initial release with Whisper.cpp |
 
 ---
 
@@ -524,4 +536,3 @@ If you find this project useful, please consider giving it a star on GitHub! It 
 <br>
 <sub>🌟 If you like this project, don't forget to star it on GitHub! 🌟</sub>
 </p>
-

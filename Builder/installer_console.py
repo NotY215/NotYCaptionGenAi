@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NotY Caption Generator AI Installer v4.5 (Console)
+NotY Caption Generator AI Installer v5.1 (Console)
 Copyright (c) 2026 NotY215
 """
 
@@ -20,7 +20,7 @@ import winreg
 
 # Application metadata
 APP_NAME = "NotY Caption Generator AI"
-APP_VERSION = "4.5"
+APP_VERSION = "5.1"
 APP_AUTHOR = "NotY215"
 APP_YEAR = "2026"
 MAIN_EXE = "NotYCaptionGenAI.exe"
@@ -42,14 +42,12 @@ if platform.system() == "Windows":
     os.system('color')
 
 def is_admin():
-    """Check if running as administrator"""
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
     except:
         return False
 
 def run_as_admin():
-    """Re-run the script as administrator"""
     try:
         ctypes.windll.shell32.ShellExecuteW(
             None, "runas", sys.executable, " ".join(sys.argv), None, 1
@@ -59,7 +57,6 @@ def run_as_admin():
         return False
 
 def print_header():
-    """Print application header"""
     print(f"{Colors.CYAN}{Colors.BOLD}")
     print("+" + "=" * 58 + "+")
     print("|" + f"{APP_NAME} Installer v{APP_VERSION}".center(58) + "|")
@@ -100,7 +97,6 @@ def get_number_input(prompt, min_val, max_val):
             print_error("Invalid input! Please enter a number.")
 
 def select_folder_dialog():
-    """Open folder selection dialog"""
     try:
         root = tk.Tk()
         root.withdraw()
@@ -113,14 +109,10 @@ def select_folder_dialog():
         return None
 
 def register_uninstall(install_path):
-    """Register application in Windows Add/Remove Programs"""
     try:
         key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NotYCaptionGenAI"
-        
-        # Try to open/create registry key
         key = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, key_path)
         
-        # Set registry values
         winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, APP_NAME)
         winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, APP_VERSION)
         winreg.SetValueEx(key, "Publisher", 0, winreg.REG_SZ, APP_AUTHOR)
@@ -137,14 +129,13 @@ def register_uninstall(install_path):
         print_success("Application registered in Windows Add/Remove Programs")
         return True
     except PermissionError:
-        print_error("Permission denied - registry write failed (run as administrator)")
+        print_error("Permission denied - run as administrator")
         return False
     except Exception as e:
         print_error(f"Registry error: {e}")
         return False
 
 def create_shortcut(path, target, description=""):
-    """Create Windows shortcut with description"""
     ps = f'''$s = New-Object -ComObject WScript.Shell
 $l = $s.CreateShortcut("{path}")
 $l.TargetPath = "{target}"
@@ -154,81 +145,64 @@ $l.Save()'''
     subprocess.run(["powershell", "-Command", ps], capture_output=True)
 
 def create_start_menu_shortcut(install_dir):
-    """Create Start Menu shortcut"""
     start = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAI.lnk"
     create_shortcut(str(start), str(install_dir / MAIN_EXE), f"{APP_NAME} v{APP_VERSION}")
 
 def create_desktop_shortcut(install_dir):
-    """Create Desktop shortcut"""
     desktop = Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAI.lnk"
     create_shortcut(str(desktop), str(install_dir / MAIN_EXE), f"{APP_NAME} v{APP_VERSION}")
 
 def register_sendto_menu(install_dir):
-    """Register to Send To menu"""
     sendto = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo" / "NotYCaptionGenAI.lnk"
     sendto.parent.mkdir(parents=True, exist_ok=True)
     create_shortcut(str(sendto), str(install_dir / MAIN_EXE), f"{APP_NAME} v{APP_VERSION}")
 
 def get_free_space(path):
-    """Get free disk space in bytes"""
     try:
         if platform.system() == "Windows":
             drive = str(Path(path).drive)
             if not drive:
                 drive = "C:"
-            
             free_bytes = ctypes.c_ulonglong(0)
-            total_bytes = ctypes.c_ulonglong(0)
             ret = ctypes.windll.kernel32.GetDiskFreeSpaceExW(
                 ctypes.c_wchar_p(drive + "\\"),
                 ctypes.byref(free_bytes),
-                ctypes.byref(total_bytes),
+                None,
                 None
             )
             if ret:
                 return free_bytes.value
-            else:
-                import shutil
-                free_bytes = shutil.disk_usage(drive).free
-                return free_bytes
-        else:
-            import shutil
-            return shutil.disk_usage(path).free
-    except Exception as e:
-        print_warning(f"Could not get free space: {e}")
+        import shutil
+        return shutil.disk_usage(path).free
+    except:
         return 1024 * 1024 * 1024 * 100
 
 def check_requirements(install_path):
-    """Check system requirements"""
     print_info("Checking system requirements...")
-    
     all_requirements_met = True
     
     try:
         install_path.mkdir(parents=True, exist_ok=True)
-        
         free_space = get_free_space(install_path)
         free_space_gb = free_space / (1024 ** 3)
         print_info(f"Free disk space: {free_space_gb:.2f} GB")
         
-        if free_space_gb < 3:
-            print_error(f"Insufficient disk space! Need 3 GB, but only {free_space_gb:.2f} GB available.")
+        if free_space_gb < 4:
+            print_error(f"Insufficient disk space! Need 4 GB, only {free_space_gb:.2f} GB available.")
             all_requirements_met = False
         else:
-            print_success(f"Disk space OK (3 GB required)")
+            print_success(f"Disk space OK (4 GB required)")
     except Exception as e:
         print_warning(f"Could not check disk space: {e}")
     
     return all_requirements_met
 
 def copy_directory(src, dst):
-    """Copy directory with progress"""
     total_files = sum(1 for _ in src.rglob('*') if _.is_file())
     if total_files == 0:
         return
     
     copied = 0
-    
     for item in src.rglob('*'):
         if item.is_file():
             rel_path = item.relative_to(src)
@@ -239,11 +213,9 @@ def copy_directory(src, dst):
             if copied % 10 == 0:
                 percent = int(copied * 100 / total_files)
                 print(f"\r  Progress: {percent}%", end="", flush=True)
-    
     print(f"\r  Progress: 100%")
 
 def get_executable_path(installer_dir):
-    """Find the main executable in the installer directory or temp extraction"""
     exe_path = installer_dir / MAIN_EXE
     if exe_path.exists():
         return exe_path
@@ -267,7 +239,6 @@ def get_executable_path(installer_dir):
     return None
 
 def get_uninstaller_path(installer_dir):
-    """Find the uninstaller executable"""
     uninstaller_path = installer_dir / UNINSTALL_EXE
     if uninstaller_path.exists():
         return uninstaller_path
@@ -291,7 +262,6 @@ def get_uninstaller_path(installer_dir):
     return None
 
 def get_directory_size(path):
-    """Get directory size in MB"""
     total = 0
     for item in path.rglob('*'):
         if item.is_file():
@@ -299,15 +269,14 @@ def get_directory_size(path):
     return total / (1024 * 1024)
 
 def install():
-    # Check for admin privileges
     if not is_admin():
         print_warning("Administrator privileges required for registry registration!")
-        print_info("The installer will now restart with administrator privileges...")
+        print_info("Installer will now restart with administrator privileges...")
         time.sleep(2)
         if run_as_admin():
             sys.exit(0)
         else:
-            print_error("Failed to elevate privileges. Installation will continue but registry may not be registered.")
+            print_error("Failed to elevate privileges. Installation will continue without registry registration.")
     
     print_header()
     
@@ -363,8 +332,7 @@ def install():
     print_header()
     if not check_requirements(install_path):
         print_error("\nSystem requirements not met!")
-        print_info("Requirements: 3 GB free disk space")
-        print_info("You can still continue, but the application may not work properly.")
+        print_info("Requirements: 4 GB free disk space")
         response = input(f"{Colors.CYAN}Continue anyway? (y/n): {Colors.RESET}").lower()
         if response not in ['y', 'yes']:
             return False
@@ -379,7 +347,6 @@ def install():
         
         exe_file = get_executable_path(installer_dir)
         if exe_file and exe_file.exists():
-            print_info(f"Found main executable: {exe_file}")
             print_info("Copying main executable...")
             shutil.copy2(exe_file, install_path / MAIN_EXE)
             print_success("Main executable copied")
@@ -466,7 +433,7 @@ def install():
         print_info(f"Application: {install_path / MAIN_EXE}")
         print_info("You can now run NotYCaptionGenAI.exe from the installation directory")
         print_info("Or right-click any video/audio file and select 'Send To' > 'NotYCaptionGenAi'")
-        print_info("To uninstall, use Windows Add/Remove Programs or run NotYCaptionGenAI_Uninstaller.exe")
+        print_info("To uninstall, use Windows Add/Remove Programs")
         
         return True
         

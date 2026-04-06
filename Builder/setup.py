@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Setup script for building NotY Caption Generator AI v4.5
+Setup script for building NotY Caption Generator AI v5.1
 Copyright (c) 2026 NotY215
 """
 
@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 
 APP_NAME = "NotYCaptionGenAI"
-APP_VERSION = "4.5"
+APP_VERSION = "5.1"
 APP_AUTHOR = "NotY215"
 INSTALLER_NAME = f"NotYCaptionGenAI_Installer_v{APP_VERSION}.exe"
 
@@ -40,7 +40,10 @@ def build_all():
         sys.exit(1)
     
     try:
-        subprocess.run([sys.executable, str(build_exe_path)], check=True, timeout=1800)
+        subprocess.run([sys.executable, str(build_exe_path)], check=True, timeout=3600)
+    except subprocess.TimeoutExpired:
+        print("[ERROR] Build timed out!")
+        sys.exit(1)
     except Exception as e:
         print(f"[ERROR] Build failed: {e}")
         sys.exit(1)
@@ -72,7 +75,7 @@ def build_all():
     temp_build_dir.mkdir(parents=True, exist_ok=True)
     
     try:
-        subprocess.run(cmd, cwd=str(temp_build_dir), check=True, timeout=120)
+        subprocess.run(cmd, cwd=str(temp_build_dir), check=True, timeout=180)
         uninstaller_exe = temp_build_dir / "dist" / "NotYCaptionGenAI_Uninstaller.exe"
         if uninstaller_exe.exists():
             print(f"[OK] Uninstaller built")
@@ -94,11 +97,13 @@ def build_all():
     shutil.copy2(main_exe, temp_dir / f"{APP_NAME}.exe")
     shutil.copy2(uninstaller_exe, temp_dir / "NotYCaptionGenAI_Uninstaller.exe")
     
+    # Copy resources
     resources_dir = base_dir / "resources"
     if resources_dir.exists():
         shutil.copytree(resources_dir, temp_dir / "resources")
         print("  Copied resources")
     
+    # Copy ffmpeg folder
     ffmpeg_dir = base_dir / "ffmpeg"
     if ffmpeg_dir.exists() and any(ffmpeg_dir.iterdir()):
         print("  Including ffmpeg...")
@@ -106,6 +111,7 @@ def build_all():
         ffmpeg_count = len(list((temp_dir / "ffmpeg").glob("*")))
         print(f"    Added {ffmpeg_count} ffmpeg files")
     
+    # Copy models
     models_dir = base_dir / "models"
     if models_dir.exists() and any(models_dir.iterdir()):
         print("  Including models...")
@@ -136,19 +142,25 @@ def build_all():
         installer_py
     ]
     
+    # Add ffmpeg if exists
     if (temp_dir / "ffmpeg").exists():
         cmd.insert(4, f"--add-data={temp_dir / 'ffmpeg'}{os.pathsep}ffmpeg")
     
+    # Add models if exists
     if (temp_dir / "models").exists():
         cmd.insert(4, f"--add-data={temp_dir / 'models'}{os.pathsep}models")
     
+    # Add icon
     icon_path = temp_dir / "resources" / "app.ico"
     if icon_path.exists():
         cmd.insert(4, f"--icon={icon_path}")
     
     try:
-        subprocess.run(cmd, cwd=str(temp_dir), check=True, timeout=300)
+        subprocess.run(cmd, cwd=str(temp_dir), check=True, timeout=600)
         print("\n[OK] Installer built successfully!")
+    except subprocess.TimeoutExpired:
+        print("\n[ERROR] Installer build timed out!")
+        sys.exit(1)
     except Exception as e:
         print(f"\n[ERROR] Installer build failed: {e}")
         sys.exit(1)
@@ -162,6 +174,7 @@ def build_all():
     else:
         print("\n[ERROR] Installer not found!")
     
+    # Clean up
     shutil.rmtree(temp_dir, ignore_errors=True)
     shutil.rmtree(temp_build_dir, ignore_errors=True)
     shutil.rmtree(builder_dir / "build", ignore_errors=True)
