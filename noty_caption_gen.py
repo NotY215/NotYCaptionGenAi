@@ -430,7 +430,7 @@ class NotYCaptionGenerator:
         return None
         
     def search_lyrics_online(self, song_name: str) -> str:
-        """Search for lyrics online using multiple sources with better scraping"""
+        """Search for lyrics online using multiple sources including YouTube and Spotify"""
         self.print_progress(f"Searching lyrics for: {song_name}", 45)
         
         if not song_name:
@@ -440,151 +440,217 @@ class NotYCaptionGenerator:
         song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
         song_name = re.sub(r'\s+', ' ', song_name).strip()
         
-        # Method 1: Try Genius with proper headers
+        # Method 1: Try YouTube search with video description extraction
         try:
+            self.print_info("Searching YouTube for lyrics...")
+            # Search for lyric videos
+            search_terms = [
+                f"{song_name} lyrics",
+                f"{song_name} lyric video",
+                f"{song_name} with lyrics"
+            ]
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
+            
+            for term in search_terms:
+                encoded_query = urllib.parse.quote(term)
+                yt_search_url = f"https://www.youtube.com/results?search_query={encoded_query}"
+                
+                req = urllib.request.Request(yt_search_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    html = response.read().decode('utf-8', errors='ignore')
+                    
+                    # Extract video IDs
+                    video_ids = re.findall(r'/watch\?v=([a-zA-Z0-9_-]{11})', html)
+                    
+                    if video_ids:
+                        # Check first few videos for lyrics in description
+                        for video_id in video_ids[:5]:
+                            try:
+                                # Get video page
+                                video_url = f"https://www.youtube.com/watch?v={video_id}"
+                                video_req = urllib.request.Request(video_url, headers=headers)
+                                with urllib.request.urlopen(video_req, timeout=15) as video_resp:
+                                    video_html = video_resp.read().decode('utf-8', errors='ignore')
+                                    
+                                    # Try multiple patterns to extract description
+                                    patterns = [
+                                        r'"shortDescription":"(.*?)"',
+                                        r'"description":"(.*?)"',
+                                        r'<meta name="description" content="(.*?)">',
+                                    ]
+                                    
+                                    for pattern in patterns:
+                                        desc_match = re.search(pattern, video_html)
+                                        if desc_match:
+                                            description = desc_match.group(1)
+                                            description = description.replace('\\n', '\n')
+                                            description = description.replace('\\"', '"')
+                                            description = description.replace('\\/', '/')
+                                            
+                                            # Look for lyrics in description
+                                            if 'lyrics' in description.lower() or len(description) > 300:
+                                                # Extract potential lyrics
+                                                lyrics_lines = []
+                                                for line in description.split('\n'):
+                                                    line = line.strip()
+                                                    if line and not line.startswith('http') and not line.startswith('@'):
+                                                        if 'subscribe' not in line.lower() and 'follow' not in line.lower():
+                                                            if 'like' not in line.lower() and 'comment' not in line.lower():
+                                                                lyrics_lines.append(line)
+                                                
+                                                if len(lyrics_lines) > 5:
+                                                    found_lyrics = '\n'.join(lyrics_lines)
+                                                    self.print_progress("Lyrics found in YouTube description", 50)
+                                                    return found_lyrics
+                            except Exception as e:
+                                continue
+        except Exception as e:
+            self.print_warning(f"YouTube search failed: {str(e)[:100]}")
+        
+        # Method 2: Try Genius with better patterns
+        try:
+            self.print_info("Searching Genius for lyrics...")
             # Format song name for Genius URL
             formatted_name = song_name.lower().replace(' ', '-')
             formatted_name = re.sub(r'[^\w\-]', '', formatted_name)
             
-            # Try multiple URL patterns
             genius_urls = [
                 f"https://genius.com/{formatted_name}-lyrics",
                 f"https://genius.com/search?q={urllib.parse.quote(song_name)}"
             ]
             
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive',
             }
             
             for url in genius_urls:
                 try:
                     req = urllib.request.Request(url, headers=headers)
                     with urllib.request.urlopen(req, timeout=15) as response:
-                        html = response.read().decode('utf-8')
+                        html = response.read().decode('utf-8', errors='ignore')
                         
                         # Try different lyrics container patterns
                         patterns = [
-                            r'<div[^>]*class="[^"]*lyrics[^"]*"[^>]*>(.*?)</div>',
-                            r'<div[^>]*class="[^"]*SongPage__Lyrics[^"]*"[^>]*>(.*?)</div>',
                             r'<div[^>]*data-lyrics-container="true"[^>]*>(.*?)</div>',
-                            r'<p[^>]*class="[^"]*lyrics[^"]*"[^>]*>(.*?)</p>',
+                            r'<div[^>]*class="[^"]*Lyrics__Container[^"]*"[^>]*>(.*?)</div>',
+                            r'<div[^>]*class="[^"]*lyrics[^"]*"[^>]*>(.*?)</div>',
+                            r'<div[^>]*class="[^"]*song_body-lyrics[^"]*"[^>]*>(.*?)</div>',
                         ]
                         
                         for pattern in patterns:
-                            match = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
-                            if match:
-                                lyrics = match.group(1)
-                                # Clean up HTML tags
+                            matches = re.findall(pattern, html, re.DOTALL | re.IGNORECASE)
+                            if matches:
+                                lyrics = ' '.join(matches)
+                                # Clean up HTML
                                 lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
                                 lyrics = re.sub(r'<[^>]+>', '', lyrics)
                                 lyrics = re.sub(r'&amp;', '&', lyrics)
                                 lyrics = re.sub(r'&quot;', '"', lyrics)
                                 lyrics = re.sub(r'&#39;', "'", lyrics)
+                                lyrics = re.sub(r'&lt;', '<', lyrics)
+                                lyrics = re.sub(r'&gt;', '>', lyrics)
                                 lyrics = re.sub(r'\n\s*\n', '\n\n', lyrics.strip())
                                 if len(lyrics) > 100:
                                     self.print_progress("Lyrics found on Genius", 50)
                                     return lyrics
-                except:
+                except Exception as e:
                     continue
         except Exception as e:
-            self.print_warning(f"Genius search failed: {e}")
+            self.print_warning(f"Genius search failed: {str(e)[:100]}")
         
-        # Method 2: Try AZLyrics
+        # Method 3: Try AZLyrics
         try:
-            # Format for AZLyrics
-            parts = song_name.split()
-            if len(parts) >= 2:
-                # Try to extract artist and song
-                first_word = parts[0].lower()
-                rest = ''.join(parts[1:]).lower()
-                az_url = f"https://www.azlyrics.com/lyrics/{first_word}/{rest}.html"
-                
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-                req = urllib.request.Request(az_url, headers=headers)
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    html = response.read().decode('utf-8')
-                    
-                    # Extract lyrics from AZLyrics format
-                    match = re.search(r'<!-- start of lyrics -->(.*?)<!-- end of lyrics -->', html, re.DOTALL)
-                    if match:
-                        lyrics = match.group(1)
-                        lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
-                        lyrics = re.sub(r'<[^>]+>', '', lyrics)
-                        lyrics = re.sub(r'&nbsp;', ' ', lyrics)
-                        lyrics = re.sub(r'\n\s*\n', '\n\n', lyrics.strip())
-                        if len(lyrics) > 100:
-                            self.print_progress("Lyrics found on AZLyrics", 50)
-                            return lyrics
-        except:
-            pass
-        
-        # Method 3: Try MetroLyrics (now redirects to AZLyrics)
-        try:
-            metro_name = song_name.lower().replace(' ', '')
-            metro_url = f"https://www.metrolyrics.com/{metro_name}-lyrics.html"
+            self.print_info("Searching AZLyrics...")
+            # Try different URL patterns
+            search_name = song_name.lower().replace(' ', '')
+            search_name = re.sub(r'[^\w]', '', search_name)
+            
+            az_urls = [
+                f"https://www.azlyrics.com/lyrics/{search_name}.html",
+                f"https://www.azlyrics.com/lyrics/{search_name[:3]}/{search_name}.html",
+                f"https://www.azlyrics.com/lyrics/{search_name[:2]}/{search_name}.html",
+            ]
             
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-            req = urllib.request.Request(metro_url, headers=headers)
-            with urllib.request.urlopen(req, timeout=15) as response:
-                html = response.read().decode('utf-8')
-                
-                # Try to extract lyrics
-                patterns = [
-                    r'<p[^>]*class="verse"[^>]*>(.*?)</p>',
-                    r'<div[^>]*class="lyrics"[^>]*>(.*?)</div>',
-                ]
-                for pattern in patterns:
-                    match = re.search(pattern, html, re.DOTALL)
-                    if match:
-                        lyrics = match.group(1)
-                        lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
-                        lyrics = re.sub(r'<[^>]+>', '', lyrics)
-                        lyrics = re.sub(r'\n\s*\n', '\n\n', lyrics.strip())
-                        if len(lyrics) > 100:
-                            self.print_progress("Lyrics found on MetroLyrics", 50)
-                            return lyrics
-        except:
-            pass
-        
-        # Method 4: Try LyricsFreak
-        try:
-            # Try different URL patterns
-            for sep in ['-', '_']:
-                lf_name = song_name.lower().replace(' ', sep)
-                lf_url = f"https://www.lyricsfreak.com/{lf_name[0]}/{lf_name}.html"
-                
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            
+            for az_url in az_urls:
                 try:
-                    req = urllib.request.Request(lf_url, headers=headers)
+                    req = urllib.request.Request(az_url, headers=headers)
                     with urllib.request.urlopen(req, timeout=15) as response:
-                        html = response.read().decode('utf-8')
+                        html = response.read().decode('utf-8', errors='ignore')
                         
-                        match = re.search(r'<div[^>]*class="[^"]*lyrics[^"]*"[^>]*>(.*?)</div>', html, re.DOTALL)
+                        # Extract lyrics from AZLyrics format
+                        match = re.search(r'<!-- start of lyrics -->(.*?)<!-- end of lyrics -->', html, re.DOTALL)
                         if match:
                             lyrics = match.group(1)
                             lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
                             lyrics = re.sub(r'<[^>]+>', '', lyrics)
+                            lyrics = re.sub(r'&nbsp;', ' ', lyrics)
                             lyrics = re.sub(r'\n\s*\n', '\n\n', lyrics.strip())
                             if len(lyrics) > 100:
-                                self.print_progress("Lyrics found on LyricsFreak", 50)
+                                self.print_progress("Lyrics found on AZLyrics", 50)
                                 return lyrics
                 except:
                     continue
-        except:
+        except Exception as e:
             pass
         
-        # Method 5: Try using an online lyrics API (if available)
+        # Method 4: Try Lyrics.ovh API
         try:
-            # Use the ChartLyrics API (free, no key required)
+            self.print_info("Trying Lyrics.ovh API...")
+            # Try different artist/song combinations
+            combinations = []
+            
+            # If format is "Artist - Song"
+            if ' - ' in song_name:
+                parts = song_name.split(' - ', 1)
+                combinations.append((parts[0], parts[1]))
+            
+            # Also try just the song name
+            combinations.append((None, song_name))
+            
+            for artist, song in combinations:
+                try:
+                    if artist:
+                        api_url = f"https://api.lyrics.ovh/v1/{urllib.parse.quote(artist)}/{urllib.parse.quote(song)}"
+                    else:
+                        # Try search endpoint
+                        api_url = f"https://api.lyrics.ovh/suggest/{urllib.parse.quote(song)}"
+                    
+                    req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        data = json.loads(response.read().decode('utf-8'))
+                        if 'lyrics' in data and data['lyrics']:
+                            lyrics = data['lyrics'].strip()
+                            if len(lyrics) > 100:
+                                self.print_progress("Lyrics found via Lyrics.ovh API", 50)
+                                return lyrics
+                        elif 'data' in data and data['data']:
+                            # Suggest endpoint returned results
+                            for item in data['data'][:3]:
+                                if 'lyrics' in item:
+                                    lyrics = item['lyrics'].strip()
+                                    if len(lyrics) > 100:
+                                        self.print_progress("Lyrics found via Lyrics.ovh API", 50)
+                                        return lyrics
+                except:
+                    continue
+        except Exception as e:
+            pass
+        
+        # Method 5: Try ChartLyrics API
+        try:
+            self.print_info("Trying ChartLyrics API...")
             api_url = f"http://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect?artist=&song={urllib.parse.quote(song_name)}"
             req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=10) as response:
                 xml_data = response.read().decode('utf-8')
-                # Extract lyric from XML
                 match = re.search(r'<Lyric>(.*?)</Lyric>', xml_data, re.DOTALL)
                 if match:
                     lyrics = match.group(1)
@@ -594,32 +660,88 @@ class NotYCaptionGenerator:
                     if len(lyrics) > 100:
                         self.print_progress("Lyrics found via ChartLyrics API", 50)
                         return lyrics
-        except:
+        except Exception as e:
             pass
         
-        # Method 6: Try Lyrics.ovh API (free, no key required)
+        # Method 6: Try Musixmatch
         try:
-            # Split into artist and song if possible
-            parts = song_name.split('-')
-            if len(parts) >= 2:
-                artist = parts[0].strip()
-                song = parts[1].strip()
-                api_url = f"https://api.lyrics.ovh/v1/{urllib.parse.quote(artist)}/{urllib.parse.quote(song)}"
-                req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=10) as response:
-                    data = json.loads(response.read().decode('utf-8'))
-                    if 'lyrics' in data and data['lyrics']:
-                        lyrics = data['lyrics'].strip()
-                        if len(lyrics) > 100:
-                            self.print_progress("Lyrics found via Lyrics.ovh API", 50)
-                            return lyrics
-        except:
+            self.print_info("Searching Musixmatch...")
+            mxm_url = f"https://www.musixmatch.com/search/{urllib.parse.quote(song_name)}"
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            req = urllib.request.Request(mxm_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8', errors='ignore')
+                
+                # Extract lyrics URL
+                lyric_match = re.search(r'href="(/lyrics/[^"]+)"', html)
+                if lyric_match:
+                    lyrics_url = "https://www.musixmatch.com" + lyric_match.group(1)
+                    lyrics_req = urllib.request.Request(lyrics_url, headers=headers)
+                    with urllib.request.urlopen(lyrics_req, timeout=15) as lyrics_resp:
+                        lyrics_html = lyrics_resp.read().decode('utf-8', errors='ignore')
+                        
+                        # Extract lyrics
+                        patterns = [
+                            r'<p[^>]*class="[^"]*mxm-lyrics[^"]*"[^>]*>(.*?)</p>',
+                            r'<span[^>]*class="[^"]*lyrics__content[^"]*"[^>]*>(.*?)</span>',
+                            r'<div[^>]*class="[^"]*lyrics[^"]*"[^>]*>(.*?)</div>',
+                        ]
+                        
+                        for pattern in patterns:
+                            lyrics_match = re.search(pattern, lyrics_html, re.DOTALL)
+                            if lyrics_match:
+                                lyrics = lyrics_match.group(1)
+                                lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
+                                lyrics = re.sub(r'<[^>]+>', '', lyrics)
+                                lyrics = re.sub(r'\n\s*\n', '\n\n', lyrics.strip())
+                                if len(lyrics) > 100:
+                                    self.print_progress("Lyrics found on Musixmatch", 50)
+                                    return lyrics
+        except Exception as e:
+            pass
+        
+        # Method 7: Try Genius API (unofficial)
+        try:
+            self.print_info("Trying Genius API...")
+            # Search for song ID
+            search_url = f"https://genius.com/api/search/multi?q={urllib.parse.quote(song_name)}"
+            req = urllib.request.Request(search_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                
+                if 'response' in data and 'sections' in data['response']:
+                    for section in data['response']['sections']:
+                        if section.get('type') == 'song' and section.get('hits'):
+                            song_path = section['hits'][0]['result']['path']
+                            lyrics_url = f"https://genius.com{song_path}"
+                            
+                            # Fetch lyrics page
+                            lyrics_req = urllib.request.Request(lyrics_url, headers={'User-Agent': 'Mozilla/5.0'})
+                            with urllib.request.urlopen(lyrics_req, timeout=15) as lyrics_resp:
+                                lyrics_html = lyrics_resp.read().decode('utf-8', errors='ignore')
+                                
+                                # Extract lyrics
+                                match = re.search(r'<div[^>]*data-lyrics-container="true"[^>]*>(.*?)</div>', lyrics_html, re.DOTALL)
+                                if match:
+                                    lyrics = match.group(1)
+                                    lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
+                                    lyrics = re.sub(r'<[^>]+>', '', lyrics)
+                                    lyrics = re.sub(r'&amp;', '&', lyrics)
+                                    lyrics = lyrics.strip()
+                                    if len(lyrics) > 100:
+                                        self.print_progress("Lyrics found via Genius API", 50)
+                                        return lyrics
+        except Exception as e:
             pass
         
         self.print_warning(f"Could not find lyrics online for: {song_name}")
-        self.print_info("Try using Manual Song Name with format: Artist - Song Name")
-        return None
+        self.print_info("Tips for better results:")
+        self.print_info("  1. Use format: 'Artist Name - Song Name'")
+        self.print_info("  2. For One Piece songs, try: 'One Piece Binks Sake'")
+        self.print_info("  3. Try: 'Binks Sake lyrics One Piece'")
         
+        return None
+
     def load_model(self, model_name: str):
         try:
             import whisper
