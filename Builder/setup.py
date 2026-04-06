@@ -135,8 +135,11 @@ def build_all():
         "--hidden-import=platform",
         "--hidden-import=tkinter",
         "--hidden-import=tkinter.filedialog",
+        "--hidden-import=tkinter.messagebox",
         "--hidden-import=tempfile",
         "--hidden-import=winreg",
+        "--hidden-import=sqlite3",
+        "--hidden-import=yt_dlp",
         "--console",
         "--noconfirm",
         installer_py

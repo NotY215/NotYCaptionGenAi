@@ -73,7 +73,7 @@ VSVersionInfo(
             StringStruct(u'OriginalFilename', u'{APP_NAME}.exe'),
             StringStruct(u'ProductName', u'{APP_NAME}'),
             StringStruct(u'ProductVersion', u'{APP_VERSION}'),
-            StringStruct(u'Comments', u'AI-Powered Subtitle & Lyrics Generator with Vocal Separation')
+            StringStruct(u'Comments', u'AI-Powered Subtitle & Lyrics Generator with YouTube Support')
           ]
         )
       ]
@@ -96,6 +96,7 @@ a = Analysis(
     binaries=[],
     datas=collect_data_files('whisper') + collect_data_files('torch') + ffmpeg_datas + [(r'{icon_path}', '.')],
     hiddenimports=[
+        # Whisper core
         'whisper',
         'whisper.__main__',
         'whisper.audio',
@@ -106,6 +107,8 @@ a = Analysis(
         'whisper.normalizers',
         'whisper.transcribe',
         'whisper.timing',
+        
+        # PyTorch essentials
         'torch',
         'torch._C',
         'torch._ops',
@@ -116,6 +119,8 @@ a = Analysis(
         'torch.storage',
         'torch.types',
         'torch.version',
+        
+        # NumPy
         'numpy',
         'numpy.core',
         'numpy.core._methods',
@@ -123,6 +128,8 @@ a = Analysis(
         'numpy.core.umath',
         'numpy.lib',
         'numpy.lib.format',
+        
+        # CLI & UI
         'colorama',
         'argparse',
         'webbrowser',
@@ -133,9 +140,12 @@ a = Analysis(
         'platform',
         'tkinter',
         'tkinter.filedialog',
+        'tkinter.messagebox',
         'ctypes',
         'importlib',
         'importlib.metadata',
+        
+        # Text processing
         'packaging',
         'packaging.version',
         'regex',
@@ -143,40 +153,105 @@ a = Analysis(
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
         'more_itertools',
+        
+        # HTTP requests (for lyrics search)
         'requests',
         'urllib3',
         'certifi',
         'charset_normalizer',
         'idna',
+        
+        # Audio processing
         'torchaudio',
+        'torchaudio.backend',
+        'torchaudio.functional',
+        'torchaudio.transforms',
+        
+        # YouTube download
+        'yt_dlp',
+        'yt_dlp.extractor',
+        'yt_dlp.downloader',
+        'yt_dlp.postprocessor',
+        
+        # Database
+        'sqlite3',
+        
+        # Windows registry
         'winreg'
     ],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
     excludes=[
-        'tensorflow', 'keras', 'transformers', 'datasets', 'spleeter',
+        # Exclude heavy ML frameworks
+        'tensorflow', 'keras', 'transformers', 'datasets',
+        'spleeter', 'tensorflow_hub',
+        
+        # Exclude GUI frameworks
         'PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'wxPython',
+        
+        # Exclude visualization
         'matplotlib', 'plotly', 'seaborn', 'bokeh',
+        
+        # Exclude scientific computing
         'scipy', 'pandas', 'sklearn', 'statsmodels',
+        
+        # Exclude image processing
         'PIL', 'opencv', 'imageio',
-        'jupyter', 'notebook', 'ipython', 'numba', 'llvmlite',
-        'setuptools', 'pkg_resources', 'jinja2', 'markupsafe',
+        
+        # Exclude other large packages
+        'jupyter', 'notebook', 'ipython',
+        'numba', 'llvmlite',
+        'setuptools', 'pkg_resources',
+        'jinja2', 'markupsafe',
         'tensorboard', 'tqdm',
-        'torch.cuda', 'torch.cuda.amp', 'torch.distributed',
-        'torch.testing', 'torch.jit', 'torch.onnx', 'torch.ao',
-        'torch.fx', 'torch._dynamo', 'torch._inductor', 'torch._export',
-        'torch._functorch', 'torch._lazy', 'torch._numpy', 'torch._prims',
-        'torch._subclasses', 'torch.backends', 'torch.contrib',
-        'torch.distributions', 'torch.fft', 'torch.futures',
-        'torch.linalg', 'torch.mps', 'torch.optim', 'torch.package',
-        'torch.profiler', 'torch.quantization', 'torch.special', 'torch.sparse',
-        'torch.utils.benchmark', 'torch.utils.checkpoint', 'torch.utils.cpp_extension',
-        'torch.utils.data', 'torch.utils.dlpack', 'torch.utils.hooks',
-        'torch.utils.model_zoo', 'torch.utils.tensorboard',
+        
+        # Exclude CUDA/GPU (CPU only)
+        'torch.cuda',
+        'torch.cuda.amp',
+        'torch.distributed',
+        'torch.testing',
+        'torch.jit',
+        'torch.onnx',
+        'torch.ao',
+        'torch.fx',
+        'torch._dynamo',
+        'torch._inductor',
+        'torch._export',
+        'torch._functorch',
+        'torch._lazy',
+        'torch._numpy',
+        'torch._prims',
+        'torch._subclasses',
+        'torch.backends',
+        'torch.contrib',
+        'torch.distributions',
+        'torch.fft',
+        'torch.futures',
+        'torch.linalg',
+        'torch.mps',
+        'torch.optim',
+        'torch.package',
+        'torch.profiler',
+        'torch.quantization',
+        'torch.special',
+        'torch.sparse',
+        'torch.utils.benchmark',
+        'torch.utils.checkpoint',
+        'torch.utils.cpp_extension',
+        'torch.utils.data',
+        'torch.utils.dlpack',
+        'torch.utils.hooks',
+        'torch.utils.model_zoo',
+        'torch.utils.tensorboard',
+        
+        # Exclude heavy torch submodules
         'torchvision', 'torchtext',
-        'numpy.random', 'numpy.ma', 'numpy.fft', 'numpy.linalg',
-        'numpy.polynomial', 'numpy.testing', 'numpy.distutils'
+        
+        # Exclude numpy submodules
+        'numpy.random', 'numpy.ma', 'numpy.fft',
+        'numpy.linalg', 'numpy.polynomial',
+        'numpy.testing', 'numpy.distutils'
     ],
     noarchive=False,
 )

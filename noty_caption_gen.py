@@ -15,9 +15,9 @@ import platform
 import argparse
 import subprocess
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from datetime import timedelta
 import re
 import json
@@ -25,6 +25,12 @@ import urllib.request
 import urllib.parse
 import tempfile
 import shutil
+import threading
+import queue
+import hashlib
+import sqlite3
+from dataclasses import dataclass
+from enum import Enum
 
 # Fix Windows console encoding
 if platform.system() == "Windows":
@@ -49,6 +55,12 @@ class Colors:
     BLACK = '\033[30m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+    BG_RED = '\033[41m'
+    BG_GREEN = '\033[42m'
+    BG_YELLOW = '\033[43m'
+    BG_BLUE = '\033[44m'
+    BG_PURPLE = '\033[45m'
+    BG_CYAN = '\033[46m'
 
 if platform.system() == "Windows":
     try:
@@ -81,6 +93,22 @@ def select_file_dialog():
         print(f"{Colors.RED}[ERROR] Could not open file dialog: {e}{Colors.RESET}")
         return None
 
+def show_message_box(title: str, message: str, icon: str = 'info'):
+    """Show a message box"""
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        if icon == 'info':
+            messagebox.showinfo(title, message)
+        elif icon == 'warning':
+            messagebox.showwarning(title, message)
+        elif icon == 'error':
+            messagebox.showerror(title, message)
+        root.destroy()
+    except:
+        pass
+
 def print_header(title: str = None):
     """Print application header"""
     if title is None:
@@ -103,13 +131,115 @@ APP_LICENSE = "LGPL-3.0"
 APP_TELEGRAM = "https://t.me/Noty_215"
 APP_YOUTUBE = "https://www.youtube.com/@NotY215"
 
+# Language codes with full transliteration support
+class Language(Enum):
+    ENGLISH = ("en", "English", False)
+    HINDI = ("hi", "Hindi", True)
+    JAPANESE = ("ja", "Japanese", True)
+    SPANISH = ("es", "Spanish", True)
+    KOREAN = ("ko", "Korean", True)
+    CHINESE = ("zh", "Chinese (Mandarin)", True)
+    AUTO = ("auto", "Auto Detect", False)
+
+# Complete transliteration mappings for all languages
+TRANSLITERATION_MAPS = {
+    "hi": {  # Hindi to English
+        # Vowels
+        'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
+        'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
+        'ऋ': 'ri', 'ॠ': 'ree',
+        # Consonants
+        'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
+        'च': 'cha', 'छ': 'chha', 'ज': 'ja', 'झ': 'jha', 'ञ': 'nya',
+        'ट': 'ta', 'ठ': 'tha', 'ड': 'da', 'ढ': 'dha', 'ण': 'na',
+        'त': 'ta', 'थ': 'tha', 'द': 'da', 'ध': 'dha', 'न': 'na',
+        'प': 'pa', 'फ': 'pha', 'ब': 'ba', 'भ': 'bha', 'म': 'ma',
+        'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha',
+        'ष': 'sha', 'स': 'sa', 'ह': 'ha', 'क्ष': 'ksha', 'त्र': 'tra',
+        'ज्ञ': 'gya', 'श्र': 'shra',
+        # Vowel signs
+        'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
+        'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h',
+        '्': '',
+        # Numbers
+        '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
+        '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
+    },
+    "ja": {  # Japanese to Romaji
+        # Hiragana
+        'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
+        'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
+        'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
+        'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
+        'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
+        'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
+        'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
+        'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
+        'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
+        'わ': 'wa', 'を': 'wo', 'ん': 'n',
+        # Katakana
+        'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
+        'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
+        'サ': 'sa', 'シ': 'shi', 'ス': 'su', 'セ': 'se', 'ソ': 'so',
+        'タ': 'ta', 'チ': 'chi', 'ツ': 'tsu', 'テ': 'te', 'ト': 'to',
+        'ナ': 'na', 'ニ': 'ni', 'ヌ': 'nu', 'ネ': 'ne', 'ノ': 'no',
+        'ハ': 'ha', 'ヒ': 'hi', 'フ': 'fu', 'ヘ': 'he', 'ホ': 'ho',
+        'マ': 'ma', 'ミ': 'mi', 'ム': 'mu', 'メ': 'me', 'モ': 'mo',
+        'ヤ': 'ya', 'ユ': 'yu', 'ヨ': 'yo',
+        'ラ': 'ra', 'リ': 'ri', 'ル': 'ru', 'レ': 're', 'ロ': 'ro',
+        'ワ': 'wa', 'ヲ': 'wo', 'ン': 'n',
+        # Small characters
+        'ゃ': 'ya', 'ゅ': 'yu', 'ょ': 'yo',
+        'ャ': 'ya', 'ュ': 'yu', 'ョ': 'yo',
+        'っ': 't', 'ッ': 't'
+    },
+    "es": {  # Spanish to English (accent removal)
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+        'ñ': 'ny', 'Ñ': 'Ny', 'ü': 'u', 'Ü': 'U',
+        '¿': '', '¡': ''
+    },
+    "ko": {  # Korean to Romanized
+        # Consonants (initial)
+        'ㄱ': 'g', 'ㄲ': 'kk', 'ㄴ': 'n', 'ㄷ': 'd', 'ㄸ': 'tt',
+        'ㄹ': 'r', 'ㅁ': 'm', 'ㅂ': 'b', 'ㅃ': 'pp', 'ㅅ': 's',
+        'ㅆ': 'ss', 'ㅇ': '', 'ㅈ': 'j', 'ㅉ': 'jj', 'ㅊ': 'ch',
+        'ㅋ': 'k', 'ㅌ': 't', 'ㅍ': 'p', 'ㅎ': 'h',
+        # Vowels
+        'ㅏ': 'a', 'ㅐ': 'ae', 'ㅑ': 'ya', 'ㅒ': 'yae', 'ㅓ': 'eo',
+        'ㅔ': 'e', 'ㅕ': 'yeo', 'ㅖ': 'ye', 'ㅗ': 'o', 'ㅘ': 'wa',
+        'ㅙ': 'wae', 'ㅚ': 'oe', 'ㅛ': 'yo', 'ㅜ': 'u', 'ㅝ': 'wo',
+        'ㅞ': 'we', 'ㅟ': 'wi', 'ㅠ': 'yu', 'ㅡ': 'eu', 'ㅢ': 'ui',
+        'ㅣ': 'i',
+        # Consonants (final)
+        'ㄱ': 'k', 'ㄲ': 'k', 'ㄳ': 'k', 'ㄴ': 'n', 'ㄵ': 'n',
+        'ㄶ': 'n', 'ㄷ': 't', 'ㄹ': 'l', 'ㄺ': 'l', 'ㄻ': 'lm',
+        'ㄼ': 'lb', 'ㄽ': 'ls', 'ㄾ': 'lt', 'ㄿ': 'lp', 'ㅀ': 'lh',
+        'ㅁ': 'm', 'ㅂ': 'p', 'ㅄ': 'ps', 'ㅅ': 't', 'ㅆ': 't',
+        'ㅇ': 'ng', 'ㅈ': 't', 'ㅊ': 't', 'ㅋ': 'k', 'ㅌ': 't',
+        'ㅍ': 'p', 'ㅎ': 't'
+    },
+    "zh": {  # Chinese Pinyin (simplified - tone removal and basic mapping)
+        # Common tone marks removal
+        'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
+        'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
+        'ī': 'i', 'í': 'i', 'ǐ': 'i', 'ì': 'i',
+        'ō': 'o', 'ó': 'o', 'ǒ': 'o', 'ò': 'o',
+        'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
+        'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v',
+        # Basic Pinyin combinations
+        'zh': 'zh', 'ch': 'ch', 'sh': 'sh',
+        'ng': 'ng', 'er': 'er'
+    }
+}
+
 # Whisper models
 WHISPER_MODELS = {
-    "tiny": {"size": "75 MB", "desc": "Fastest"},
-    "base": {"size": "150 MB", "desc": "Balanced"},
-    "small": {"size": "500 MB", "desc": "Good"},
-    "medium": {"size": "1.5 GB", "desc": "Accurate"},
-    "large": {"size": "2.9 GB", "desc": "Best"}
+    "tiny": {"size": "75 MB", "desc": "Fastest", "download_url": "https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt"},
+    "base": {"size": "150 MB", "desc": "Balanced", "download_url": "https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt"},
+    "small": {"size": "500 MB", "desc": "Good", "download_url": "https://openaipublic.azureedge.net/main/whisper/models/9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794/small.pt"},
+    "medium": {"size": "1.5 GB", "desc": "Accurate", "download_url": "https://openaipublic.azureedge.net/main/whisper/models/345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674b08dcb1/medium.pt"},
+    "large": {"size": "2.9 GB", "desc": "Best", "download_url": "https://openaipublic.azureedge.net/main/whisper/models/e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb/large-v3.pt"}
 }
 
 # Supported file extensions
@@ -119,6 +249,34 @@ SUPPORTED_EXTENSIONS = {
     'all': ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm', '.mp3', '.wav', '.m4a', '.flac']
 }
 
+class ProgressTracker:
+    """Track progress of long operations"""
+    def __init__(self):
+        self.progress = 0
+        self.message = ""
+        self.is_complete = False
+        self.error = None
+        
+    def update(self, progress: int, message: str):
+        self.progress = progress
+        self.message = message
+        
+    def complete(self):
+        self.is_complete = True
+        self.progress = 100
+        
+    def fail(self, error: str):
+        self.error = error
+        self.is_complete = True
+
+@dataclass
+class SubtitleEntry:
+    """Subtitle entry structure"""
+    index: int
+    start: timedelta
+    end: timedelta
+    text: str
+    
 class NotYCaptionGenerator:
     def __init__(self, media_path: str = None):
         if getattr(sys, 'frozen', False):
@@ -128,7 +286,9 @@ class NotYCaptionGenerator:
             
         self.models_dir = self.base_dir / "models"
         self.ffmpeg_dir = self.base_dir / "ffmpeg"
+        self.cache_dir = self.base_dir / "cache"
         self.models_dir.mkdir(parents=True, exist_ok=True)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
         
         # Setup ffmpeg path
         if platform.system() == "Windows":
@@ -142,6 +302,21 @@ class NotYCaptionGenerator:
         if self.ffmpeg_dir.exists():
             os.environ['PATH'] = str(self.ffmpeg_dir) + os.pathsep + os.environ['PATH']
         
+        # Initialize database for caching
+        self.init_database()
+        
+        # Language models
+        self.languages = [
+            (Language.ENGLISH.value[1], Language.ENGLISH.value[0]),
+            (Language.HINDI.value[1], Language.HINDI.value[0]),
+            (Language.JAPANESE.value[1], Language.JAPANESE.value[0]),
+            (Language.SPANISH.value[1], Language.SPANISH.value[0]),
+            (Language.KOREAN.value[1], Language.KOREAN.value[0]),
+            (Language.CHINESE.value[1], Language.CHINESE.value[0]),
+            (Language.AUTO.value[1], Language.AUTO.value[0])
+        ]
+        
+        # Models list
         self.models = [
             ("tiny", WHISPER_MODELS["tiny"]["size"], WHISPER_MODELS["tiny"]["desc"]),
             ("base", WHISPER_MODELS["base"]["size"], WHISPER_MODELS["base"]["desc"]),
@@ -150,39 +325,109 @@ class NotYCaptionGenerator:
             ("large", WHISPER_MODELS["large"]["size"], WHISPER_MODELS["large"]["desc"])
         ]
         
-        self.languages = [
-            ("English", "en"),
-            ("Hindi", "hi"),
-            ("Japanese", "ja"),
-            ("Auto Detect", "auto")
-        ]
-        
-        self.modes = [
-            ("Normal Mode", "normal", "Generate subtitles from audio"),
-            ("Song Mode", "song", "Enhanced lyrics with vocal separation")
-        ]
-        
-        self.song_search_options = [
-            ("Auto Detect Song", "auto", "Automatically detect song name from title"),
-            ("Manual Song Name", "manual", "Enter song name manually for accurate lyrics")
-        ]
-        
+        # Line types
         self.line_types = [
-            ("Words", "words", "Break by word count"),
-            ("Letters", "letters", "Break by character limit"),
+            ("Words", "words", "Break by word count (1-30)"),
+            ("Letters", "letters", "Break by character limit (1-30)"),
             ("Auto", "auto", "Auto-detect sentence breaks by audio gaps")
         ]
         
         self.selected_model = None
         self.selected_language = None
-        self.selected_mode = None
-        self.selected_song_search = None
         self.selected_line_type = None
-        self.manual_song_name = None
         self.media_path_arg = media_path
         self.model = None
         self.temp_audio = None
         self.vocal_audio = None
+        self.current_progress = ProgressTracker()
+        
+    def init_database(self):
+        """Initialize SQLite database for caching"""
+        self.db_path = self.cache_dir / "cache.db"
+        self.conn = sqlite3.connect(str(self.db_path))
+        self.cursor = self.conn.cursor()
+        
+        # Create tables
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS transcriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_hash TEXT UNIQUE,
+                model_name TEXT,
+                language TEXT,
+                result TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lyrics_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                song_name TEXT UNIQUE,
+                lyrics TEXT,
+                source TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        self.conn.commit()
+        
+    def get_file_hash(self, file_path: Path) -> str:
+        """Generate hash for file caching"""
+        hasher = hashlib.md5()
+        with open(file_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(65536), b''):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+        
+    def cache_transcription(self, file_hash: str, model_name: str, language: str, result: dict):
+        """Cache transcription result"""
+        try:
+            self.cursor.execute(
+                "INSERT OR REPLACE INTO transcriptions (file_hash, model_name, language, result) VALUES (?, ?, ?, ?)",
+                (file_hash, model_name, language, json.dumps(result))
+            )
+            self.conn.commit()
+        except Exception as e:
+            pass
+            
+    def get_cached_transcription(self, file_hash: str, model_name: str, language: str) -> Optional[dict]:
+        """Get cached transcription result"""
+        try:
+            self.cursor.execute(
+                "SELECT result FROM transcriptions WHERE file_hash = ? AND model_name = ? AND language = ?",
+                (file_hash, model_name, language)
+            )
+            row = self.cursor.fetchone()
+            if row:
+                return json.loads(row[0])
+        except Exception as e:
+            pass
+        return None
+        
+    def cache_lyrics(self, song_name: str, lyrics: str, source: str):
+        """Cache lyrics result"""
+        try:
+            self.cursor.execute(
+                "INSERT OR REPLACE INTO lyrics_cache (song_name, lyrics, source) VALUES (?, ?, ?)",
+                (song_name.lower(), lyrics, source)
+            )
+            self.conn.commit()
+        except Exception as e:
+            pass
+            
+    def get_cached_lyrics(self, song_name: str) -> Optional[Tuple[str, str]]:
+        """Get cached lyrics"""
+        try:
+            self.cursor.execute(
+                "SELECT lyrics, source FROM lyrics_cache WHERE song_name = ?",
+                (song_name.lower(),)
+            )
+            row = self.cursor.fetchone()
+            if row:
+                return row[0], row[1]
+        except Exception as e:
+            pass
+        return None
         
     def clear_screen(self):
         os.system('cls' if platform.system() == 'Windows' else 'clear')
@@ -205,6 +450,8 @@ class NotYCaptionGenerator:
             filled = int(bar_length * percent / 100)
             bar = '█' * filled + '░' * (bar_length - filled)
             print(f"\r{Colors.CYAN}[PROGRESS] {bar} {percent}% - {message}{Colors.RESET}", end="", flush=True)
+            if percent == 100:
+                print()
         else:
             print(f"{Colors.CYAN}[PROGRESS] {message}{Colors.RESET}")
         
@@ -266,51 +513,100 @@ class NotYCaptionGenerator:
                 return -1
             return choice - 1
             
-    def download_youtube_audio(self, url: str) -> Path:
+    def get_media_path(self, allowed_extensions: List[str]) -> Path:
+        if self.media_path_arg:
+            path = Path(self.media_path_arg.strip('"'))
+            if path.exists() and path.suffix.lower() in allowed_extensions:
+                self.print_success(f"Using file: {path}")
+                return path
+        
+        self.print_info("Opening file selection dialog...")
+        self.print_info(f"Supported formats: {', '.join(allowed_extensions)}")
+        file_path = select_file_dialog()
+        
+        if file_path:
+            path = Path(file_path)
+            if path.exists() and path.suffix.lower() in allowed_extensions:
+                self.print_success(f"Selected: {path}")
+                return path
+            else:
+                self.print_error("Invalid file selected!")
+        
+        while True:
+            print(f"\n{Colors.CYAN}Provide Video/Audio Path{Colors.RESET}")
+            print(f"   Supported formats: {', '.join(allowed_extensions)}")
+            print(f"   Tip: You can drag and drop a file here, then press Enter")
+            path_str = self.get_input("> ").strip().strip('"')
+            
+            if not path_str:
+                self.print_error("Path cannot be empty!")
+                continue
+                
+            path = Path(path_str)
+            if not path.exists():
+                self.print_error(f"File not found: {path}")
+                continue
+                
+            if path.suffix.lower() not in allowed_extensions:
+                self.print_error(f"Invalid extension! Supported: {', '.join(allowed_extensions)}")
+                continue
+                
+            return path
+            
+    def download_youtube_audio(self, url: str) -> Tuple[Optional[Path], Optional[str]]:
         """Download audio from YouTube URL"""
         self.print_info("Downloading audio from YouTube...")
         
         temp_dir = Path(os.environ.get('TEMP', '.'))
-        output_path = temp_dir / f"youtube_audio_{int(time.time())}.mp3"
+        output_path = temp_dir / f"youtube_audio_{int(time.time())}"
         
-        # Try using yt-dlp if available, otherwise use youtube-dl
+        # Try using yt-dlp
         try:
             # Check if yt-dlp is installed
             subprocess.run(['yt-dlp', '--version'], capture_output=True, check=True)
+            
+            # First, get video info to extract title
+            info_cmd = ['yt-dlp', '--dump-json', '--skip-download', url]
+            info_result = subprocess.run(info_cmd, capture_output=True, text=True, timeout=60)
+            
+            video_title = None
+            if info_result.returncode == 0:
+                try:
+                    info = json.loads(info_result.stdout)
+                    video_title = info.get('title', '')
+                    self.print_info(f"Video title: {video_title}")
+                except:
+                    pass
+            
+            # Download audio
             cmd = [
-                'yt-dlp', '-x', '--audio-format', 'mp3',
+                'yt-dlp', '-x', '--audio-format', 'wav',
+                '--audio-quality', '0',
                 '-o', str(output_path), url
             ]
-        except:
-            try:
-                subprocess.run(['youtube-dl', '--version'], capture_output=True, check=True)
-                cmd = [
-                    'youtube-dl', '-x', '--audio-format', 'mp3',
-                    '-o', str(output_path), url
-                ]
-            except:
-                self.print_error("yt-dlp or youtube-dl not installed!")
-                self.print_info("Please install: pip install yt-dlp")
-                return None
-        
-        try:
-            subprocess.run(cmd, capture_output=True, timeout=300)
-            # Find the downloaded file (yt-dlp adds extensions)
-            for f in temp_dir.glob(f"{output_path.stem}*"):
-                if f.suffix in ['.mp3', '.m4a', '.webm']:
-                    # Convert to WAV for consistency
-                    wav_path = temp_dir / f"{f.stem}.wav"
-                    ffmpeg_cmd = [str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg',
-                                  '-i', str(f), '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', '-y', str(wav_path)]
-                    subprocess.run(ffmpeg_cmd, capture_output=True, timeout=60)
-                    f.unlink()
-                    self.print_success("YouTube audio downloaded successfully")
-                    return wav_path
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            
+            if result.returncode == 0:
+                # Find the downloaded file
+                for f in temp_dir.glob(f"{output_path.stem}*"):
+                    if f.suffix in ['.wav', '.mp3', '.m4a', '.webm']:
+                        # Ensure it's WAV format
+                        if f.suffix != '.wav':
+                            wav_path = temp_dir / f"{f.stem}.wav"
+                            ffmpeg_cmd = [str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg',
+                                          '-i', str(f), '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', '-y', str(wav_path)]
+                            subprocess.run(ffmpeg_cmd, capture_output=True, timeout=120)
+                            f.unlink()
+                            f = wav_path
+                        self.print_success("YouTube audio downloaded successfully")
+                        return f, video_title
+        except subprocess.CalledProcessError:
+            self.print_error("yt-dlp not found. Please install: pip install yt-dlp")
         except Exception as e:
             self.print_error(f"Failed to download YouTube audio: {e}")
-            return None
-        
-        return None
+            
+        return None, None
         
     def check_ffmpeg(self) -> bool:
         """Check if ffmpeg is available"""
@@ -416,8 +712,14 @@ class NotYCaptionGenerator:
         
         return '\n'.join(cleaned_lines)
         
-    def search_lyrics_online(self, song_name: str) -> Tuple[str, str]:
+    def search_lyrics_online(self, song_name: str) -> Tuple[Optional[str], Optional[str]]:
         """Search for lyrics online with exact matching"""
+        # Check cache first
+        cached = self.get_cached_lyrics(song_name)
+        if cached:
+            self.print_progress("Found cached lyrics", 50)
+            return cached
+            
         self.print_progress(f"Searching lyrics for: {song_name}", 45)
         
         if not song_name:
@@ -442,9 +744,11 @@ class NotYCaptionGenerator:
                         lyrics = data['lyrics'].strip()
                         if len(lyrics) > 100:
                             cleaned_lyrics = self.clean_lyrics_text(lyrics)
-                            self.print_progress("Found lyrics via Lyrics.ovh", 50)
-                            return cleaned_lyrics, "Lyrics.ovh"
-        except:
+                            if len(cleaned_lyrics) > 50:
+                                self.cache_lyrics(song_name, cleaned_lyrics, "Lyrics.ovh")
+                                self.print_progress("Found lyrics via Lyrics.ovh", 50)
+                                return cleaned_lyrics, "Lyrics.ovh"
+        except Exception as e:
             pass
         
         # Method 2: Try Genius.com
@@ -485,10 +789,11 @@ class NotYCaptionGenerator:
                                         
                                         if len(lyrics) > 200 and not re.search(r'contributors?|reimagined|remix', lyrics.lower()):
                                             cleaned_lyrics = self.clean_lyrics_text(lyrics)
-                                            if len(cleaned_lyrics) > 100:
+                                            if len(cleaned_lyrics) > 50:
+                                                self.cache_lyrics(song_name, cleaned_lyrics, "Genius")
                                                 self.print_progress("Found lyrics on Genius", 50)
                                                 return cleaned_lyrics, "Genius"
-        except:
+        except Exception as e:
             pass
         
         # Method 3: Try AZLyrics
@@ -512,13 +817,33 @@ class NotYCaptionGenerator:
                     
                     if len(lyrics) > 200:
                         cleaned_lyrics = self.clean_lyrics_text(lyrics)
-                        self.print_progress("Found lyrics on AZLyrics", 50)
-                        return cleaned_lyrics, "AZLyrics"
-        except:
+                        if len(cleaned_lyrics) > 50:
+                            self.cache_lyrics(song_name, cleaned_lyrics, "AZLyrics")
+                            self.print_progress("Found lyrics on AZLyrics", 50)
+                            return cleaned_lyrics, "AZLyrics"
+        except Exception as e:
             pass
         
         self.print_warning(f"Could not find exact lyrics for: {song_name}")
         return None, None
+        
+    def transliterate_text(self, text: str, language_code: str) -> str:
+        """Complete transliteration for all supported languages"""
+        if language_code not in TRANSLITERATION_MAPS:
+            return text
+            
+        mapping = TRANSLITERATION_MAPS[language_code]
+        
+        # Special handling for Japanese double consonants
+        if language_code == "ja":
+            for japanese, romaji in mapping.items():
+                text = text.replace(japanese, romaji)
+            text = re.sub(r'([bcdfghjklmnpqrstvwxyz])\1+', r'\1\1', text)
+        else:
+            for original, translit in mapping.items():
+                text = text.replace(original, translit)
+                
+        return text
         
     def load_model(self, model_name: str):
         try:
@@ -531,53 +856,6 @@ class NotYCaptionGenerator:
             self.print_error(f"Failed to load model: {e}")
             return False
             
-    def transliterate_text(self, text: str, language_code: str) -> str:
-        if language_code == "hi":
-            hindi_map = {
-                'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
-                'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
-                'ऋ': 'ri', 'ॠ': 'ree', 'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
-                'च': 'cha', 'छ': 'chha', 'ज': 'ja', 'झ': 'jha', 'ञ': 'nya',
-                'ट': 'ta', 'ठ': 'tha', 'ड': 'da', 'ढ': 'dha', 'ण': 'na',
-                'त': 'ta', 'थ': 'tha', 'द': 'da', 'ध': 'dha', 'न': 'na',
-                'प': 'pa', 'फ': 'pha', 'ब': 'ba', 'भ': 'bha', 'म': 'ma',
-                'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha',
-                'ष': 'sha', 'स': 'sa', 'ह': 'ha', 'क्ष': 'ksha', 'त्र': 'tra',
-                'ज्ञ': 'gya', 'श्र': 'shra', 'ा': 'a', 'ि': 'i', 'ी': 'ee',
-                'ु': 'u', 'ू': 'oo', 'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au',
-                'ं': 'n', 'ः': 'h', '्': '', '०': '0', '१': '1', '२': '2',
-                '३': '3', '४': '4', '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
-            }
-            for hindi, english in hindi_map.items():
-                text = text.replace(hindi, english)
-        elif language_code == "ja":
-            ja_map = {
-                'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
-                'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
-                'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
-                'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
-                'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
-                'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
-                'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
-                'や': 'ya', 'ゆ': 'yu', 'よ': 'yo', 'ら': 'ra', 'り': 'ri',
-                'る': 'ru', 'れ': 're', 'ろ': 'ro', 'わ': 'wa', 'を': 'wo', 'ん': 'n',
-                'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
-                'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
-                'サ': 'sa', 'シ': 'shi', 'ス': 'su', 'セ': 'se', 'ソ': 'so',
-                'タ': 'ta', 'チ': 'chi', 'ツ': 'tsu', 'テ': 'te', 'ト': 'to',
-                'ナ': 'na', 'ニ': 'ni', 'ヌ': 'nu', 'ネ': 'ne', 'ノ': 'no',
-                'ハ': 'ha', 'ヒ': 'hi', 'フ': 'fu', 'ヘ': 'he', 'ホ': 'ho',
-                'マ': 'ma', 'ミ': 'mi', 'ム': 'mu', 'メ': 'me', 'モ': 'mo',
-                'ヤ': 'ya', 'ユ': 'yu', 'ヨ': 'yo', 'ラ': 'ra', 'リ': 'ri',
-                'ル': 'ru', 'レ': 're', 'ロ': 'ro', 'ワ': 'wa', 'ヲ': 'wo', 'ン': 'n',
-                'ゃ': 'ya', 'ゅ': 'yu', 'ょ': 'yo', 'ャ': 'ya', 'ュ': 'yu', 'ョ': 'yo',
-                'っ': 't', 'ッ': 't'
-            }
-            for japanese, romaji in ja_map.items():
-                text = text.replace(japanese, romaji)
-            text = re.sub(r'([bcdfghjklmnpqrstvwxyz])\1+', r'\1\1', text)
-        return text
-        
     def format_time(self, seconds: float) -> str:
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
@@ -613,7 +891,8 @@ class NotYCaptionGenerator:
             lines.append(current_line)
         return '\n'.join(lines)
         
-    def auto_break_sentences(self, segments) -> List[dict]:
+    def auto_break_sentences(self, segments) -> List[SubtitleEntry]:
+        """Auto-detect sentence breaks based on audio gaps and punctuation"""
         subtitles = []
         index = 1
         min_gap = 0.3
@@ -630,21 +909,21 @@ class NotYCaptionGenerator:
             end_time = segment["end"]
             
             if text.endswith(('.', '!', '?')):
-                subtitles.append({
-                    "index": index,
-                    "start": timedelta(seconds=start_time),
-                    "end": timedelta(seconds=end_time),
-                    "text": text
-                })
+                subtitles.append(SubtitleEntry(
+                    index=index,
+                    start=timedelta(seconds=start_time),
+                    end=timedelta(seconds=end_time),
+                    text=text
+                ))
                 index += 1
                 i += 1
             elif i < len(segments) - 1 and segments[i+1]["start"] - end_time > min_gap:
-                subtitles.append({
-                    "index": index,
-                    "start": timedelta(seconds=start_time),
-                    "end": timedelta(seconds=end_time),
-                    "text": text
-                })
+                subtitles.append(SubtitleEntry(
+                    index=index,
+                    start=timedelta(seconds=start_time),
+                    end=timedelta(seconds=end_time),
+                    text=text
+                ))
                 index += 1
                 i += 1
             else:
@@ -665,180 +944,63 @@ class NotYCaptionGenerator:
                         break
                     j += 1
                 
-                subtitles.append({
-                    "index": index,
-                    "start": timedelta(seconds=start_time),
-                    "end": timedelta(seconds=merged_end),
-                    "text": merged_text
-                })
+                subtitles.append(SubtitleEntry(
+                    index=index,
+                    start=timedelta(seconds=start_time),
+                    end=timedelta(seconds=merged_end),
+                    text=merged_text
+                ))
                 index += 1
                 i = j
                 
         return subtitles
         
-    def generate_song_lyrics(self, media_path: Path, model_name: str, language_code: str, 
-                              song_search_type: str, manual_song_name: str = None, 
-                              youtube_title: str = None) -> bool:
-        """Generate lyrics using song mode with vocal separation"""
-        try:
-            import whisper
-            from datetime import timedelta
-            
-            # Extract audio
-            audio_path = media_path
-            if media_path.suffix.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm']:
-                audio_path = self.extract_audio(media_path)
-                if not audio_path:
-                    self.print_error("Could not extract audio from video file")
-                    return False
-            
-            # Get song name
-            if song_search_type == "manual" and manual_song_name:
-                song_name = manual_song_name.strip()
-                self.print_info(f"Searching for: {song_name}")
-            elif youtube_title:
-                # Extract from YouTube title
-                title = youtube_title
-                # Remove common patterns
-                title = re.sub(r'\(.*?\)|\[.*?\]|\{.*?\}', '', title)
-                title = re.sub(r'(Official|Video|Lyrics|HD|Audio|Music|Song|Cover|Remix|Live)', '', title, flags=re.IGNORECASE)
-                title = re.sub(r'\s+', ' ', title).strip()
-                song_name = title
-                self.print_info(f"Auto-detected from YouTube: {song_name}")
-            else:
-                original_name = media_path.stem
-                clean_name = re.sub(r'[_\-\[\]\(\)]', ' ', original_name)
-                clean_name = re.sub(r'\s+', ' ', clean_name).strip()
-                song_name = clean_name
-                self.print_info(f"Auto-detected: {song_name}")
-            
-            # Search for lyrics
-            online_lyrics, lyrics_source = self.search_lyrics_online(song_name)
-            
-            # Vocal separation
-            vocal_path = self.separate_vocals_ffmpeg(audio_path)
-            
-            if self.model is None:
-                if not self.load_model(model_name):
-                    return False
-                    
-            self.print_progress("Transcribing audio for timing...", 70)
-            
-            language = language_code if language_code != "auto" else None
-            
-            result = self.model.transcribe(
-                str(vocal_path),
-                language=language,
-                verbose=False,
-                word_timestamps=True
-            )
-            
-            self.print_progress("Processing lyrics...", 80)
-            
-            output_path = media_path.parent / f"{media_path.stem}_lyrics.srt"
-            
-            if online_lyrics:
-                lyrics_lines = [line.strip() for line in online_lyrics.split('\n') if line.strip() and len(line.strip()) > 2]
-                segments = result.get("segments", [])
-                
-                subtitles = []
-                index = 1
-                
-                lyrics_lines = [line for line in lyrics_lines if not re.match(r'^[\d\W]+$', line)]
-                
-                total_duration = segments[-1]["end"] if segments else 0
-                avg_duration = total_duration / max(len(lyrics_lines), 1)
-                
-                for i, line in enumerate(lyrics_lines):
-                    if i < len(segments):
-                        segment = segments[i]
-                        start_time = segment["start"]
-                        end_time = segment["end"]
-                    else:
-                        start_time = avg_duration * i
-                        end_time = start_time + avg_duration
-                    
-                    text = line
-                    if language_code in ["hi", "ja"]:
-                        text = self.transliterate_text(text, language_code)
-                    
-                    subtitles.append({
-                        "index": index,
-                        "start": timedelta(seconds=start_time),
-                        "end": timedelta(seconds=end_time),
-                        "text": text
-                    })
-                    index += 1
-            else:
-                self.print_warning("No online lyrics found, using AI transcription")
-                segments = result.get("segments", [])
-                if language_code in ["hi", "ja"]:
-                    for seg in segments:
-                        seg["text"] = self.transliterate_text(seg["text"], language_code)
-                subtitles = self.auto_break_sentences(segments)
-            
-            self.print_progress("Writing lyrics file...", 90)
-            with open(output_path, 'w', encoding='utf-8') as f:
-                for sub in subtitles:
-                    start_str = self.format_time(sub["start"].total_seconds())
-                    end_str = self.format_time(sub["end"].total_seconds())
-                    f.write(f"{sub['index']}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
-            
-            # Clean up
-            if audio_path != media_path and audio_path and audio_path.exists():
-                try:
-                    audio_path.unlink()
-                except:
-                    pass
-            if vocal_path != audio_path and vocal_path and vocal_path.exists():
-                try:
-                    vocal_path.unlink()
-                except:
-                    pass
-            
-            self.print_progress("Complete!", 100)
-            print()
-            
-            if online_lyrics:
-                self.print_success(f"Lyrics saved to: {output_path} (from {lyrics_source})")
-            else:
-                self.print_success(f"Lyrics saved to: {output_path} (AI-generated)")
-            self.print_info(f"Generated {len(subtitles)} lyrics entries")
-            return True
-            
-        except Exception as e:
-            self.print_error(f"Error in song mode: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-            
     def generate_captions(self, media_path: Path, model_name: str, line_type: str, 
                           number_per_line: int, language_code: str) -> bool:
         try:
             import whisper
             from datetime import timedelta
             
-            audio_path = media_path
-            if media_path.suffix.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm']:
-                audio_path = self.extract_audio(media_path)
-                if not audio_path:
-                    self.print_error("Could not extract audio from video file")
-                    return False
+            # Check cache
+            file_hash = self.get_file_hash(media_path)
+            cached_result = self.get_cached_transcription(file_hash, model_name, language_code)
             
-            if self.model is None:
-                if not self.load_model(model_name):
-                    return False
-                    
-            self.print_progress("Transcribing audio...", 70)
-            
-            language = language_code if language_code != "auto" else None
-            
-            result = self.model.transcribe(
-                str(audio_path),
-                language=language,
-                verbose=False,
-                word_timestamps=True
-            )
+            if cached_result:
+                self.print_success("Using cached transcription")
+                result = cached_result
+            else:
+                # Extract audio if needed
+                audio_path = media_path
+                if media_path.suffix.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm']:
+                    audio_path = self.extract_audio(media_path)
+                    if not audio_path:
+                        self.print_error("Could not extract audio from video file")
+                        return False
+                
+                if self.model is None:
+                    if not self.load_model(model_name):
+                        return False
+                        
+                self.print_progress("Transcribing audio...", 70)
+                
+                language = language_code if language_code != "auto" else None
+                
+                result = self.model.transcribe(
+                    str(audio_path),
+                    language=language,
+                    verbose=False,
+                    word_timestamps=True
+                )
+                
+                # Cache result
+                self.cache_transcription(file_hash, model_name, language_code, result)
+                
+                # Clean up temp audio
+                if audio_path != media_path and audio_path and audio_path.exists():
+                    try:
+                        audio_path.unlink()
+                    except:
+                        pass
             
             self.print_progress("Processing transcription...", 80)
             
@@ -863,7 +1025,8 @@ class NotYCaptionGenerator:
                     segment_start = segment.get("start", 0)
                     segment_end = segment.get("end", segment_start + 1)
                     
-                    if language_code in ["hi", "ja"]:
+                    # Apply transliteration if needed
+                    if language_code in TRANSLITERATION_MAPS:
                         segment_text = self.transliterate_text(segment_text, language_code)
                     
                     words_data = segment.get("words", [])
@@ -881,37 +1044,35 @@ class NotYCaptionGenerator:
                             chunk_start = word_starts[i]
                             chunk_end = word_ends[min(i + number_per_line - 1, len(word_ends) - 1)]
                             
-                            subtitles.append({
-                                "index": index,
-                                "start": timedelta(seconds=chunk_start),
-                                "end": timedelta(seconds=chunk_end),
-                                "text": line_text
-                            })
+                            subtitles.append(SubtitleEntry(
+                                index=index,
+                                start=timedelta(seconds=chunk_start),
+                                end=timedelta(seconds=chunk_end),
+                                text=line_text
+                            ))
                             index += 1
                     else:
                         if line_type == "letters":
                             segment_text = self.limit_letters_per_line(segment_text, number_per_line)
                         
-                        subtitles.append({
-                            "index": index,
-                            "start": timedelta(seconds=segment_start),
-                            "end": timedelta(seconds=segment_end),
-                            "text": segment_text
-                        })
+                        subtitles.append(SubtitleEntry(
+                            index=index,
+                            start=timedelta(seconds=segment_start),
+                            end=timedelta(seconds=segment_end),
+                            text=segment_text
+                        ))
                         index += 1
             
+            # Write SRT file
             self.print_progress("Writing subtitle file...", 90)
             with open(output_path, 'w', encoding='utf-8') as f:
                 for sub in subtitles:
-                    start_str = self.format_time(sub["start"].total_seconds())
-                    end_str = self.format_time(sub["end"].total_seconds())
-                    f.write(f"{sub['index']}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
+                    start_str = self.format_time(sub.start.total_seconds())
+                    end_str = self.format_time(sub.end.total_seconds())
+                    f.write(f"{sub.index}\n{start_str} --> {end_str}\n{sub.text}\n\n")
             
-            if audio_path != media_path and audio_path and audio_path.exists():
-                try:
-                    audio_path.unlink()
-                except:
-                    pass
+            # Show completion message box
+            show_message_box("Success", f"Captions saved to:\n{output_path}", "info")
             
             self.print_progress("Complete!", 100)
             print()
@@ -923,6 +1084,7 @@ class NotYCaptionGenerator:
             self.print_error(f"Error: {e}")
             import traceback
             traceback.print_exc()
+            show_message_box("Error", f"Failed to generate captions:\n{str(e)}", "error")
             return False
             
     def run(self):
@@ -958,7 +1120,7 @@ class NotYCaptionGenerator:
                 print_header()
                 print(f"\n{Colors.CYAN}{Colors.BOLD}SELECT PLATFORM{Colors.RESET}")
                 print(f"{Colors.CYAN}┌{'─' * 50}┐{Colors.RESET}")
-                print(f"{Colors.CYAN}│{Colors.RESET}  1) YouTube - Download and generate captions/lyrics{Colors.CYAN}│{Colors.RESET}")
+                print(f"{Colors.CYAN}│{Colors.RESET}  1) YouTube - Download and generate captions{Colors.CYAN}│{Colors.RESET}")
                 print(f"{Colors.CYAN}│{Colors.RESET}  2) Local File - Use local video/audio file{Colors.CYAN}│{Colors.RESET}")
                 print(f"{Colors.CYAN}│{Colors.RESET}  0) Exit{Colors.CYAN}│{Colors.RESET}")
                 print(f"{Colors.CYAN}└{'─' * 50}┘{Colors.RESET}")
@@ -981,7 +1143,7 @@ class NotYCaptionGenerator:
                     continue
                 
                 media_path = None
-                youtube_title = None
+                video_title = None
                 
                 if platform_choice == 1:
                     # YouTube mode
@@ -1012,23 +1174,12 @@ class NotYCaptionGenerator:
                         
                         # Download YouTube audio
                         self.print_info("Downloading from YouTube...")
-                        media_path = self.download_youtube_audio(url)
+                        media_path, video_title = self.download_youtube_audio(url)
                         
                         if not media_path:
                             self.print_error("Failed to download YouTube video!")
                             input("Press Enter to continue...")
                             continue
-                        
-                        # Try to get video title for better lyrics search
-                        try:
-                            import yt_dlp
-                            ydl_opts = {'quiet': True, 'extract_flat': True}
-                            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                                info = ydl.extract_info(url, download=False)
-                                youtube_title = info.get('title', '')
-                                self.print_info(f"Video title: {youtube_title}")
-                        except:
-                            pass
                         
                         break
                     
@@ -1050,7 +1201,7 @@ class NotYCaptionGenerator:
                     if not media_path:
                         continue
                     
-                self.print_success(f"Media source ready")
+                self.print_success(f"Media source ready: {media_path.name if platform_choice == 2 else 'YouTube Audio'}")
                 
                 # Select model
                 self.clear_screen()
@@ -1060,7 +1211,6 @@ class NotYCaptionGenerator:
                 model_options = [f"{m[0].upper()} ({m[1]}) - {m[2]}" for m in self.models]
                 model_choice = self.show_menu("SELECT MODEL", model_options)
                 if model_choice == -1:
-                    # Clean up temp file if YouTube
                     if platform_choice == 1 and media_path and media_path.exists():
                         try:
                             media_path.unlink()
@@ -1088,144 +1238,59 @@ class NotYCaptionGenerator:
                 language_code = self.selected_language[1]
                 language_name = self.selected_language[0]
                 
-                # Select mode
+                # Select line type
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
                 print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
                 
-                mode_options = [f"{m[0]} - {m[2]}" for m in self.modes]
-                mode_choice = self.show_menu("SELECT MODE", mode_options)
-                if mode_choice == -1:
+                line_options = [f"{l[0]} - {l[2]}" for l in self.line_types]
+                line_choice = self.show_menu("LINE TYPE", line_options)
+                if line_choice == -1:
                     if platform_choice == 1 and media_path and media_path.exists():
                         try:
                             media_path.unlink()
                         except:
                             pass
                     continue
-                    
-                self.selected_mode = self.modes[mode_choice]
-                mode = self.selected_mode[1]
+                self.selected_line_type = self.line_types[line_choice]
+                line_type = self.selected_line_type[1]
                 
-                # If Song Mode, select search option (only for local files or if we have title)
-                if mode == "song":
-                    self.clear_screen()
-                    print_header()
-                    print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
-                    print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
-                    print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
-                    
-                    song_options = [f"{s[0]} - {s[2]}" for s in self.song_search_options]
-                    song_choice = self.show_menu("SONG SEARCH OPTION", song_options)
-                    if song_choice == -1:
-                        if platform_choice == 1 and media_path and media_path.exists():
-                            try:
-                                media_path.unlink()
-                            except:
-                                pass
-                        continue
-                    
-                    self.selected_song_search = self.song_search_options[song_choice]
-                    song_search_type = self.selected_song_search[1]
-                    
-                    manual_song_name = None
-                    if song_search_type == "manual":
-                        print(f"\n{Colors.CYAN}Enter song name (e.g., Artist - Song Name):{Colors.RESET}")
-                        manual_song_name = self.get_input("> ").strip()
-                        if not manual_song_name:
-                            self.print_error("Song name cannot be empty!")
-                            if platform_choice == 1 and media_path and media_path.exists():
-                                try:
-                                    media_path.unlink()
-                                except:
-                                    pass
-                            continue
-                    
-                    # Confirm and generate lyrics
-                    self.clear_screen()
-                    print_header()
-                    search_display = "Auto Detect" if song_search_type == "auto" else f"Manual: {manual_song_name}"
-                    self.print_box([
-                        f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
-                        f"Model: {self.selected_model.upper()}",
-                        f"Language: {language_name}",
-                        f"Mode: SONG MODE",
-                        f"Search: {search_display}"
-                    ])
-                    
-                    if not self.confirm("Generate lyrics?"):
-                        if platform_choice == 1 and media_path and media_path.exists():
-                            try:
-                                media_path.unlink()
-                            except:
-                                pass
-                        continue
-                    
-                    self.print_info("Generating lyrics with vocal separation...")
-                    success = self.generate_song_lyrics(
-                        media_path,
-                        self.selected_model,
-                        language_code,
-                        song_search_type,
-                        manual_song_name,
-                        youtube_title
+                number_per_line = 5
+                if line_type != "auto":
+                    number_per_line = self.get_number_input(
+                        f"How many {line_type} per line? (1-30): ", 1, 30
                     )
-                else:
-                    # Normal mode - select line type
-                    self.clear_screen()
-                    print_header()
-                    print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
-                    print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
-                    print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}")
-                    print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}\n")
-                    
-                    line_options = [f"{l[0]} - {l[2]}" for l in self.line_types]
-                    line_choice = self.show_menu("LINE TYPE", line_options)
-                    if line_choice == -1:
-                        if platform_choice == 1 and media_path and media_path.exists():
-                            try:
-                                media_path.unlink()
-                            except:
-                                pass
-                        continue
-                    self.selected_line_type = self.line_types[line_choice]
-                    line_type = self.selected_line_type[1]
-                    
-                    number_per_line = 5
-                    if line_type != "auto":
-                        number_per_line = self.get_number_input(
-                            f"How many {line_type} per line? (1-30): ", 1, 30
-                        )
-                    
-                    # Confirm and generate
-                    self.clear_screen()
-                    print_header()
-                    self.print_box([
-                        f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
-                        f"Model: {self.selected_model.upper()}",
-                        f"Language: {language_name}",
-                        f"Mode: {self.selected_mode[0]}",
-                        f"Line Type: {self.selected_line_type[0]}",
-                        f"Settings: {number_per_line if line_type != 'auto' else 'Auto-detect'}"
-                    ])
-                    
-                    if not self.confirm("Generate captions?"):
-                        if platform_choice == 1 and media_path and media_path.exists():
-                            try:
-                                media_path.unlink()
-                            except:
-                                pass
-                        continue
-                    
-                    self.print_info("Generating captions... This may take several minutes.")
-                    success = self.generate_captions(
-                        media_path,
-                        self.selected_model,
-                        line_type,
-                        number_per_line,
-                        language_code
-                    )
+                
+                # Confirm and generate
+                self.clear_screen()
+                print_header()
+                self.print_box([
+                    f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
+                    f"File: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}",
+                    f"Model: {self.selected_model.upper()}",
+                    f"Language: {language_name}",
+                    f"Line Type: {self.selected_line_type[0]}",
+                    f"Settings: {number_per_line if line_type != 'auto' else 'Auto-detect'}"
+                ])
+                
+                if not self.confirm("Generate captions?"):
+                    if platform_choice == 1 and media_path and media_path.exists():
+                        try:
+                            media_path.unlink()
+                        except:
+                            pass
+                    continue
+                
+                self.print_info("Generating captions... This may take several minutes.")
+                success = self.generate_captions(
+                    media_path,
+                    self.selected_model,
+                    line_type,
+                    number_per_line,
+                    language_code
+                )
                 
                 # Clean up temp file if YouTube
                 if platform_choice == 1 and media_path and media_path.exists():
@@ -1236,7 +1301,6 @@ class NotYCaptionGenerator:
                 
                 if success:
                     self.print_success(f"Thanks for using {APP_NAME}!")
-                    self.print_success("Your caption has been generated successfully!")
                     
                     try:
                         webbrowser.open(APP_TELEGRAM)
