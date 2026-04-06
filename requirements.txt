@@ -1,26 +1,30 @@
-# Core dependencies
+# Core Dependencies
 openai-whisper>=20231117
 torch>=2.0.0
 torchaudio>=2.0.0
 numpy>=1.24.0,<2.0.0
 
-# Audio/Video processing
+# Audio/Video Processing
 moviepy>=1.0.3
+pydub>=0.25.1
 
-# CLI enhancements
+# CLI Enhancements
 colorama>=0.4.6
 
-# Text processing
+# Text Processing
 tiktoken>=0.5.0
 regex>=2023.12.25
 
-# HTTP requests (for online lyrics search)
+# HTTP Requests (for lyrics search)
 requests>=2.31.0
+urllib3>=2.0.0
+certifi>=2023.0.0
+charset-normalizer>=3.0.0
+idna>=3.0.0
 
-# Build tools
+# Build Tools
 pyinstaller>=6.0.0
 pyinstaller-hooks-contrib>=2024.0
 
-# Optional dependencies for enhanced features
-spleeter
-tensorflow
+# Optional but recommended for better performance
+ffmpeg-python>=0.2.0

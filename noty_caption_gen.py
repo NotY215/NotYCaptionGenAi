@@ -3,7 +3,7 @@
 
 """
 NotY Caption Generator AI v5.1
-Using OpenAI Whisper (PyTorch) with Spleeter Vocal Separation & Smart Lyrics Matching
+Using OpenAI Whisper (PyTorch) with FFmpeg Vocal Separation & Smart Lyrics Matching
 Copyright (c) 2026 NotY215
 """
 
@@ -36,7 +36,6 @@ if platform.system() == "Windows":
 # Set environment variables
 os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # ANSI color codes
 class Colors:
@@ -92,7 +91,7 @@ def print_header(title: str = None):
     print("|" + title.center(58) + "|")
     print("|" + f"Copyright (c) {APP_YEAR} {APP_AUTHOR}".center(58) + "|")
     print("|" + f"License: {APP_LICENSE}".center(58) + "|")
-    print("|" + "Powered by OpenAI Whisper + Spleeter".center(58) + "|")
+    print("|" + "Powered by OpenAI Whisper".center(58) + "|")
     print("+" + "=" * 58 + "+")
     print(f"{Colors.RESET}")
 
@@ -161,7 +160,7 @@ class NotYCaptionGenerator:
         
         self.modes = [
             ("Normal Mode", "normal", "Generate subtitles from audio"),
-            ("Song Mode", "song", "Enhanced lyrics with Spleeter vocal separation")
+            ("Song Mode", "song", "Enhanced lyrics with vocal separation")
         ]
         
         self.song_search_options = [
@@ -318,76 +317,7 @@ class NotYCaptionGenerator:
         except:
             pass
         return False
-        
-    def install_spleeter(self) -> bool:
-        """Install Spleeter for vocal separation"""
-        try:
-            self.print_info("Installing Spleeter for vocal separation...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "spleeter", "--quiet"])
-            self.print_success("Spleeter installed successfully")
-            return True
-        except Exception as e:
-            self.print_warning(f"Could not install Spleeter: {e}")
-            self.print_info("Will use FFmpeg filter as fallback")
-            return False
             
-    def separate_vocals_spleeter(self, audio_path: Path) -> Path:
-        """Separate vocals using Spleeter"""
-        try:
-            from spleeter.separator import Separator
-            
-            output_dir = Path(tempfile.gettempdir()) / f"spleeter_{int(time.time())}"
-            output_dir.mkdir(exist_ok=True)
-            
-            self.print_progress("Running Spleeter vocal separation...", 35)
-            
-            # Use 2 stems (vocals + accompaniment)
-            separator = Separator('spleeter:2stems', multiprocess=False)
-            separator.separate_to_file(str(audio_path), str(output_dir))
-            
-            vocal_path = output_dir / f"{audio_path.stem}_vocals.wav"
-            
-            # Find the vocals file
-            for file in output_dir.rglob("*.wav"):
-                if "vocals" in file.name.lower():
-                    vocal_path = file
-                    break
-                    
-            if vocal_path.exists() and vocal_path.stat().st_size > 0:
-                self.print_progress("Spleeter separation complete", 40)
-                return vocal_path
-        except Exception as e:
-            self.print_warning(f"Spleeter failed: {e}")
-        
-        return None
-        
-    def separate_vocals_ffmpeg(self, audio_path: Path) -> Path:
-        """Fallback: Separate vocals using FFmpeg filters"""
-        self.print_progress("Using FFmpeg vocal isolation...", 35)
-        
-        temp_dir = Path(os.environ.get('TEMP', '.'))
-        vocal_path = temp_dir / f"{audio_path.stem}_vocals_ffmpeg.wav"
-        
-        ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
-        
-        # Enhanced vocal isolation filters
-        cmd = [
-            ffmpeg_cmd, '-i', str(audio_path),
-            '-af', 'highpass=f=100, lowpass=f=8000, volume=2.0',
-            '-y',
-            str(vocal_path)
-        ]
-        
-        try:
-            subprocess.run(cmd, capture_output=True, timeout=180)
-            if vocal_path.exists() and vocal_path.stat().st_size > 0:
-                self.print_progress("FFmpeg vocal isolation complete", 40)
-                return vocal_path
-        except:
-            pass
-        
-        return audio_path
-        
     def extract_audio(self, video_path: Path) -> Path:
         """Extract audio from video file"""
         if not self.check_ffmpeg():
@@ -419,6 +349,33 @@ class NotYCaptionGenerator:
             pass
         
         return None
+        
+    def separate_vocals_ffmpeg(self, audio_path: Path) -> Path:
+        """Separate vocals using FFmpeg filters"""
+        self.print_progress("Isolating vocals from music...", 35)
+        
+        temp_dir = Path(os.environ.get('TEMP', '.'))
+        vocal_path = temp_dir / f"{audio_path.stem}_vocals.wav"
+        
+        ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
+        
+        # Enhanced vocal isolation using multiple filters
+        cmd = [
+            ffmpeg_cmd, '-i', str(audio_path),
+            '-af', 'highpass=f=200, lowpass=f=8000, volume=2.0',
+            '-y',
+            str(vocal_path)
+        ]
+        
+        try:
+            subprocess.run(cmd, capture_output=True, timeout=180)
+            if vocal_path.exists() and vocal_path.stat().st_size > 0:
+                self.print_progress("Vocal isolation complete", 40)
+                return vocal_path
+        except:
+            pass
+        
+        return audio_path
         
     def clean_lyrics_text(self, lyrics: str) -> str:
         """Remove unwanted metadata, hashtags, and promotional content from lyrics"""
@@ -485,7 +442,7 @@ class NotYCaptionGenerator:
         song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
         song_name = re.sub(r'\s+', ' ', song_name).strip()
         
-        # First try: Genius.com API
+        # First try: Genius.com
         try:
             self.print_info("Searching Genius...")
             encoded = urllib.parse.quote(song_name)
@@ -752,7 +709,7 @@ class NotYCaptionGenerator:
         
     def generate_song_lyrics(self, media_path: Path, model_name: str, language_code: str, 
                               song_search_type: str, manual_song_name: str = None) -> bool:
-        """Generate lyrics using song mode with Spleeter vocal separation"""
+        """Generate lyrics using song mode with FFmpeg vocal separation"""
         try:
             import whisper
             from datetime import timedelta
@@ -777,7 +734,7 @@ class NotYCaptionGenerator:
                 clean_name = re.sub(r'\s+', ' ', clean_name).strip()
                 search_queries.append(clean_name)
                 
-                # Try variations
+                # Try variations for anime/English songs
                 for suffix in [' lyrics', ' song', ' ost', ' theme']:
                     search_queries.append(clean_name + suffix)
                 
@@ -797,18 +754,7 @@ class NotYCaptionGenerator:
                     break
             
             # Vocal separation for better accuracy
-            self.print_progress("Preparing vocal track...", 30)
-            
-            # Try Spleeter first
-            vocal_path = None
-            try:
-                vocal_path = self.separate_vocals_spleeter(audio_path)
-            except:
-                pass
-            
-            # Fallback to FFmpeg if Spleeter fails
-            if not vocal_path:
-                vocal_path = self.separate_vocals_ffmpeg(audio_path)
+            vocal_path = self.separate_vocals_ffmpeg(audio_path)
             
             if self.model is None:
                 if not self.load_model(model_name):
@@ -882,15 +828,12 @@ class NotYCaptionGenerator:
             # Clean up temp files
             if audio_path != media_path and audio_path and audio_path.exists():
                 try:
-                    shutil.rmtree(audio_path.parent, ignore_errors=True)
+                    audio_path.unlink()
                 except:
                     pass
-            if vocal_path and vocal_path != audio_path and vocal_path.exists():
+            if vocal_path != audio_path and vocal_path and vocal_path.exists():
                 try:
-                    if "spleeter" in str(vocal_path):
-                        shutil.rmtree(vocal_path.parent, ignore_errors=True)
-                    else:
-                        vocal_path.unlink()
+                    vocal_path.unlink()
                 except:
                     pass
             
@@ -1132,7 +1075,7 @@ class NotYCaptionGenerator:
                     if not self.confirm("Generate lyrics?"):
                         continue
                     
-                    self.print_info("Generating lyrics with Spleeter vocal separation...")
+                    self.print_info("Generating lyrics with vocal separation...")
                     success = self.generate_song_lyrics(
                         media_path,
                         self.selected_model,
