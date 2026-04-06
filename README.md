@@ -137,10 +137,10 @@ Choose option (0-4): 1
 │  3) Song Mode - Enhanced lyrics with online search│
 │  0) Back                                         │
 └──────────────────────────────────────────────────┘
-Choose option (0-3): 3
+Choose option (0-3): 1/2
 ```
 
-**6. Select Line Type**
+**6. Select Line Type[Not Appear If choosen Song Mode]**
 ```
 ┌──────────────────────────────────────────────────┐
 │                   LINE TYPE                       │
@@ -153,9 +153,9 @@ Choose option (0-3): 3
 Choose option (0-3): 1
 ```
 
-**7. Set Words per Line (if Words selected)**
+**7. Set WordsLetter/ per Line**
 ```
-How many words per line? (1-30): 8
+How many words/letters per line? (1-30): 8
 ```
 
 **8. Confirm Generation**
@@ -447,7 +447,7 @@ For the full license text, visit: https://www.gnu.org/licenses/lgpl-3.0.en.html
 
 ## 📞 Contact
 
-- **Telegram**: https://t.me/NotY215
+- **Telegram**: https://t.me/Not_Y215
 - **YouTube**: https://www.youtube.com/@NotY215
 - **GitHub**: https://github.com/NotY215/NotYCaptionGenAi
 
