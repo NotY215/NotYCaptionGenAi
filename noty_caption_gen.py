@@ -149,9 +149,10 @@ class NotYCaptionGenerator:
         
         self.modes = [
             ("Normal", "transcribe", "Generate subtitles in selected language"),
-            ("Translate to English", "translate", "Translate any language to English"),
-            ("Song Mode", "song", "Enhanced lyrics with online search")
+            ("Translate to English", "translate", "Translate any language to English")
         ]
+        
+        self.song_mode = ("Song Mode", "song", "Enhanced lyrics with online search")
         
         self.line_types = [
             ("Words", "words", "Break by word count"),
@@ -341,7 +342,7 @@ class NotYCaptionGenerator:
         
         ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
         
-        # Use ffmpeg's afir filter for vocal isolation (simplified approach)
+        # Use ffmpeg's highpass/lowpass filter for vocal isolation
         cmd = [
             ffmpeg_cmd, '-i', str(audio_path),
             '-af', 'highpass=f=200, lowpass=f=8000',
@@ -359,26 +360,26 @@ class NotYCaptionGenerator:
         
         return audio_path  # Return original if separation fails
         
-    def search_lyrics_online(self, song_name: str, artist: str = "") -> str:
+    def search_lyrics_online(self, song_name: str) -> str:
         """Search for lyrics online using multiple sources"""
         self.print_progress(f"Searching lyrics for: {song_name}", 45)
         
-        # Try to extract song name from filename
         if not song_name:
             return None
             
-        # Search query
-        query = f"{song_name} {artist} lyrics".strip()
-        encoded_query = urllib.parse.quote(query)
+        # Clean up song name
+        song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
+        song_name = re.sub(r'\s+', ' ', song_name).strip()
         
-        # Try Genius API (simplified)
+        # Method 1: Try Genius API
         try:
+            encoded_query = urllib.parse.quote(song_name)
             url = f"https://genius.com/search?q={encoded_query}"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=15) as response:
                 html = response.read().decode('utf-8')
                 
-                # Extract lyrics URL (simplified pattern)
+                # Extract lyrics URL
                 match = re.search(r'href="([^"]*lyrics[^"]*)"', html)
                 if match:
                     lyrics_url = match.group(1)
@@ -387,7 +388,7 @@ class NotYCaptionGenerator:
                     
                     # Fetch lyrics page
                     req2 = urllib.request.Request(lyrics_url, headers={'User-Agent': 'Mozilla/5.0'})
-                    with urllib.request.urlopen(req2, timeout=10) as response2:
+                    with urllib.request.urlopen(req2, timeout=15) as response2:
                         lyrics_html = response2.read().decode('utf-8')
                         
                         # Extract lyrics text
@@ -395,11 +396,52 @@ class NotYCaptionGenerator:
                         if lyrics_match:
                             lyrics = re.sub(r'<[^>]+>', '', lyrics_match.group(1))
                             lyrics = re.sub(r'\n\s*\n', '\n\n', lyrics.strip())
-                            self.print_progress("Lyrics found online", 50)
+                            if len(lyrics) > 100:
+                                self.print_progress("Lyrics found on Genius", 50)
+                                return lyrics
+        except:
+            pass
+            
+        # Method 2: Try AZLyrics
+        try:
+            song_query = song_name.lower().replace(' ', '')
+            url = f"https://www.azlyrics.com/lyrics/{song_query}.html"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8')
+                
+                # Extract lyrics
+                match = re.search(r'<!-- start of lyrics -->(.*?)<!-- end of lyrics -->', html, re.DOTALL)
+                if match:
+                    lyrics = re.sub(r'<[^>]+>', '', match.group(1))
+                    lyrics = re.sub(r'\n\s*\n', '\n\n', lyrics.strip())
+                    if len(lyrics) > 100:
+                        self.print_progress("Lyrics found on AZLyrics", 50)
+                        return lyrics
+        except:
+            pass
+        
+        # Method 3: Try MetroLyrics format
+        try:
+            artist_song = song_name.split('-')
+            if len(artist_song) >= 2:
+                artist = artist_song[0].strip().lower().replace(' ', '')
+                song = artist_song[1].strip().lower().replace(' ', '')
+                url = f"https://www.metrolyrics.com/{song}-lyrics-{artist}.html"
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    html = response.read().decode('utf-8')
+                    match = re.search(r'<p[^>]*class="verse"[^>]*>(.*?)</p>', html, re.DOTALL)
+                    if match:
+                        lyrics = re.sub(r'<[^>]+>', '', match.group(1))
+                        lyrics = re.sub(r'\n\s*\n', '\n\n', lyrics.strip())
+                        if len(lyrics) > 100:
+                            self.print_progress("Lyrics found on MetroLyrics", 50)
                             return lyrics
         except:
             pass
         
+        self.print_warning("Could not find lyrics online")
         return None
         
     def load_model(self, model_name: str):
@@ -422,29 +464,22 @@ class NotYCaptionGenerator:
                 'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
                 'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
                 'ऋ': 'ri', 'ॠ': 'ree',
-                # Consonants - Gutturals
+                # Consonants
                 'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
-                # Palatals
                 'च': 'cha', 'छ': 'chha', 'ज': 'ja', 'झ': 'jha', 'ञ': 'nya',
-                # Cerebrals
                 'ट': 'ta', 'ठ': 'tha', 'ड': 'da', 'ढ': 'dha', 'ण': 'na',
-                # Dentals
                 'त': 'ta', 'थ': 'tha', 'द': 'da', 'ध': 'dha', 'न': 'na',
-                # Labials
                 'प': 'pa', 'फ': 'pha', 'ब': 'ba', 'भ': 'bha', 'म': 'ma',
-                # Semi-vowels
-                'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va',
-                # Sibilants
-                'श': 'sha', 'ष': 'sha', 'स': 'sa', 'ह': 'ha',
-                # Compounds
-                'क्ष': 'ksha', 'त्र': 'tra', 'ज्ञ': 'gya', 'श्र': 'shra',
+                'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha',
+                'ष': 'sha', 'स': 'sa', 'ह': 'ha', 'क्ष': 'ksha', 'त्र': 'tra',
+                'ज्ञ': 'gya', 'श्र': 'shra',
                 # Vowel signs
                 'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
                 'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h',
-                # Other
-                'ॐ': 'om', '।': '.', '॥': '..', '०': '0', '१': '1',
-                '२': '2', '३': '3', '४': '4', '५': '5', '६': '6',
-                '७': '7', '८': '8', '९': '9'
+                '्': '',
+                # Numbers
+                '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
+                '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
             }
             for hindi, english in hindi_map.items():
                 text = text.replace(hindi, english)
@@ -526,19 +561,21 @@ class NotYCaptionGenerator:
         """Auto-detect sentence breaks based on audio gaps and punctuation"""
         subtitles = []
         index = 1
-        min_gap = 0.3  # Minimum gap for sentence break (seconds)
+        min_gap = 0.3
         
-        for i, segment in enumerate(segments):
+        i = 0
+        while i < len(segments):
+            segment = segments[i]
             text = segment["text"].strip()
             if not text:
+                i += 1
                 continue
                 
             start_time = segment["start"]
             end_time = segment["end"]
             
-            # Check for natural breaks
-            if text.endswith(('.', '!', '?')) or (i < len(segments) - 1 and 
-               segments[i+1]["start"] - end_time > min_gap):
+            # Check for natural break
+            if text.endswith(('.', '!', '?')):
                 subtitles.append({
                     "index": index,
                     "start": timedelta(seconds=start_time),
@@ -546,8 +583,18 @@ class NotYCaptionGenerator:
                     "text": text
                 })
                 index += 1
+                i += 1
+            elif i < len(segments) - 1 and segments[i+1]["start"] - end_time > min_gap:
+                subtitles.append({
+                    "index": index,
+                    "start": timedelta(seconds=start_time),
+                    "end": timedelta(seconds=end_time),
+                    "text": text
+                })
+                index += 1
+                i += 1
             else:
-                # Merge with next segment
+                # Merge with next segments
                 merged_text = text
                 merged_end = end_time
                 j = i + 1
@@ -556,16 +603,14 @@ class NotYCaptionGenerator:
                     if not next_text:
                         j += 1
                         continue
-                    if next_text.endswith(('.', '!', '?')) or (j < len(segments) - 1 and
+                    merged_text += " " + next_text
+                    merged_end = segments[j]["end"]
+                    
+                    if next_text.endswith(('.', '!', '?')) or (j < len(segments) - 1 and 
                        segments[j+1]["start"] - segments[j]["end"] > min_gap):
-                        merged_text += " " + next_text
-                        merged_end = segments[j]["end"]
                         j += 1
                         break
-                    else:
-                        merged_text += " " + next_text
-                        merged_end = segments[j]["end"]
-                        j += 1
+                    j += 1
                 
                 subtitles.append({
                     "index": index,
@@ -574,10 +619,116 @@ class NotYCaptionGenerator:
                     "text": merged_text
                 })
                 index += 1
-                i = j - 1
+                i = j
                 
         return subtitles
         
+    def generate_song_lyrics(self, media_path: Path, model_name: str, language_code: str) -> bool:
+        """Generate lyrics using song mode with online search"""
+        try:
+            import whisper
+            from datetime import timedelta
+            
+            # Extract audio
+            audio_path = media_path
+            if media_path.suffix.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm']:
+                audio_path = self.extract_audio(media_path)
+                if not audio_path:
+                    self.print_error("Could not extract audio from video file")
+                    return False
+            
+            # Separate vocals for better lyrics
+            vocal_path = self.separate_vocals(audio_path)
+            
+            # Get song name from filename
+            song_name = media_path.stem
+            song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
+            song_name = re.sub(r'\s+', ' ', song_name).strip()
+            
+            # Search for lyrics online
+            online_lyrics = self.search_lyrics_online(song_name)
+            
+            if self.model is None:
+                if not self.load_model(model_name):
+                    return False
+                    
+            self.print_progress("Transcribing audio for timing...", 70)
+            
+            language = language_code if language_code != "auto" else None
+            
+            result = self.model.transcribe(
+                str(vocal_path),
+                language=language,
+                verbose=False,
+                word_timestamps=True
+            )
+            
+            self.print_progress("Processing lyrics...", 80)
+            
+            output_path = media_path.parent / f"{media_path.stem}_lyrics.srt"
+            
+            if online_lyrics:
+                # Use online lyrics with timing from audio
+                lyrics_lines = [line.strip() for line in online_lyrics.split('\n') if line.strip()]
+                segments = result.get("segments", [])
+                
+                subtitles = []
+                index = 1
+                
+                # Match lyrics lines to audio segments
+                for i, segment in enumerate(segments):
+                    if i < len(lyrics_lines):
+                        text = lyrics_lines[i]
+                        subtitles.append({
+                            "index": index,
+                            "start": timedelta(seconds=segment["start"]),
+                            "end": timedelta(seconds=segment["end"]),
+                            "text": text
+                        })
+                        index += 1
+                    else:
+                        break
+            else:
+                # Use transcribed text with auto break
+                segments = result.get("segments", [])
+                subtitles = self.auto_break_sentences(segments)
+            
+            # Write SRT file
+            self.print_progress("Writing lyrics file...", 90)
+            with open(output_path, 'w', encoding='utf-8') as f:
+                for sub in subtitles:
+                    start_str = self.format_time(sub["start"].total_seconds())
+                    end_str = self.format_time(sub["end"].total_seconds())
+                    f.write(f"{sub['index']}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
+            
+            # Clean up temp files
+            if audio_path != media_path and audio_path and audio_path.exists():
+                try:
+                    audio_path.unlink()
+                except:
+                    pass
+            if vocal_path != audio_path and vocal_path and vocal_path.exists():
+                try:
+                    vocal_path.unlink()
+                except:
+                    pass
+            
+            self.print_progress("Complete!", 100)
+            print()
+            
+            if online_lyrics:
+                self.print_success(f"Lyrics saved to: {output_path} (with online lyrics)")
+            else:
+                self.print_success(f"Lyrics saved to: {output_path} (AI-generated)")
+            self.print_info(f"Generated {len(subtitles)} lyrics entries")
+            return True
+            
+        except Exception as e:
+            self.print_error(f"Error in song mode: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+            
     def generate_captions(self, media_path: Path, model_name: str, line_type: str, 
                           number_per_line: int, language_code: str, mode: str) -> bool:
         try:
@@ -591,22 +742,6 @@ class NotYCaptionGenerator:
                 if not audio_path:
                     self.print_error("Could not extract audio from video file")
                     return False
-            
-            # Song mode - separate vocals and search lyrics
-            online_lyrics = None
-            if mode == "song":
-                vocal_path = self.separate_vocals(audio_path)
-                audio_path = vocal_path
-                
-                # Try to get song name from filename
-                song_name = media_path.stem
-                # Clean up song name
-                song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
-                song_name = re.sub(r'\s+', ' ', song_name).strip()
-                
-                online_lyrics = self.search_lyrics_online(song_name)
-                if online_lyrics:
-                    self.print_success("Found lyrics online!")
             
             if self.model is None:
                 if not self.load_model(model_name):
@@ -631,87 +766,63 @@ class NotYCaptionGenerator:
             output_path = media_path.parent / f"{media_path.stem}"
             if mode == "translate":
                 output_path = output_path.with_name(f"{media_path.stem}_en")
-            elif mode == "song":
-                output_path = output_path.with_name(f"{media_path.stem}_lyrics")
             elif language_code != "auto":
                 output_path = output_path.with_name(f"{media_path.stem}_{language_code}")
             output_path = output_path.with_suffix(".srt")
             
-            # Process based on mode
-            if mode == "song" and online_lyrics:
-                # Use online lyrics
-                lyrics_lines = online_lyrics.split('\n')
+            segments = result.get("segments", [])
+            
+            if line_type == "auto":
+                subtitles = self.auto_break_sentences(segments)
+            else:
                 subtitles = []
                 index = 1
                 
-                # Distribute lyrics across segments
-                total_segments = len(result["segments"])
-                for i, segment in enumerate(result["segments"]):
-                    if i < len(lyrics_lines):
-                        text = lyrics_lines[i].strip()
-                        if text:
-                            subtitles.append({
-                                "index": index,
-                                "start": timedelta(seconds=segment["start"]),
-                                "end": timedelta(seconds=segment["end"]),
-                                "text": text
-                            })
-                            index += 1
-            else:
-                # Standard transcription
-                segments = result.get("segments", [])
-                
-                if line_type == "auto":
-                    subtitles = self.auto_break_sentences(segments)
-                else:
-                    subtitles = []
-                    index = 1
+                for segment in segments:
+                    segment_text = segment.get("text", "").strip()
+                    if not segment_text:
+                        continue
+                        
+                    segment_start = segment.get("start", 0)
+                    segment_end = segment.get("end", segment_start + 1)
                     
-                    for segment in segments:
-                        segment_text = segment.get("text", "").strip()
-                        if not segment_text:
-                            continue
-                            
-                        segment_start = segment.get("start", 0)
-                        segment_end = segment.get("end", segment_start + 1)
+                    # Apply transliteration if needed
+                    if language_code in ["hi", "ja"]:
+                        segment_text = self.transliterate_text(segment_text, language_code)
+                    
+                    words_data = segment.get("words", [])
+                    
+                    if line_type == "words" and words_data:
+                        words = [w["word"].strip() for w in words_data]
+                        word_starts = [w.get("start", segment_start) for w in words_data]
+                        word_ends = [w.get("end", segment_end) for w in words_data]
                         
-                        # Apply transliteration if needed
-                        if language_code in ["hi", "ja"]:
-                            segment_text = self.transliterate_text(segment_text, language_code)
-                        
-                        words_data = segment.get("words", [])
-                        
-                        if line_type == "words" and words_data:
-                            words = [w["word"].strip() for w in words_data]
-                            word_starts = [w.get("start", segment_start) for w in words_data]
-                            word_ends = [w.get("end", segment_end) for w in words_data]
-                            
-                            for i in range(0, len(words), number_per_line):
-                                chunk_words = words[i:i + number_per_line]
-                                line_text = " ".join(chunk_words).strip()
-                                if not line_text:
-                                    continue
-                                chunk_start = word_starts[i]
-                                chunk_end = word_ends[min(i + number_per_line - 1, len(word_ends) - 1)]
-                                
-                                subtitles.append({
-                                    "index": index,
-                                    "start": timedelta(seconds=chunk_start),
-                                    "end": timedelta(seconds=chunk_end),
-                                    "text": line_text
-                                })
-                                index += 1
-                        else:
-                            if line_type == "letters":
-                                segment_text = self.limit_letters_per_line(segment_text, number_per_line)
+                        for i in range(0, len(words), number_per_line):
+                            chunk_words = words[i:i + number_per_line]
+                            line_text = " ".join(chunk_words).strip()
+                            if not line_text:
+                                continue
+                            chunk_start = word_starts[i]
+                            chunk_end = word_ends[min(i + number_per_line - 1, len(word_ends) - 1)]
                             
                             subtitles.append({
                                 "index": index,
-                                "start": timedelta(seconds=segment_start),
-                                "end": timedelta(seconds=segment_end),
-                                "text": segment_text
+                                "start": timedelta(seconds=chunk_start),
+                                "end": timedelta(seconds=chunk_end),
+                                "text": line_text
                             })
                             index += 1
+                    else:
+                        if line_type == "letters":
+                            segment_text = self.limit_letters_per_line(segment_text, number_per_line)
+                        
+                        subtitles.append({
+                            "index": index,
+                            "start": timedelta(seconds=segment_start),
+                            "end": timedelta(seconds=segment_end),
+                            "text": segment_text
+                        })
+                        index += 1
             
             # Write SRT file
             self.print_progress("Writing subtitle file...", 90)
@@ -727,14 +838,9 @@ class NotYCaptionGenerator:
                     audio_path.unlink()
                 except:
                     pass
-            if hasattr(self, 'vocal_audio') and self.vocal_audio and self.vocal_audio.exists():
-                try:
-                    self.vocal_audio.unlink()
-                except:
-                    pass
             
             self.print_progress("Complete!", 100)
-            print()  # New line
+            print()
             self.print_success(f"Captions saved to: {output_path}")
             self.print_info(f"Generated {len(subtitles)} subtitle entries")
             return True
@@ -792,65 +898,111 @@ class NotYCaptionGenerator:
                 language_code = self.selected_language[1]
                 language_name = self.selected_language[0]
                 
-                # Select mode
+                # Select mode (filter based on language)
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
                 print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
                 
-                mode_options = [f"{m[0]} - {m[2]}" for m in self.modes]
-                mode_choice = self.show_menu("SELECT MODE", mode_options)
-                if mode_choice == -1:
+                # Build mode options based on language
+                mode_options = []
+                mode_values = []
+                
+                # Normal mode always available
+                mode_options.append(f"{self.modes[0][0]} - {self.modes[0][2]}")
+                mode_values.append(self.modes[0])
+                
+                # Translate mode - only show if language is not English
+                if language_code != "en":
+                    mode_options.append(f"{self.modes[1][0]} - {self.modes[1][2]}")
+                    mode_values.append(self.modes[1])
+                
+                # Song mode always available as separate option
+                is_song_mode = False
+                print(f"\n{Colors.CYAN}Additional Option:{Colors.RESET}")
+                print(f"  {len(mode_options) + 1}) {self.song_mode[0]} - {self.song_mode[2]}")
+                
+                choice = self.get_number_input(f"\nChoose option (0-{len(mode_options) + 1}): ", 0, len(mode_options) + 1)
+                
+                if choice == 0:
                     continue
-                self.selected_mode = self.modes[mode_choice]
-                mode = self.selected_mode[1]
+                elif choice == len(mode_options) + 1:
+                    # Song mode selected
+                    is_song_mode = True
+                    mode = "song"
+                else:
+                    is_song_mode = False
+                    self.selected_mode = mode_values[choice - 1]
+                    mode = self.selected_mode[1]
                 
-                # Select line type
-                self.clear_screen()
-                print_header()
-                print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
-                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
-                print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}")
-                print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}\n")
-                
-                line_options = [f"{l[0]} - {l[2]}" for l in self.line_types]
-                line_choice = self.show_menu("LINE TYPE", line_options)
-                if line_choice == -1:
-                    continue
-                self.selected_line_type = self.line_types[line_choice]
-                line_type = self.selected_line_type[1]
-                
-                number_per_line = 5
-                if line_type != "auto":
-                    number_per_line = self.get_number_input(
-                        f"How many {line_type} per line? (1-30): ", 1, 30
+                # If Song Mode, skip line type selection
+                if is_song_mode:
+                    # Confirm and generate lyrics
+                    self.clear_screen()
+                    print_header()
+                    self.print_box([
+                        f"Media File: {media_path}",
+                        f"Model: {self.selected_model.upper()}",
+                        f"Language: {language_name}",
+                        f"Mode: SONG MODE - Enhanced lyrics with online search"
+                    ])
+                    
+                    if not self.confirm("Generate lyrics?"):
+                        continue
+                    
+                    self.print_info("Generating lyrics with online search...")
+                    success = self.generate_song_lyrics(
+                        media_path,
+                        self.selected_model,
+                        language_code
                     )
-                
-                # Confirm and generate
-                self.clear_screen()
-                print_header()
-                self.print_box([
-                    f"Media File: {media_path}",
-                    f"Model: {self.selected_model.upper()}",
-                    f"Language: {language_name}",
-                    f"Mode: {self.selected_mode[0]}",
-                    f"Line Type: {self.selected_line_type[0]}",
-                    f"Settings: {number_per_line if line_type != 'auto' else 'Auto-detect'}"
-                ])
-                
-                if not self.confirm("Generate captions?"):
-                    continue
-                
-                self.print_info("Generating captions... This may take several minutes.")
-                success = self.generate_captions(
-                    media_path,
-                    self.selected_model,
-                    line_type,
-                    number_per_line,
-                    language_code,
-                    mode
-                )
+                else:
+                    # Select line type
+                    self.clear_screen()
+                    print_header()
+                    print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
+                    print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
+                    print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}")
+                    print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}\n")
+                    
+                    line_options = [f"{l[0]} - {l[2]}" for l in self.line_types]
+                    line_choice = self.show_menu("LINE TYPE", line_options)
+                    if line_choice == -1:
+                        continue
+                    self.selected_line_type = self.line_types[line_choice]
+                    line_type = self.selected_line_type[1]
+                    
+                    number_per_line = 5
+                    if line_type != "auto":
+                        number_per_line = self.get_number_input(
+                            f"How many {line_type} per line? (1-30): ", 1, 30
+                        )
+                    
+                    # Confirm and generate
+                    self.clear_screen()
+                    print_header()
+                    self.print_box([
+                        f"Media File: {media_path}",
+                        f"Model: {self.selected_model.upper()}",
+                        f"Language: {language_name}",
+                        f"Mode: {self.selected_mode[0]}",
+                        f"Line Type: {self.selected_line_type[0]}",
+                        f"Settings: {number_per_line if line_type != 'auto' else 'Auto-detect'}"
+                    ])
+                    
+                    if not self.confirm("Generate captions?"):
+                        continue
+                    
+                    self.print_info("Generating captions... This may take several minutes.")
+                    success = self.generate_captions(
+                        media_path,
+                        self.selected_model,
+                        line_type,
+                        number_per_line,
+                        language_code,
+                        mode
+                    )
                 
                 if success:
                     self.print_success(f"Thanks for using {APP_NAME}!")
@@ -862,7 +1014,7 @@ class NotYCaptionGenerator:
                     except:
                         pass
                     
-                    if not self.confirm("Process another video?"):
+                    if not self.confirm("Process another file?"):
                         break
                 else:
                     self.print_error("Failed to generate captions")
