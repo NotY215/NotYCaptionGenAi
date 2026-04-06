@@ -3,7 +3,7 @@
 
 """
 NotY Caption Generator AI v5.2
-Using OpenAI Whisper (PyTorch) with FFmpeg Vocal Separation & Smart Lyrics Matching
+Using OpenAI Whisper (PyTorch) with YouTube Support & Smart Lyrics Matching
 Copyright (c) 2026 NotY215
 """
 
@@ -163,7 +163,7 @@ class NotYCaptionGenerator:
         ]
         
         self.song_search_options = [
-            ("Auto Detect Song", "auto", "Automatically detect song name from filename"),
+            ("Auto Detect Song", "auto", "Automatically detect song name from title"),
             ("Manual Song Name", "manual", "Enter song name manually for accurate lyrics")
         ]
         
@@ -266,46 +266,52 @@ class NotYCaptionGenerator:
                 return -1
             return choice - 1
             
-    def get_media_path(self, allowed_extensions: List[str]) -> Path:
-        if self.media_path_arg:
-            path = Path(self.media_path_arg.strip('"'))
-            if path.exists() and path.suffix.lower() in allowed_extensions:
-                self.print_success(f"Using file: {path}")
-                return path
+    def download_youtube_audio(self, url: str) -> Path:
+        """Download audio from YouTube URL"""
+        self.print_info("Downloading audio from YouTube...")
         
-        self.print_info("Opening file selection dialog...")
-        self.print_info(f"Supported formats: {', '.join(allowed_extensions)}")
-        file_path = select_file_dialog()
+        temp_dir = Path(os.environ.get('TEMP', '.'))
+        output_path = temp_dir / f"youtube_audio_{int(time.time())}.mp3"
         
-        if file_path:
-            path = Path(file_path)
-            if path.exists() and path.suffix.lower() in allowed_extensions:
-                self.print_success(f"Selected: {path}")
-                return path
-            else:
-                self.print_error("Invalid file selected!")
+        # Try using yt-dlp if available, otherwise use youtube-dl
+        try:
+            # Check if yt-dlp is installed
+            subprocess.run(['yt-dlp', '--version'], capture_output=True, check=True)
+            cmd = [
+                'yt-dlp', '-x', '--audio-format', 'mp3',
+                '-o', str(output_path), url
+            ]
+        except:
+            try:
+                subprocess.run(['youtube-dl', '--version'], capture_output=True, check=True)
+                cmd = [
+                    'youtube-dl', '-x', '--audio-format', 'mp3',
+                    '-o', str(output_path), url
+                ]
+            except:
+                self.print_error("yt-dlp or youtube-dl not installed!")
+                self.print_info("Please install: pip install yt-dlp")
+                return None
         
-        while True:
-            print(f"\n{Colors.CYAN}Provide Video/Audio Path{Colors.RESET}")
-            print(f"   Supported formats: {', '.join(allowed_extensions)}")
-            print(f"   Tip: You can drag and drop a file here, then press Enter")
-            path_str = self.get_input("> ").strip().strip('"')
-            
-            if not path_str:
-                self.print_error("Path cannot be empty!")
-                continue
-                
-            path = Path(path_str)
-            if not path.exists():
-                self.print_error(f"File not found: {path}")
-                continue
-                
-            if path.suffix.lower() not in allowed_extensions:
-                self.print_error(f"Invalid extension! Supported: {', '.join(allowed_extensions)}")
-                continue
-                
-            return path
-            
+        try:
+            subprocess.run(cmd, capture_output=True, timeout=300)
+            # Find the downloaded file (yt-dlp adds extensions)
+            for f in temp_dir.glob(f"{output_path.stem}*"):
+                if f.suffix in ['.mp3', '.m4a', '.webm']:
+                    # Convert to WAV for consistency
+                    wav_path = temp_dir / f"{f.stem}.wav"
+                    ffmpeg_cmd = [str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg',
+                                  '-i', str(f), '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', '-y', str(wav_path)]
+                    subprocess.run(ffmpeg_cmd, capture_output=True, timeout=60)
+                    f.unlink()
+                    self.print_success("YouTube audio downloaded successfully")
+                    return wav_path
+        except Exception as e:
+            self.print_error(f"Failed to download YouTube audio: {e}")
+            return None
+        
+        return None
+        
     def check_ffmpeg(self) -> bool:
         """Check if ffmpeg is available"""
         if self.ffmpeg_exe.exists():
@@ -420,10 +426,9 @@ class NotYCaptionGenerator:
         song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
         song_name = re.sub(r'\s+', ' ', song_name).strip()
         
-        # Method 1: Try Lyrics.ovh API first (most reliable)
+        # Method 1: Try Lyrics.ovh API
         try:
             self.print_info("Trying Lyrics.ovh API...")
-            # Try to extract artist from filename if format is "Artist - Song"
             parts = song_name.split('-')
             if len(parts) >= 2:
                 artist = parts[0].strip()
@@ -446,53 +451,43 @@ class NotYCaptionGenerator:
         try:
             self.print_info("Searching Genius...")
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            encoded = urllib.parse.quote(song_name)
+            search_url = f"https://genius.com/search?q={encoded}"
             
-            # Try multiple search variations
-            search_variations = [
-                song_name,
-                song_name.replace(' ', '-'),
-                song_name.replace(' ', '')
-            ]
-            
-            for variation in search_variations[:3]:
-                encoded = urllib.parse.quote(variation)
-                search_url = f"https://genius.com/search?q={encoded}"
+            req = urllib.request.Request(search_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8')
                 
-                req = urllib.request.Request(search_url, headers=headers)
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    html = response.read().decode('utf-8')
-                    
-                    # Find song URLs
-                    song_links = re.findall(r'href="([^"]*)"[^>]*>([^<]+)</a>', html)
-                    
-                    for link, title in song_links:
-                        if song_name.lower() in title.lower() or title.lower() in song_name.lower():
-                            if 'lyrics' in link:
-                                song_url = link if link.startswith('http') else 'https://genius.com' + link
+                song_links = re.findall(r'href="([^"]*)"[^>]*>([^<]+)</a>', html)
+                
+                for link, title in song_links:
+                    if song_name.lower() in title.lower() or title.lower() in song_name.lower():
+                        if 'lyrics' in link:
+                            song_url = link if link.startswith('http') else 'https://genius.com' + link
+                            
+                            req2 = urllib.request.Request(song_url, headers=headers)
+                            with urllib.request.urlopen(req2, timeout=15) as response2:
+                                lyrics_html = response2.read().decode('utf-8')
                                 
-                                req2 = urllib.request.Request(song_url, headers=headers)
-                                with urllib.request.urlopen(req2, timeout=15) as response2:
-                                    lyrics_html = response2.read().decode('utf-8')
-                                    
-                                    patterns = [
-                                        r'<div[^>]*data-lyrics-container="true"[^>]*>(.*?)</div>',
-                                        r'<div[^>]*class="[^"]*Lyrics__Container[^"]*"[^>]*>(.*?)</div>',
-                                    ]
-                                    
-                                    for pattern in patterns:
-                                        matches = re.findall(pattern, lyrics_html, re.DOTALL)
-                                        if matches:
-                                            lyrics = ' '.join(matches)
-                                            lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
-                                            lyrics = re.sub(r'<[^>]+>', '', lyrics)
-                                            lyrics = re.sub(r'&amp;', '&', lyrics)
-                                            lyrics = lyrics.strip()
-                                            
-                                            if len(lyrics) > 200 and not re.search(r'contributors?|reimagined|remix', lyrics.lower()):
-                                                cleaned_lyrics = self.clean_lyrics_text(lyrics)
-                                                if len(cleaned_lyrics) > 100:
-                                                    self.print_progress("Found lyrics on Genius", 50)
-                                                    return cleaned_lyrics, "Genius"
+                                patterns = [
+                                    r'<div[^>]*data-lyrics-container="true"[^>]*>(.*?)</div>',
+                                    r'<div[^>]*class="[^"]*Lyrics__Container[^"]*"[^>]*>(.*?)</div>',
+                                ]
+                                
+                                for pattern in patterns:
+                                    matches = re.findall(pattern, lyrics_html, re.DOTALL)
+                                    if matches:
+                                        lyrics = ' '.join(matches)
+                                        lyrics = re.sub(r'<br\s*/?>', '\n', lyrics)
+                                        lyrics = re.sub(r'<[^>]+>', '', lyrics)
+                                        lyrics = re.sub(r'&amp;', '&', lyrics)
+                                        lyrics = lyrics.strip()
+                                        
+                                        if len(lyrics) > 200 and not re.search(r'contributors?|reimagined|remix', lyrics.lower()):
+                                            cleaned_lyrics = self.clean_lyrics_text(lyrics)
+                                            if len(cleaned_lyrics) > 100:
+                                                self.print_progress("Found lyrics on Genius", 50)
+                                                return cleaned_lyrics, "Genius"
         except:
             pass
         
@@ -523,10 +518,6 @@ class NotYCaptionGenerator:
             pass
         
         self.print_warning(f"Could not find exact lyrics for: {song_name}")
-        self.print_info("Tips for better results:")
-        self.print_info("  1. Use Manual Song Name with format: Artist - Song Name")
-        self.print_info("  2. Example: Coldplay - Hymn for the Weekend")
-        self.print_info("  3. Check spelling - the correct song is 'Hymn for the Weekend'")
         return None, None
         
     def load_model(self, model_name: str):
@@ -686,7 +677,9 @@ class NotYCaptionGenerator:
         return subtitles
         
     def generate_song_lyrics(self, media_path: Path, model_name: str, language_code: str, 
-                              song_search_type: str, manual_song_name: str = None) -> bool:
+                              song_search_type: str, manual_song_name: str = None, 
+                              youtube_title: str = None) -> bool:
+        """Generate lyrics using song mode with vocal separation"""
         try:
             import whisper
             from datetime import timedelta
@@ -703,6 +696,15 @@ class NotYCaptionGenerator:
             if song_search_type == "manual" and manual_song_name:
                 song_name = manual_song_name.strip()
                 self.print_info(f"Searching for: {song_name}")
+            elif youtube_title:
+                # Extract from YouTube title
+                title = youtube_title
+                # Remove common patterns
+                title = re.sub(r'\(.*?\)|\[.*?\]|\{.*?\}', '', title)
+                title = re.sub(r'(Official|Video|Lyrics|HD|Audio|Music|Song|Cover|Remix|Live)', '', title, flags=re.IGNORECASE)
+                title = re.sub(r'\s+', ' ', title).strip()
+                song_name = title
+                self.print_info(f"Auto-detected from YouTube: {song_name}")
             else:
                 original_name = media_path.stem
                 clean_name = re.sub(r'[_\-\[\]\(\)]', ' ', original_name)
@@ -928,88 +930,200 @@ class NotYCaptionGenerator:
         if not self.check_ffmpeg():
             self.print_warning("FFmpeg not found! Video extraction may fail.")
         
-        # Try to import whisper (handle missing torch.cuda gracefully)
+        # Try to import whisper
         try:
             import whisper
             self.print_success("Whisper loaded successfully (CPU mode)")
         except ImportError as e:
             if 'torch.cuda' in str(e):
                 self.print_warning("CUDA not available, using CPU mode")
-                # Try importing again - whisper will use CPU automatically
                 try:
                     import whisper
                     self.print_success("Whisper loaded successfully (CPU mode)")
                 except ImportError as e2:
                     self.print_error(f"Whisper import failed: {e2}")
-                    self.print_info("Please install: pip install openai-whisper torch numpy")
+                    self.print_info("Please install: pip install openai-whisper torch numpy yt-dlp")
                     input("\nPress Enter to exit...")
                     return
             else:
                 self.print_error(f"Whisper import failed: {e}")
-                self.print_info("Please install: pip install openai-whisper torch numpy")
+                self.print_info("Please install: pip install openai-whisper torch numpy yt-dlp")
                 input("\nPress Enter to exit...")
                 return
             
         while True:
             try:
+                # Platform Selection
                 self.clear_screen()
                 print_header()
-                print(f"\n{Colors.CYAN}Supported Formats:{Colors.RESET}")
-                print(f"  Video: {', '.join(SUPPORTED_EXTENSIONS['video'])}")
-                print(f"  Audio: {', '.join(SUPPORTED_EXTENSIONS['audio'])}")
-                print()
+                print(f"\n{Colors.CYAN}{Colors.BOLD}SELECT PLATFORM{Colors.RESET}")
+                print(f"{Colors.CYAN}┌{'─' * 50}┐{Colors.RESET}")
+                print(f"{Colors.CYAN}│{Colors.RESET}  1) YouTube - Download and generate captions/lyrics{Colors.CYAN}│{Colors.RESET}")
+                print(f"{Colors.CYAN}│{Colors.RESET}  2) Local File - Use local video/audio file{Colors.CYAN}│{Colors.RESET}")
+                print(f"{Colors.CYAN}│{Colors.RESET}  0) Exit{Colors.CYAN}│{Colors.RESET}")
+                print(f"{Colors.CYAN}└{'─' * 50}┘{Colors.RESET}")
                 
-                allowed_extensions = SUPPORTED_EXTENSIONS['all']
-                media_path = self.get_media_path(allowed_extensions)
-                self.print_success(f"Selected: {media_path}")
+                platform_choice = self.get_number_input("Choose option (0-2): ", 0, 2)
                 
+                if platform_choice == 0:
+                    break
+                    
+                # Confirm platform choice
+                platform_name = "YouTube" if platform_choice == 1 else "Local File"
                 self.clear_screen()
                 print_header()
-                print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}\n")
+                print(f"\n{Colors.CYAN}Are you sure you want to use {platform_name}?{Colors.RESET}")
+                print(f"\n  1) Continue")
+                print(f"  0) Back")
+                
+                confirm_choice = self.get_number_input("\nChoose option (0-1): ", 0, 1)
+                if confirm_choice == 0:
+                    continue
+                
+                media_path = None
+                youtube_title = None
+                
+                if platform_choice == 1:
+                    # YouTube mode
+                    while True:
+                        self.clear_screen()
+                        print_header()
+                        print(f"\n{Colors.CYAN}Paste YouTube URL:{Colors.RESET}")
+                        print(f"   Example: https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+                        url = self.get_input("\n> ").strip()
+                        
+                        if not url:
+                            self.print_error("URL cannot be empty!")
+                            input("Press Enter to continue...")
+                            continue
+                        
+                        self.clear_screen()
+                        print_header()
+                        print(f"\n{Colors.CYAN}URL: {url}{Colors.RESET}")
+                        print(f"\n  1) Continue")
+                        print(f"  2) Paste again")
+                        print(f"  0) Back to platform selection")
+                        
+                        url_choice = self.get_number_input("\nChoose option (0-2): ", 0, 2)
+                        if url_choice == 0:
+                            break
+                        elif url_choice == 2:
+                            continue
+                        
+                        # Download YouTube audio
+                        self.print_info("Downloading from YouTube...")
+                        media_path = self.download_youtube_audio(url)
+                        
+                        if not media_path:
+                            self.print_error("Failed to download YouTube video!")
+                            input("Press Enter to continue...")
+                            continue
+                        
+                        # Try to get video title for better lyrics search
+                        try:
+                            import yt_dlp
+                            ydl_opts = {'quiet': True, 'extract_flat': True}
+                            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                                info = ydl.extract_info(url, download=False)
+                                youtube_title = info.get('title', '')
+                                self.print_info(f"Video title: {youtube_title}")
+                        except:
+                            pass
+                        
+                        break
+                    
+                    if not media_path:
+                        continue
+                        
+                else:
+                    # Local file mode
+                    self.clear_screen()
+                    print_header()
+                    print(f"\n{Colors.CYAN}Supported Formats:{Colors.RESET}")
+                    print(f"  Video: {', '.join(SUPPORTED_EXTENSIONS['video'])}")
+                    print(f"  Audio: {', '.join(SUPPORTED_EXTENSIONS['audio'])}")
+                    print()
+                    
+                    allowed_extensions = SUPPORTED_EXTENSIONS['all']
+                    media_path = self.get_media_path(allowed_extensions)
+                    
+                    if not media_path:
+                        continue
+                    
+                self.print_success(f"Media source ready")
+                
+                # Select model
+                self.clear_screen()
+                print_header()
+                print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}\n")
                 
                 model_options = [f"{m[0].upper()} ({m[1]}) - {m[2]}" for m in self.models]
                 model_choice = self.show_menu("SELECT MODEL", model_options)
                 if model_choice == -1:
+                    # Clean up temp file if YouTube
+                    if platform_choice == 1 and media_path and media_path.exists():
+                        try:
+                            media_path.unlink()
+                        except:
+                            pass
                     continue
                 self.selected_model = self.models[model_choice][0]
                 
+                # Select language
                 self.clear_screen()
                 print_header()
-                print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
+                print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}\n")
                 
                 lang_options = [f"{lang[0]} ({lang[1]})" for lang in self.languages]
                 lang_choice = self.show_menu("SELECT LANGUAGE", lang_options)
                 if lang_choice == -1:
+                    if platform_choice == 1 and media_path and media_path.exists():
+                        try:
+                            media_path.unlink()
+                        except:
+                            pass
                     continue
                 self.selected_language = self.languages[lang_choice]
                 language_code = self.selected_language[1]
                 language_name = self.selected_language[0]
                 
+                # Select mode
                 self.clear_screen()
                 print_header()
-                print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
+                print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
                 print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
                 
                 mode_options = [f"{m[0]} - {m[2]}" for m in self.modes]
                 mode_choice = self.show_menu("SELECT MODE", mode_options)
                 if mode_choice == -1:
+                    if platform_choice == 1 and media_path and media_path.exists():
+                        try:
+                            media_path.unlink()
+                        except:
+                            pass
                     continue
                     
                 self.selected_mode = self.modes[mode_choice]
                 mode = self.selected_mode[1]
                 
+                # If Song Mode, select search option (only for local files or if we have title)
                 if mode == "song":
                     self.clear_screen()
                     print_header()
-                    print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
+                    print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
                     print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
                     print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
                     
                     song_options = [f"{s[0]} - {s[2]}" for s in self.song_search_options]
                     song_choice = self.show_menu("SONG SEARCH OPTION", song_options)
                     if song_choice == -1:
+                        if platform_choice == 1 and media_path and media_path.exists():
+                            try:
+                                media_path.unlink()
+                            except:
+                                pass
                         continue
                     
                     self.selected_song_search = self.song_search_options[song_choice]
@@ -1021,13 +1135,19 @@ class NotYCaptionGenerator:
                         manual_song_name = self.get_input("> ").strip()
                         if not manual_song_name:
                             self.print_error("Song name cannot be empty!")
+                            if platform_choice == 1 and media_path and media_path.exists():
+                                try:
+                                    media_path.unlink()
+                                except:
+                                    pass
                             continue
                     
+                    # Confirm and generate lyrics
                     self.clear_screen()
                     print_header()
                     search_display = "Auto Detect" if song_search_type == "auto" else f"Manual: {manual_song_name}"
                     self.print_box([
-                        f"Media File: {media_path}",
+                        f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
                         f"Model: {self.selected_model.upper()}",
                         f"Language: {language_name}",
                         f"Mode: SONG MODE",
@@ -1035,6 +1155,11 @@ class NotYCaptionGenerator:
                     ])
                     
                     if not self.confirm("Generate lyrics?"):
+                        if platform_choice == 1 and media_path and media_path.exists():
+                            try:
+                                media_path.unlink()
+                            except:
+                                pass
                         continue
                     
                     self.print_info("Generating lyrics with vocal separation...")
@@ -1043,12 +1168,14 @@ class NotYCaptionGenerator:
                         self.selected_model,
                         language_code,
                         song_search_type,
-                        manual_song_name
+                        manual_song_name,
+                        youtube_title
                     )
                 else:
+                    # Normal mode - select line type
                     self.clear_screen()
                     print_header()
-                    print(f"\n{Colors.BOLD}File: {media_path.name}{Colors.RESET}")
+                    print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
                     print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
                     print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}")
                     print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}\n")
@@ -1056,6 +1183,11 @@ class NotYCaptionGenerator:
                     line_options = [f"{l[0]} - {l[2]}" for l in self.line_types]
                     line_choice = self.show_menu("LINE TYPE", line_options)
                     if line_choice == -1:
+                        if platform_choice == 1 and media_path and media_path.exists():
+                            try:
+                                media_path.unlink()
+                            except:
+                                pass
                         continue
                     self.selected_line_type = self.line_types[line_choice]
                     line_type = self.selected_line_type[1]
@@ -1066,10 +1198,11 @@ class NotYCaptionGenerator:
                             f"How many {line_type} per line? (1-30): ", 1, 30
                         )
                     
+                    # Confirm and generate
                     self.clear_screen()
                     print_header()
                     self.print_box([
-                        f"Media File: {media_path}",
+                        f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
                         f"Model: {self.selected_model.upper()}",
                         f"Language: {language_name}",
                         f"Mode: {self.selected_mode[0]}",
@@ -1078,6 +1211,11 @@ class NotYCaptionGenerator:
                     ])
                     
                     if not self.confirm("Generate captions?"):
+                        if platform_choice == 1 and media_path and media_path.exists():
+                            try:
+                                media_path.unlink()
+                            except:
+                                pass
                         continue
                     
                     self.print_info("Generating captions... This may take several minutes.")
@@ -1088,6 +1226,13 @@ class NotYCaptionGenerator:
                         number_per_line,
                         language_code
                     )
+                
+                # Clean up temp file if YouTube
+                if platform_choice == 1 and media_path and media_path.exists():
+                    try:
+                        media_path.unlink()
+                    except:
+                        pass
                 
                 if success:
                     self.print_success(f"Thanks for using {APP_NAME}!")
