@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build NotY Caption Generator AI Executable v5.2 - WORKING VERSION
+Build NotY Caption Generator AI Executable v5.2 - FIXED
 Copyright (c) 2026 NotY215
 """
 
@@ -62,72 +62,60 @@ def build_exe():
     for p in python_paths:
         print(f"    - {p}")
     
-    # Find torch and whisper
-    torch_path = None
-    whisper_path = None
+    # Convert paths to use forward slashes for the spec file
+    source_path = str(base_dir / "noty_caption_gen.py").replace('\\', '/')
+    icon_path = str(resources_dir / "app.ico").replace('\\', '/')
     
-    for path in python_paths:
-        torch_check = Path(path) / "torch"
-        whisper_check = Path(path) / "whisper"
-        if torch_check.exists():
-            torch_path = str(torch_check)
-        if whisper_check.exists():
-            whisper_path = str(whisper_check)
-    
-    if not torch_path:
-        print("\n[ERROR] torch not found! Installing...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "torch", "torchaudio"], check=True)
-        for path in python_paths:
-            torch_check = Path(path) / "torch"
-            if torch_check.exists():
-                torch_path = str(torch_check)
-                break
-    
-    if not whisper_path:
-        print("\n[ERROR] whisper not found! Installing...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "openai-whisper"], check=True)
-        for path in python_paths:
-            whisper_check = Path(path) / "whisper"
-            if whisper_check.exists():
-                whisper_path = str(whisper_check)
-                break
-    
-    print(f"\n[3/4] Found torch at: {torch_path}")
-    print(f"    Found whisper at: {whisper_path}")
-    
-    # Collect all data files
-    datas = []
-    
-    # Add torch
-    if torch_path:
-        for root, dirs, files in os.walk(torch_path):
-            for file in files:
-                if file.endswith(('.dll', '.pyd', '.so', '.py')):
-                    full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, os.path.dirname(torch_path))
-                    datas.append((full_path, rel_path))
-    
-    # Add whisper
-    if whisper_path:
-        for root, dirs, files in os.walk(whisper_path):
-            for file in files:
-                if file.endswith('.py'):
-                    full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, os.path.dirname(whisper_path))
-                    datas.append((full_path, rel_path))
-    
-    # Add ffmpeg
+    # Collect ffmpeg files as strings with forward slashes
+    ffmpeg_datas = []
     if ffmpeg_dir.exists():
         for file in ffmpeg_dir.glob("*"):
             if file.is_file():
-                datas.append((str(file), 'ffmpeg'))
+                ffmpeg_datas.append((str(file).replace('\\', '/'), 'ffmpeg'))
     
-    # Add icon
-    icon_path = resources_dir / "app.ico"
-    if icon_path.exists():
-        datas.append((str(icon_path), '.'))
+    # Parse version numbers
+    version_parts = [int(x) for x in APP_VERSION.split('.')]
+    while len(version_parts) < 4:
+        version_parts.append(0)
     
-    # Create the spec file
+    # Create version info for Windows
+    version_info = f'''
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=({version_parts[0]}, {version_parts[1]}, {version_parts[2]}, {version_parts[3]}),
+    prodvers=({version_parts[0]}, {version_parts[1]}, {version_parts[2]}, {version_parts[3]}),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          u'040904B0',
+          [
+            StringStruct(u'CompanyName', u'{APP_AUTHOR}'),
+            StringStruct(u'FileDescription', u'{APP_NAME}'),
+            StringStruct(u'FileVersion', u'{APP_VERSION}'),
+            StringStruct(u'InternalName', u'{APP_NAME}'),
+            StringStruct(u'LegalCopyright', u'Copyright (c) 2026 {APP_AUTHOR}'),
+            StringStruct(u'OriginalFilename', u'{APP_NAME}.exe'),
+            StringStruct(u'ProductName', u'{APP_NAME}'),
+            StringStruct(u'ProductVersion', u'{APP_VERSION}'),
+            StringStruct(u'Comments', u'AI-Powered Subtitle & Lyrics Generator with YouTube Support')
+          ]
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+  ]
+)
+'''
+    
+    # Create the spec file with properly escaped paths
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 
 import sys
@@ -135,17 +123,17 @@ import os
 
 block_cipher = None
 
-# All collected data files
-datas = {datas}
+# FFmpeg data
+ffmpeg_datas = {ffmpeg_datas}
 
 a = Analysis(
-    ['{base_dir / "noty_caption_gen.py"}'],
+    [r'{source_path}'],
     pathex=[],
     binaries=[],
-    datas=datas,
+    datas=ffmpeg_datas + [(r'{icon_path}', '.')],
     hiddenimports=[
         'whisper',
-        'whisper._cli',
+        'whisper.__main__',
         'whisper.audio',
         'whisper.decoding',
         'whisper.model',
@@ -166,8 +154,6 @@ a = Analysis(
         'torch.version',
         'torch.autograd',
         'torch.autograd.function',
-        'torch.cuda',
-        'torch.cuda.amp',
         'numpy',
         'numpy.core',
         'numpy.core._methods',
@@ -233,34 +219,20 @@ a = Analysis(
         'io',
         'queue',
         'logging',
-        'warnings',
-        'abc',
-        'weakref',
-        'copy',
-        'math',
-        'random',
-        'string',
-        'socket',
-        'ssl',
-        'hashlib',
-        'hmac',
-        'secrets'
+        'warnings'
     ],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
     excludes=[
-        'tensorflow',
-        'keras',
-        'matplotlib',
-        'scipy',
-        'pandas',
-        'sklearn',
-        'PIL',
-        'cv2',
-        'PyQt5',
-        'PyQt6',
-        'wxPython'
+        'tensorflow', 'keras', 'transformers',
+        'PyQt5', 'PyQt6', 'wxPython',
+        'matplotlib', 'plotly', 'seaborn',
+        'scipy', 'pandas', 'sklearn',
+        'PIL', 'opencv', 'imageio',
+        'jupyter', 'notebook', 'ipython',
+        'torch.distributed', 'torch.testing', 'torch.jit', 'torch.onnx',
+        'torchvision', 'torchtext'
     ],
     noarchive=False,
 )
@@ -288,91 +260,82 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='{icon_path}' if {icon_path.exists()} else None,
+    icon=r'{icon_path}',
     version='version_info.txt'
 )
 
-# COLLECT all files
-coll = COLLECT(
-    exe,
+app = EXE(
+    pyz,
+    a.scripts,
     a.binaries,
     a.datas,
     a.zipfiles,
     a.zipped_data,
-    a.scripts,
+    [],
+    name='{APP_NAME}',
+    debug=False,
+    bootloader_ignore_signals=False,
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='{APP_NAME}'
+    runtime_tmpdir=None,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=r'{icon_path}',
+    version='version_info.txt'
 )
 '''
     
-    # Write spec file
     spec_path = builder_dir / f"{APP_NAME}.spec"
     with open(spec_path, 'w', encoding='utf-8') as f:
         f.write(spec_content)
+        print(f"\n[INFO] Spec file created: {spec_path}")
     
-    # Create version info
-    version_info = f'''
-VSVersionInfo(
-  ffi=FixedFileInfo(
-    filevers=({APP_VERSION.replace('.', ',')}, 0),
-    prodvers=({APP_VERSION.replace('.', ',')}, 0),
-    mask=0x3f,
-    flags=0x0,
-    OS=0x40004,
-    fileType=0x1,
-    subtype=0x0,
-    date=(0, 0)
-  ),
-  kids=[
-    StringFileInfo(
-      [
-        StringTable(
-          u'040904B0',
-          [
-            StringStruct(u'CompanyName', u'{APP_AUTHOR}'),
-            StringStruct(u'FileDescription', u'{APP_NAME}'),
-            StringStruct(u'FileVersion', u'{APP_VERSION}'),
-            StringStruct(u'InternalName', u'{APP_NAME}'),
-            StringStruct(u'LegalCopyright', u'Copyright (c) 2026 {APP_AUTHOR}'),
-            StringStruct(u'OriginalFilename', u'{APP_NAME}.exe'),
-            StringStruct(u'ProductName', u'{APP_NAME}'),
-            StringStruct(u'ProductVersion', u'{APP_VERSION}')
-          ]
-        )
-      ]
-    ),
-    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
-  ]
-)
-'''
-    
+    # Write version info
     version_path = builder_dir / "version_info.txt"
-    with open(version_path, 'w') as f:
+    with open(version_path, 'w', encoding='utf-8') as f:
         f.write(version_info)
+        print(f"[INFO] Version file created: {version_path}")
     
     print("\n[4/4] Running PyInstaller...")
     print("This will take 15-20 minutes...")
     sys.stdout.flush()
     
+    # Change to builder directory
+    os.chdir(builder_dir)
+    
     # Run PyInstaller
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        str(spec_path),
-        "--distpath", str(dist_dir),
-        "--workpath", str(builder_dir / "build"),
+        f"{APP_NAME}.spec",
+        "--distpath", str(dist_dir).replace('\\', '/'),
+        "--workpath", "build",
         "--noconfirm",
-        "--clean",
-        "--log-level=WARN"
+        "--clean"
     ]
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+        # Run with real-time output
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
         
-        if result.returncode != 0:
+        for line in process.stdout:
+            print(f"  {line.rstrip()}")
+            sys.stdout.flush()
+        
+        process.wait(timeout=3600)
+        
+        if process.returncode != 0:
             print("\n[ERROR] PyInstaller failed!")
-            print(result.stderr)
             return None
         
         print("\n[SUCCESS] Build completed!")
@@ -385,39 +348,51 @@ VSVersionInfo(
         return None
     
     # Cleanup
-    spec_path.unlink(missing_ok=True)
-    version_path.unlink(missing_ok=True)
-    shutil.rmtree(builder_dir / "build", ignore_errors=True)
+    try:
+        spec_path.unlink(missing_ok=True)
+        version_path.unlink(missing_ok=True)
+        shutil.rmtree(builder_dir / "build", ignore_errors=True)
+    except:
+        pass
     
-    # Check if executable was created
+    # Find the executable
     exe_file = dist_dir / f"{APP_NAME}.exe"
     if not exe_file.exists():
-        exe_file = dist_dir / APP_NAME / f"{APP_NAME}.exe"
+        # Check in subfolder
+        possible_path = dist_dir / APP_NAME / f"{APP_NAME}.exe"
+        if possible_path.exists():
+            exe_file = possible_path
+            # Move it up
+            shutil.move(str(possible_path), str(dist_dir / f"{APP_NAME}.exe"))
+            exe_file = dist_dir / f"{APP_NAME}.exe"
     
     if exe_file.exists():
         size = exe_file.stat().st_size / (1024 * 1024)
-        print(f"\n[OK] Executable: {exe_file} ({size:.2f} MB)")
+        print(f"\n[OK] Executable built: {exe_file} ({size:.2f} MB)")
         
         # Copy necessary folders
-        for folder in ['models', 'ffmpeg', 'resources']:
-            src = base_dir / folder
-            dst = dist_dir / folder
+        for folder_name in ['models', 'ffmpeg', 'resources']:
+            src = base_dir / folder_name
+            dst = dist_dir / folder_name
             if src.exists():
                 if dst.exists():
                     shutil.rmtree(dst)
                 shutil.copytree(src, dst)
-                print(f"  Copied {folder}")
+                print(f"  Copied {folder_name}")
         
         # Create run script
-        run_script = dist_dir / "run.bat"
+        run_script = dist_dir / "Run_App.bat"
         with open(run_script, 'w') as f:
             f.write(f'''@echo off
 cd /d "%~dp0"
 set TORCH_USE_RTLD_GLOBAL=1
 set CUDA_VISIBLE_DEVICES=-1
-"{exe_file.name}" %*
+echo Starting NotY Caption Generator AI v{APP_VERSION}...
+echo.
+"{exe_file.name}"
 pause
 ''')
+        print(f"  Created Run_App.bat")
         
         return exe_file
     
@@ -428,6 +403,9 @@ if __name__ == "__main__":
     result = build_exe()
     if result:
         print(f"\n[SUCCESS] Build successful! Run: {result}")
+        print("\nYou can now run the app using:")
+        print(f"  cd dist")
+        print(f"  Run_App.bat")
     else:
         print("\n[FAILED] Build failed!")
         sys.exit(1)
