@@ -38,12 +38,32 @@ if platform.system() == "Windows":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
 
-# Set environment variables
+# Set environment variables before importing torch
 os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
-# Fix for PyInstaller packaging
-if getattr(sys, 'frozen', False):
+# Mock torch.cuda if not available
+class MockCuda:
+    def __init__(self):
+        self.is_available = lambda: False
+        self.device_count = lambda: 0
+        self.current_device = lambda: -1
+        
+    def __getattr__(self, name):
+        return lambda *args, **kwargs: None
+
+# Now import torch
+try:
+    import torch
+    if not torch.cuda.is_available():
+        torch.cuda = MockCuda()
+except ImportError:
+    # Create mock torch module
+    class MockTorch:
+        cuda = MockCuda()
+    torch = MockTorch()
+    sys.modules['torch'] = torch
+    
     # Running as compiled executable
     application_path = os.path.dirname(sys.executable)
     os.environ['PATH'] = application_path + os.pathsep + os.environ['PATH']

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build NotY Caption Generator AI Executable v5.2 - FIXED
+Build NotY Caption Generator AI Executable v5.2
 Copyright (c) 2026 NotY215
 """
 
@@ -9,7 +9,6 @@ import os
 import sys
 import shutil
 import subprocess
-import time
 from pathlib import Path
 
 APP_NAME = "NotYCaptionGenAI"
@@ -28,35 +27,24 @@ def build_exe():
     ffmpeg_dir = base_dir / "ffmpeg"
     dist_dir = base_dir / "dist"
     
-    # Kill any existing Python/PyInstaller processes that might hold file locks
-    print("[INFO] Cleaning up any lingering processes...")
+    # Kill any python processes that might lock files
+    print("[INFO] Cleaning up processes...")
     try:
         subprocess.run(['taskkill', '/f', '/im', 'python.exe'], capture_output=True)
+        import time
         time.sleep(2)
     except:
         pass
     
-    # Clean previous builds with retry
     if dist_dir.exists():
         print("[INFO] Cleaning previous dist directory...")
-        for attempt in range(3):
-            try:
-                shutil.rmtree(dist_dir)
-                break
-            except PermissionError:
-                print(f"[WARNING] Permission denied, retrying in 2 seconds... (attempt {attempt+1}/3)")
-                time.sleep(2)
+        shutil.rmtree(dist_dir)
     dist_dir.mkdir(parents=True, exist_ok=True)
     
     # Clean PyInstaller cache
     build_cache = builder_dir / "build"
     if build_cache.exists():
-        for attempt in range(3):
-            try:
-                shutil.rmtree(build_cache)
-                break
-            except PermissionError:
-                time.sleep(1)
+        shutil.rmtree(build_cache)
     
     source_path = str(base_dir / "noty_caption_gen.py").replace('\\', '/')
     icon_path = str(resources_dir / "app.ico").replace('\\', '/')
@@ -110,25 +98,32 @@ VSVersionInfo(
 )
 '''
     
-    # Simplified spec file without COLLECT to avoid permission issues
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 
 import sys
 import os
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-# Collect whisper data
+# Collect all necessary data files
 whisper_datas = collect_data_files('whisper')
+torch_datas = collect_data_files('torch')
+torchaudio_datas = collect_data_files('torchaudio')
+numpy_datas = collect_data_files('numpy')
+ytdl_datas = collect_data_files('yt_dlp')
 
 # FFmpeg data
 ffmpeg_datas = {ffmpeg_datas}
+
+# Combine all datas
+all_datas = whisper_datas + torch_datas + torchaudio_datas + numpy_datas + ytdl_datas + ffmpeg_datas
 
 a = Analysis(
     [r'{source_path}'],
     pathex=[],
     binaries=[],
-    datas=whisper_datas + ffmpeg_datas + [(r'{icon_path}', '.')],
+    datas=all_datas + [(r'{icon_path}', '.')],
     hiddenimports=[
+        # Whisper and submodules
         'whisper',
         'whisper.__main__',
         'whisper.audio',
@@ -139,6 +134,8 @@ a = Analysis(
         'whisper.normalizers',
         'whisper.transcribe',
         'whisper.timing',
+        
+        # PyTorch core
         'torch',
         'torch._C',
         'torch._ops',
@@ -149,9 +146,23 @@ a = Analysis(
         'torch.storage',
         'torch.types',
         'torch.version',
+        'torch.autograd',
+        'torch.autograd.function',
+        
+        # NumPy
         'numpy',
         'numpy.core',
+        'numpy.core._methods',
+        'numpy.core.fromnumeric',
+        'numpy.core.umath',
+        'numpy.core.multiarray',
+        'numpy.core.numeric',
+        'numpy.core.numerictypes',
         'numpy.lib',
+        'numpy.lib.format',
+        'numpy.random',
+        
+        # CLI & UI
         'colorama',
         'argparse',
         'webbrowser',
@@ -166,27 +177,51 @@ a = Analysis(
         'ctypes',
         'importlib',
         'importlib.metadata',
+        'importlib.resources',
+        
+        # Text processing
         'packaging',
         'packaging.version',
+        'packaging.specifiers',
         'regex',
         'tiktoken',
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
         'more_itertools',
+        
+        # HTTP requests
         'requests',
+        'requests.api',
+        'requests.models',
+        'requests.sessions',
+        'requests.adapters',
         'urllib3',
         'certifi',
         'charset_normalizer',
         'idna',
+        
+        # Audio processing
         'torchaudio',
         'torchaudio.functional',
         'torchaudio.transforms',
+        
+        # YouTube download
         'yt_dlp',
         'yt_dlp.extractor',
+        'yt_dlp.extractor.youtube',
         'yt_dlp.downloader',
+        'yt_dlp.downloader.http',
+        'yt_dlp.downloader.hls',
         'yt_dlp.postprocessor',
+        'yt_dlp.utils',
+        
+        # Database
         'sqlite3',
+        
+        # Windows registry
         'winreg',
+        
+        # Additional modules
         'json',
         'hashlib',
         'tempfile',
@@ -200,25 +235,25 @@ a = Analysis(
         'urllib.request',
         're',
         'io',
-        'queue'
+        'queue',
+        'logging',
+        'warnings'
     ],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
     excludes=[
-        'tensorflow', 'keras', 'transformers', 'datasets',
-        'PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'wxPython',
-        'matplotlib', 'plotly', 'seaborn', 'bokeh',
-        'scipy', 'pandas', 'sklearn', 'statsmodels',
+        'tensorflow', 'keras', 'transformers',
+        'PyQt5', 'PyQt6', 'wxPython',
+        'matplotlib', 'plotly', 'seaborn',
+        'scipy', 'pandas', 'sklearn',
         'PIL', 'opencv', 'imageio',
         'jupyter', 'notebook', 'ipython',
-        'numba', 'llvmlite',
-        'setuptools', 'pkg_resources',
-        'torchvision', 'torchtext',
         'torch.distributed',
         'torch.testing',
         'torch.jit',
-        'torch.onnx'
+        'torch.onnx',
+        'torchvision', 'torchtext'
     ],
     noarchive=False,
 )
@@ -258,10 +293,11 @@ exe = EXE(
     with open(version_path, 'w', encoding='utf-8') as f:
         f.write(version_info)
     
-    # Install/update required packages
+    # Ensure all required packages are installed
     print("\n[INFO] Ensuring required packages are installed...")
-    packages = ['pyinstaller', 'openai-whisper', 'torch', 'torchaudio', 'numpy', 'yt-dlp']
+    packages = ['openai-whisper', 'torch', 'torchaudio', 'numpy', 'yt-dlp', 'pyinstaller']
     for package in packages:
+        print(f"  Installing/upgrading {package}...")
         subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", package], 
                       capture_output=True)
     
@@ -271,87 +307,107 @@ exe = EXE(
         "--distpath", str(dist_dir),
         "--workpath", str(builder_dir / "build"),
         "--noconfirm",
-        "--clean",
-        "--log-level=INFO"
+        "--clean"
     ]
     
     try:
-        print("\n[INFO] Building executable...")
-        print("[INFO] This may take 10-15 minutes...")
-        subprocess.check_call(cmd, timeout=5400)
+        print("\n[INFO] Building executable with PyInstaller...")
+        print("[INFO] This may take 15-20 minutes...")
+        print("[INFO] The build is working, please wait...")
+        sys.stdout.flush()
+        
+        # Run PyInstaller with real-time output
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        # Print output in real-time
+        for line in process.stdout:
+            print(f"  {line.rstrip()}")
+            sys.stdout.flush()
+        
+        # Wait for completion
+        return_code = process.wait(timeout=5400)
+        
+        if return_code != 0:
+            print(f"\n[ERROR] PyInstaller failed with code: {return_code}")
+            return None
+            
         print("\n[OK] Build completed successfully!")
+        
     except subprocess.TimeoutExpired:
-        print("\n[ERROR] Build timed out!")
-        sys.exit(1)
-    except subprocess.CalledProcessError as e:
+        print("\n[ERROR] Build timed out after 90 minutes!")
+        return None
+    except Exception as e:
         print(f"\n[ERROR] Build failed: {e}")
-        sys.exit(1)
-    except KeyboardInterrupt:
-        print("\n[WARNING] Build interrupted!")
-        sys.exit(1)
+        return None
     
     # Clean up spec and version files
-    try:
-        spec_path.unlink(missing_ok=True)
-        version_path.unlink(missing_ok=True)
-        shutil.rmtree(builder_dir / "build", ignore_errors=True)
-    except:
-        pass
+    spec_path.unlink(missing_ok=True)
+    version_path.unlink(missing_ok=True)
+    shutil.rmtree(builder_dir / "build", ignore_errors=True)
     
     exe_file = dist_dir / f"{APP_NAME}.exe"
     if exe_file.exists():
         size = exe_file.stat().st_size / 1024 / 1024
         print(f"\n[OK] Executable built: {exe_file} ({size:.2f} MB)")
         
-        # Create directories
+        # Create necessary directories
         models_dir = dist_dir / "models"
         models_dir.mkdir(exist_ok=True)
         
         # Copy models if they exist
         source_models = base_dir / "models"
         if source_models.exists():
+            print("[INFO] Copying models...")
             for model_file in source_models.glob("*.pt"):
                 shutil.copy2(model_file, models_dir / model_file.name)
-                print(f"  Copied model: {model_file.name}")
+                print(f"  Copied: {model_file.name}")
         
-        # Copy ffmpeg folder
+        # Copy ffmpeg
         dest_ffmpeg = dist_dir / "ffmpeg"
         if ffmpeg_dir.exists():
+            print("[INFO] Copying ffmpeg...")
             if dest_ffmpeg.exists():
-                try:
-                    shutil.rmtree(dest_ffmpeg)
-                except:
-                    pass
+                shutil.rmtree(dest_ffmpeg)
             shutil.copytree(ffmpeg_dir, dest_ffmpeg)
             print("  Copied ffmpeg folder")
         
         # Copy resources
         dest_resources = dist_dir / "resources"
         if resources_dir.exists():
+            print("[INFO] Copying resources...")
             if dest_resources.exists():
-                try:
-                    shutil.rmtree(dest_resources)
-                except:
-                    pass
+                shutil.rmtree(dest_resources)
             shutil.copytree(resources_dir, dest_resources)
             print("  Copied resources")
         
-        # Create a batch file to run the app with proper environment
+        # Create run script
         batch_content = f'''@echo off
 cd /d "%~dp0"
 set TORCH_USE_RTLD_GLOBAL=1
 set CUDA_VISIBLE_DEVICES=-1
-"{exe_file.name}" %*
+start "" "{exe_file.name}" %*
 '''
         batch_path = dist_dir / "run_app.bat"
         with open(batch_path, 'w') as f:
             f.write(batch_content)
-        print(f"  Created run script: run_app.bat")
+        print("  Created run_app.bat")
         
         return exe_file
     else:
         print("\n[ERROR] Build failed - executable not found!")
-        sys.exit(1)
+        return None
 
 if __name__ == "__main__":
-    build_exe()
+    result = build_exe()
+    if result:
+        print(f"\n[SUCCESS] Build completed! Executable at: {result}")
+    else:
+        print("\n[FAILED] Build failed!")
+        sys.exit(1)
