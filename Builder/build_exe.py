@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build NotY Caption Generator AI Executable v5.2
+Build NotY Caption Generator AI Executable v5.2 - FIXED
 Copyright (c) 2026 NotY215
 """
 
@@ -9,6 +9,7 @@ import os
 import sys
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 APP_NAME = "NotYCaptionGenAI"
@@ -27,9 +28,35 @@ def build_exe():
     ffmpeg_dir = base_dir / "ffmpeg"
     dist_dir = base_dir / "dist"
     
+    # Kill any existing Python/PyInstaller processes that might hold file locks
+    print("[INFO] Cleaning up any lingering processes...")
+    try:
+        subprocess.run(['taskkill', '/f', '/im', 'python.exe'], capture_output=True)
+        time.sleep(2)
+    except:
+        pass
+    
+    # Clean previous builds with retry
     if dist_dir.exists():
-        shutil.rmtree(dist_dir)
+        print("[INFO] Cleaning previous dist directory...")
+        for attempt in range(3):
+            try:
+                shutil.rmtree(dist_dir)
+                break
+            except PermissionError:
+                print(f"[WARNING] Permission denied, retrying in 2 seconds... (attempt {attempt+1}/3)")
+                time.sleep(2)
     dist_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Clean PyInstaller cache
+    build_cache = builder_dir / "build"
+    if build_cache.exists():
+        for attempt in range(3):
+            try:
+                shutil.rmtree(build_cache)
+                break
+            except PermissionError:
+                time.sleep(1)
     
     source_path = str(base_dir / "noty_caption_gen.py").replace('\\', '/')
     icon_path = str(resources_dir / "app.ico").replace('\\', '/')
@@ -83,20 +110,25 @@ VSVersionInfo(
 )
 '''
     
+    # Simplified spec file without COLLECT to avoid permission issues
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 
+import sys
+import os
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-# Collect ffmpeg files
+# Collect whisper data
+whisper_datas = collect_data_files('whisper')
+
+# FFmpeg data
 ffmpeg_datas = {ffmpeg_datas}
 
 a = Analysis(
     [r'{source_path}'],
     pathex=[],
     binaries=[],
-    datas=collect_data_files('whisper') + collect_data_files('torch') + ffmpeg_datas + [(r'{icon_path}', '.')],
+    datas=whisper_datas + ffmpeg_datas + [(r'{icon_path}', '.')],
     hiddenimports=[
-        # Whisper core
         'whisper',
         'whisper.__main__',
         'whisper.audio',
@@ -107,8 +139,6 @@ a = Analysis(
         'whisper.normalizers',
         'whisper.transcribe',
         'whisper.timing',
-        
-        # PyTorch essentials
         'torch',
         'torch._C',
         'torch._ops',
@@ -119,17 +149,9 @@ a = Analysis(
         'torch.storage',
         'torch.types',
         'torch.version',
-        
-        # NumPy
         'numpy',
         'numpy.core',
-        'numpy.core._methods',
-        'numpy.core.fromnumeric',
-        'numpy.core.umath',
         'numpy.lib',
-        'numpy.lib.format',
-        
-        # CLI & UI
         'colorama',
         'argparse',
         'webbrowser',
@@ -144,8 +166,6 @@ a = Analysis(
         'ctypes',
         'importlib',
         'importlib.metadata',
-        
-        # Text processing
         'packaging',
         'packaging.version',
         'regex',
@@ -153,105 +173,52 @@ a = Analysis(
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
         'more_itertools',
-        
-        # HTTP requests (for lyrics search)
         'requests',
         'urllib3',
         'certifi',
         'charset_normalizer',
         'idna',
-        
-        # Audio processing
         'torchaudio',
-        'torchaudio.backend',
         'torchaudio.functional',
         'torchaudio.transforms',
-        
-        # YouTube download
         'yt_dlp',
         'yt_dlp.extractor',
         'yt_dlp.downloader',
         'yt_dlp.postprocessor',
-        
-        # Database
         'sqlite3',
-        
-        # Windows registry
-        'winreg'
+        'winreg',
+        'json',
+        'hashlib',
+        'tempfile',
+        'shutil',
+        'enum',
+        'dataclasses',
+        'typing',
+        'datetime',
+        'urllib',
+        'urllib.parse',
+        'urllib.request',
+        're',
+        'io',
+        'queue'
     ],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
     excludes=[
-        # Exclude heavy ML frameworks
         'tensorflow', 'keras', 'transformers', 'datasets',
-        'spleeter', 'tensorflow_hub',
-        
-        # Exclude GUI frameworks
         'PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'wxPython',
-        
-        # Exclude visualization
         'matplotlib', 'plotly', 'seaborn', 'bokeh',
-        
-        # Exclude scientific computing
         'scipy', 'pandas', 'sklearn', 'statsmodels',
-        
-        # Exclude image processing
         'PIL', 'opencv', 'imageio',
-        
-        # Exclude other large packages
         'jupyter', 'notebook', 'ipython',
         'numba', 'llvmlite',
         'setuptools', 'pkg_resources',
-        'jinja2', 'markupsafe',
-        'tensorboard', 'tqdm',
-        
-        # Exclude CUDA/GPU (CPU only)
-        'torch.cuda',
-        'torch.cuda.amp',
+        'torchvision', 'torchtext',
         'torch.distributed',
         'torch.testing',
         'torch.jit',
-        'torch.onnx',
-        'torch.ao',
-        'torch.fx',
-        'torch._dynamo',
-        'torch._inductor',
-        'torch._export',
-        'torch._functorch',
-        'torch._lazy',
-        'torch._numpy',
-        'torch._prims',
-        'torch._subclasses',
-        'torch.backends',
-        'torch.contrib',
-        'torch.distributions',
-        'torch.fft',
-        'torch.futures',
-        'torch.linalg',
-        'torch.mps',
-        'torch.optim',
-        'torch.package',
-        'torch.profiler',
-        'torch.quantization',
-        'torch.special',
-        'torch.sparse',
-        'torch.utils.benchmark',
-        'torch.utils.checkpoint',
-        'torch.utils.cpp_extension',
-        'torch.utils.data',
-        'torch.utils.dlpack',
-        'torch.utils.hooks',
-        'torch.utils.model_zoo',
-        'torch.utils.tensorboard',
-        
-        # Exclude heavy torch submodules
-        'torchvision', 'torchtext',
-        
-        # Exclude numpy submodules
-        'numpy.random', 'numpy.ma', 'numpy.fft',
-        'numpy.linalg', 'numpy.polynomial',
-        'numpy.testing', 'numpy.distutils'
+        'torch.onnx'
     ],
     noarchive=False,
 )
@@ -268,7 +235,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=True,
@@ -291,19 +258,27 @@ exe = EXE(
     with open(version_path, 'w', encoding='utf-8') as f:
         f.write(version_info)
     
+    # Install/update required packages
+    print("\n[INFO] Ensuring required packages are installed...")
+    packages = ['pyinstaller', 'openai-whisper', 'torch', 'torchaudio', 'numpy', 'yt-dlp']
+    for package in packages:
+        subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", package], 
+                      capture_output=True)
+    
     cmd = [
         sys.executable, "-m", "PyInstaller",
         str(spec_path),
         "--distpath", str(dist_dir),
         "--workpath", str(builder_dir / "build"),
         "--noconfirm",
-        "--clean"
+        "--clean",
+        "--log-level=INFO"
     ]
     
     try:
-        print("Building executable...")
-        print("This may take 5-10 minutes...")
-        subprocess.check_call(cmd, timeout=3600)
+        print("\n[INFO] Building executable...")
+        print("[INFO] This may take 10-15 minutes...")
+        subprocess.check_call(cmd, timeout=5400)
         print("\n[OK] Build completed successfully!")
     except subprocess.TimeoutExpired:
         print("\n[ERROR] Build timed out!")
@@ -316,16 +291,19 @@ exe = EXE(
         sys.exit(1)
     
     # Clean up spec and version files
-    spec_path.unlink(missing_ok=True)
-    version_path.unlink(missing_ok=True)
-    shutil.rmtree(builder_dir / "build", ignore_errors=True)
+    try:
+        spec_path.unlink(missing_ok=True)
+        version_path.unlink(missing_ok=True)
+        shutil.rmtree(builder_dir / "build", ignore_errors=True)
+    except:
+        pass
     
     exe_file = dist_dir / f"{APP_NAME}.exe"
     if exe_file.exists():
         size = exe_file.stat().st_size / 1024 / 1024
         print(f"\n[OK] Executable built: {exe_file} ({size:.2f} MB)")
         
-        # Create models directory
+        # Create directories
         models_dir = dist_dir / "models"
         models_dir.mkdir(exist_ok=True)
         
@@ -340,7 +318,10 @@ exe = EXE(
         dest_ffmpeg = dist_dir / "ffmpeg"
         if ffmpeg_dir.exists():
             if dest_ffmpeg.exists():
-                shutil.rmtree(dest_ffmpeg)
+                try:
+                    shutil.rmtree(dest_ffmpeg)
+                except:
+                    pass
             shutil.copytree(ffmpeg_dir, dest_ffmpeg)
             print("  Copied ffmpeg folder")
         
@@ -348,9 +329,24 @@ exe = EXE(
         dest_resources = dist_dir / "resources"
         if resources_dir.exists():
             if dest_resources.exists():
-                shutil.rmtree(dest_resources)
+                try:
+                    shutil.rmtree(dest_resources)
+                except:
+                    pass
             shutil.copytree(resources_dir, dest_resources)
             print("  Copied resources")
+        
+        # Create a batch file to run the app with proper environment
+        batch_content = f'''@echo off
+cd /d "%~dp0"
+set TORCH_USE_RTLD_GLOBAL=1
+set CUDA_VISIBLE_DEVICES=-1
+"{exe_file.name}" %*
+'''
+        batch_path = dist_dir / "run_app.bat"
+        with open(batch_path, 'w') as f:
+            f.write(batch_content)
+        print(f"  Created run script: run_app.bat")
         
         return exe_file
     else:

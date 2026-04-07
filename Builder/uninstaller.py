@@ -133,6 +133,45 @@ def remove_shortcuts():
                 pass
     return removed
 
+def create_self_delete_bat(install_path, uninstaller_path):
+    """Create a batch file that will delete the entire installation folder including the uninstaller"""
+    bat_path = Path(os.environ["TEMP"]) / f"delete_noty_{int(time.time())}.bat"
+    
+    bat_content = f'''@echo off
+timeout /t 3 /nobreak >nul
+echo Deleting NotYCaptionGenAI installation...
+
+:: Kill any remaining processes
+taskkill /f /im NotYCaptionGenAI.exe 2>nul
+
+:: Remove the entire installation directory
+cd /d "C:\\"
+rmdir /s /q "{install_path}" 2>nul
+
+:: Remove shortcuts again if any remain
+del /f /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\NotYCaptionGenAI.lnk" 2>nul
+del /f /q "%USERPROFILE%\\Desktop\\NotYCaptionGenAI.lnk" 2>nul
+del /f /q "%APPDATA%\\Microsoft\\Windows\\SendTo\\NotYCaptionGenAI.lnk" 2>nul
+
+:: Clear cache directories
+rmdir /s /q "%TEMP%\\NotYCaptionGenAI" 2>nul
+rmdir /s /q "%LOCALAPPDATA%\\NotYCaptionGenAI" 2>nul
+
+echo Cleanup completed.
+
+:: Delete this batch file
+del "%~f0" 2>nul
+exit
+'''
+    
+    try:
+        with open(bat_path, 'w') as f:
+            f.write(bat_content)
+        return bat_path
+    except Exception as e:
+        print_error(f"Failed to create cleanup script: {e}")
+        return None
+
 def uninstall():
     # Check for admin privileges
     if not is_admin():
@@ -177,11 +216,6 @@ def uninstall():
         kill_processes(install_path)
         print_success("Processes stopped")
         
-        # Remove installation directory
-        print_info("Removing application files...")
-        shutil.rmtree(install_path, ignore_errors=True)
-        print_success("Application files removed")
-        
         # Remove shortcuts
         print_info("Removing shortcuts...")
         removed = remove_shortcuts()
@@ -191,42 +225,54 @@ def uninstall():
         print_info("Removing registry entries...")
         remove_registry()
         
-        # Clear cache directories
-        cache_dirs = [
-            Path(os.environ.get('TEMP', '.')) / "NotYCaptionGenAI",
-            Path(os.environ.get('LOCALAPPDATA', '.')) / "NotYCaptionGenAI",
-        ]
-        for cache_dir in cache_dirs:
-            if cache_dir.exists():
-                try:
-                    shutil.rmtree(cache_dir, ignore_errors=True)
-                    print(f"  Removed cache: {cache_dir}")
-                except:
-                    pass
+        # Get current uninstaller path before it's deleted
+        current_uninstaller = Path(sys.executable) if getattr(sys, 'frozen', False) else None
         
-        print()
-        print_success("Uninstallation complete!")
-        print_info(f"{APP_NAME} has been removed from your computer.")
+        print_info("Preparing cleanup script...")
         
-        # Self-delete
-        if getattr(sys, 'frozen', False):
-            uninstaller_path = Path(sys.executable)
-            print_info("The uninstaller will now delete itself...")
+        # Create self-deleting batch file
+        bat_file = create_self_delete_bat(install_path, current_uninstaller)
+        
+        if bat_file and bat_file.exists():
+            print_success("Cleanup script created")
+            print_info("The cleanup script will run in the background to complete removal...")
+            
+            # Run the batch file in background
+            subprocess.Popen([str(bat_file)], shell=True, 
+                           creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS)
+            
+            # Wait a moment for the batch file to start
             time.sleep(2)
             
-            # Create batch file to delete the uninstaller
-            bat_path = Path(os.environ["TEMP"]) / f"delete_uninstaller_{int(time.time())}.bat"
-            bat_content = f'''@echo off
-timeout /t 2 /nobreak >nul
-del "{uninstaller_path}" 2>nul
-rmdir /s /q "{install_path}" 2>nul
-del "%~f0" 2>nul
-exit
-'''
-            with open(bat_path, 'w') as f:
-                f.write(bat_content)
+            # Exit the uninstaller - the batch file will delete everything including this
+            print_success("Uninstallation complete!")
+            print_info("The application will be fully removed in a few moments...")
+            return True
+        else:
+            # Fallback: try to delete manually
+            print_info("Performing manual cleanup...")
+            try:
+                # Try to delete the installation directory
+                shutil.rmtree(install_path, ignore_errors=True)
+                print_success("Installation directory removed")
+            except Exception as e:
+                print_error(f"Could not remove installation directory: {e}")
+                print_info("Please delete the folder manually: " + str(install_path))
             
-            subprocess.Popen([str(bat_path)], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            # Clear cache directories
+            cache_dirs = [
+                Path(os.environ.get('TEMP', '.')) / "NotYCaptionGenAI",
+                Path(os.environ.get('LOCALAPPDATA', '.')) / "NotYCaptionGenAI",
+            ]
+            for cache_dir in cache_dirs:
+                if cache_dir.exists():
+                    try:
+                        shutil.rmtree(cache_dir, ignore_errors=True)
+                        print(f"  Removed cache: {cache_dir}")
+                    except:
+                        pass
+            
+            print_success("Uninstallation complete!")
             return True
         
     except Exception as e:
@@ -240,7 +286,9 @@ if __name__ == "__main__":
     
     if success:
         print_success("\nUninstallation completed successfully!")
+        if getattr(sys, 'frozen', False):
+            print_info("The uninstaller will close now...")
+            time.sleep(3)
     else:
         print_error("\nUninstallation failed!")
-    
-    input("\nPress Enter to exit...")
+        input("\nPress Enter to exit...")

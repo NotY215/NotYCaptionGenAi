@@ -42,6 +42,16 @@ if platform.system() == "Windows":
 os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
+# Fix for PyInstaller packaging
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    application_path = os.path.dirname(sys.executable)
+    os.environ['PATH'] = application_path + os.pathsep + os.environ['PATH']
+    
+    # Fix for torch in packaged app
+    import site
+    site.addsitedir(os.path.join(application_path, 'torch'))
+
 # ANSI color codes
 class Colors:
     RESET = '\033[0m'
