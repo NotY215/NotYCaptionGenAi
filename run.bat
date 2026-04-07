@@ -1,46 +1,39 @@
 @echo off
 title Building NotY Caption Generator AI
+color 0A
+
 echo ============================================================
 echo Building NotY Caption Generator AI v5.2
 echo ============================================================
 echo.
 
-:: Activate virtual environment if it exists
-if exist ".venv\Scripts\activate.bat" (
-    call .venv\Scripts\activate.bat
-)
-
-:: Install/update build tools
-echo Installing build tools...
-pip install --upgrade nuitka ordered-set zstandard pyinstaller
-
 :: Clean previous builds
-echo.
 echo Cleaning previous builds...
 if exist "dist" rmdir /s /q "dist"
 if exist "build" rmdir /s /q "build"
 if exist "*.spec" del /q "*.spec"
 
-:: Run the build
+:: Build executable
 echo.
-echo Starting build process...
-python build_nuitka.py
+echo Building executable...
+python build_exe.py
 
 if errorlevel 1 (
-    echo.
-    echo ============================================================
-    echo BUILD FAILED!
-    echo ============================================================
+    echo [ERROR] Build failed!
     pause
     exit /b 1
 )
 
+:: Build installers
 echo.
-echo ============================================================
-echo BUILD SUCCESSFUL!
-echo ============================================================
-echo.
-echo Executable is in the 'dist' folder
-echo.
+echo Building installers...
+python build_installer.py
 
+echo.
+echo ============================================================
+echo BUILD COMPLETE!
+echo ============================================================
+echo.
+echo Executable and installers are in the 'dist' folder
+echo.
 pause
