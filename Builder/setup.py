@@ -9,222 +9,171 @@ import os
 import sys
 import shutil
 import subprocess
+import zipfile
 from pathlib import Path
 
 APP_NAME = "NotYCaptionGenAI"
 APP_VERSION = "5.2"
 APP_AUTHOR = "NotY215"
-INSTALLER_NAME = f"NotYCaptionGenAI_Installer_v{APP_VERSION}.exe"
 
 def build_all():
-    print("=" * 60)
+    print("=" * 70)
     print(f"Building {APP_NAME} v{APP_VERSION}")
     print(f"Copyright (c) 2026 {APP_AUTHOR}")
-    print("=" * 60)
-    sys.stdout.flush()
+    print("=" * 70)
     
     base_dir = Path(__file__).parent.parent
     builder_dir = Path(__file__).parent
     dist_dir = base_dir / "dist"
     
-    # Clean previous builds
-    if dist_dir.exists():
-        print("Cleaning previous build...")
-        sys.stdout.flush()
-        try:
-            shutil.rmtree(dist_dir)
-        except Exception as e:
-            print(f"Warning: {e}")
-            sys.stdout.flush()
-    dist_dir.mkdir(parents=True, exist_ok=True)
-    
     # Step 1: Build main executable
-    print("\n[1/3] Building main executable...")
-    print("[INFO] This may take 10-15 minutes...")
-    sys.stdout.flush()
+    print("\n[1/2] Building main executable...")
     
     build_exe_path = builder_dir / "build_exe.py"
     if not build_exe_path.exists():
         print("[ERROR] build_exe.py not found!")
         sys.exit(1)
     
-    # Run build_exe directly in this process
-    try:
-        # Import and run build_exe directly
-        sys.path.insert(0, str(builder_dir))
-        from build_exe import build_exe
-        result = build_exe()
-        if result is None:
-            print("[ERROR] Main executable build failed!")
-            sys.exit(1)
-    except Exception as e:
-        print(f"[ERROR] Build failed: {e}")
-        import traceback
-        traceback.print_exc()
+    # Import and run build_exe
+    sys.path.insert(0, str(builder_dir))
+    from build_exe import build_exe
+    exe_file = build_exe()
+    
+    if not exe_file or not exe_file.exists():
+        print("[ERROR] Main executable build failed!")
         sys.exit(1)
     
-    main_exe = dist_dir / f"{APP_NAME}.exe"
-    if not main_exe.exists():
-        print("[ERROR] Main executable not found!")
-        sys.exit(1)
+    print(f"\n[OK] Main executable: {exe_file}")
     
-    size_mb = main_exe.stat().st_size / 1024 / 1024
-    print(f"\n[OK] Main executable: {main_exe} ({size_mb:.2f} MB)")
-    sys.stdout.flush()
+    # Step 2: Create portable package
+    print("\n[2/2] Creating portable package...")
     
-    # Step 2: Build uninstaller
-    print("\n[2/3] Building uninstaller...")
-    sys.stdout.flush()
+    # Create portable directory
+    portable_dir = base_dir / f"{APP_NAME}_Portable_v{APP_VERSION}"
+    if portable_dir.exists():
+        shutil.rmtree(portable_dir)
+    portable_dir.mkdir(parents=True)
     
-    uninstaller_py = builder_dir / "uninstaller.py"
-    if not uninstaller_py.exists():
-        print("[ERROR] uninstaller.py not found!")
-        sys.exit(1)
+    # Copy executable
+    shutil.copy2(exe_file, portable_dir / exe_file.name)
     
-    temp_dir = base_dir / "temp_build"
-    if temp_dir.exists():
-        shutil.rmtree(temp_dir)
-    temp_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Build uninstaller with PyInstaller
-    cmd = [
-        sys.executable, "-m", "PyInstaller",
-        "--name=NotYCaptionGenAI_Uninstaller",
-        "--onefile",
-        "--console",
-        "--noconfirm",
-        "--clean",
-        "--distpath", str(temp_dir / "dist"),
-        "--workpath", str(temp_dir / "build"),
-        str(uninstaller_py)
-    ]
-    
-    print(f"[INFO] Running: {' '.join(cmd)}")
-    sys.stdout.flush()
-    
-    try:
-        subprocess.run(cmd, check=True, timeout=300)
-        uninstaller_exe = temp_dir / "dist" / "NotYCaptionGenAI_Uninstaller.exe"
-        if uninstaller_exe.exists():
-            size_kb = uninstaller_exe.stat().st_size / 1024
-            print(f"[OK] Uninstaller built: {size_kb:.2f} KB")
-        else:
-            print("[ERROR] Uninstaller not found!")
-            sys.exit(1)
-    except Exception as e:
-        print(f"[ERROR] Failed to build uninstaller: {e}")
-        sys.exit(1)
-    
-    # Step 3: Create installer
-    print("\n[3/3] Creating installer...")
-    sys.stdout.flush()
-    
-    installer_dir = base_dir / "installer_temp"
-    if installer_dir.exists():
-        shutil.rmtree(installer_dir)
-    installer_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Copy files
-    print("Copying files...")
-    shutil.copy2(main_exe, installer_dir / f"{APP_NAME}.exe")
-    shutil.copy2(uninstaller_exe, installer_dir / "NotYCaptionGenAI_Uninstaller.exe")
-    
-    # Copy resources
-    resources_dir = base_dir / "resources"
-    if resources_dir.exists():
-        shutil.copytree(resources_dir, installer_dir / "resources")
-    
-    # Copy ffmpeg
-    ffmpeg_dir = base_dir / "ffmpeg"
-    if ffmpeg_dir.exists():
-        shutil.copytree(ffmpeg_dir, installer_dir / "ffmpeg")
-    
-    # Copy models
-    models_dir = base_dir / "models"
-    if models_dir.exists():
-        shutil.copytree(models_dir, installer_dir / "models")
-    
-    # Create installer script
-    installer_script = installer_dir / "install.py"
-    installer_content = '''import os
-import sys
-import shutil
-import subprocess
-from pathlib import Path
-
-APP_NAME = "NotY Caption Generator AI"
-EXE_NAME = "NotYCaptionGenAI.exe"
-
-def install():
-    print("=" * 60)
-    print(f"Installing {APP_NAME} v5.2")
-    print("=" * 60)
-    
-    # Default install path
-    install_path = Path("C:\\\\NotYCaptionGenAI")
-    install_path.mkdir(parents=True, exist_ok=True)
-    
-    print(f"Installing to: {install_path}")
-    
-    # Copy files
-    shutil.copy2(Path(sys.executable).parent / EXE_NAME, install_path / EXE_NAME)
-    shutil.copy2(Path(sys.executable).parent / "NotYCaptionGenAI_Uninstaller.exe", install_path / "NotYCaptionGenAI_Uninstaller.exe")
-    
-    # Copy directories
-    for dir_name in ["resources", "ffmpeg", "models"]:
-        src = Path(sys.executable).parent / dir_name
+    # Copy required folders
+    for folder in ['models', 'ffmpeg', 'resources']:
+        src = base_dir / folder
+        dst = portable_dir / folder
         if src.exists():
-            dst = install_path / dir_name
             if dst.exists():
                 shutil.rmtree(dst)
             shutil.copytree(src, dst)
+            print(f"  Copied {folder}")
     
-    # Create desktop shortcut
-    desktop = Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAI.lnk"
-    with open(desktop, 'w') as f:
-        f.write("Shortcut to NotYCaptionGenAI")
+    # Create run script
+    run_script = portable_dir / "Run_NotYCaptionGenAI.bat"
+    with open(run_script, 'w') as f:
+        f.write(f'''@echo off
+title NotY Caption Generator AI v{APP_VERSION}
+cd /d "%~dp0"
+set TORCH_USE_RTLD_GLOBAL=1
+set CUDA_VISIBLE_DEVICES=-1
+echo Starting NotY Caption Generator AI v{APP_VERSION}...
+echo.
+"{exe_file.name}"
+pause
+''')
     
-    print("Installation complete!")
-    input("Press Enter to exit...")
+    # Create README
+    readme = portable_dir / "README.txt"
+    with open(readme, 'w') as f:
+        f.write(f'''NotY Caption Generator AI v{APP_VERSION}
+=====================================
 
-if __name__ == "__main__":
-    install()
-'''
+How to use:
+1. Run "Run_NotYCaptionGenAI.bat"
+2. Select YouTube URL or Local File
+3. Choose model (tiny/base/small/medium/large)
+4. Choose language
+5. Choose line type
+6. Wait for processing
+
+Requirements:
+- Windows 10 or later
+- 4GB RAM minimum (8GB recommended)
+- 4GB free disk space
+
+Features:
+- YouTube video captions
+- Local video/audio captions
+- 6 languages + auto detect
+- Word/Letter/Auto line breaks
+- Lyrics search for songs
+- Vocal separation for music
+
+Support:
+Telegram: https://t.me/Noty_215
+YouTube: https://www.youtube.com/@NotY215
+
+License: LGPL-3.0
+Copyright (c) 2026 NotY215
+''')
     
-    with open(installer_script, 'w') as f:
-        f.write(installer_content)
-    
-    # Create simple installer using IExpress or just copy
-    print("Creating installer package...")
-    
-    # Create a self-extracting archive using 7zip if available
-    final_installer = base_dir / INSTALLER_NAME
-    
-    # Simple copy for now
-    import zipfile
-    with zipfile.ZipFile(final_installer, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(installer_dir):
+    # Create ZIP archive
+    print("\nCreating ZIP archive...")
+    zip_name = base_dir / f"{APP_NAME}_Portable_v{APP_VERSION}.zip"
+    with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(portable_dir):
             for file in files:
                 file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, installer_dir)
+                arcname = os.path.relpath(file_path, portable_dir.parent)
                 zipf.write(file_path, arcname)
-    
-    if final_installer.exists():
-        size_mb = final_installer.stat().st_size / 1024 / 1024
-        print(f"\n[OK] Installer created: {final_installer} ({size_mb:.2f} MB)")
-    else:
-        print("[ERROR] Installer creation failed!")
-        sys.exit(1)
+                print(f"  Added: {arcname}")
     
     # Clean up
-    shutil.rmtree(temp_dir, ignore_errors=True)
-    shutil.rmtree(installer_dir, ignore_errors=True)
+    shutil.rmtree(portable_dir)
     
-    print("\n" + "=" * 60)
-    print("Build complete!")
-    print(f"Installer: {final_installer}")
-    print("=" * 60)
-    sys.stdout.flush()
+    # Create simple installer
+    print("\nCreating installer...")
+    installer_name = base_dir / f"{APP_NAME}_Installer_v{APP_VERSION}.exe"
+    
+    # Create a simple batch installer
+    installer_bat = base_dir / "installer_temp.bat"
+    with open(installer_bat, 'w') as f:
+        f.write(f'''@echo off
+title {APP_NAME} v{APP_VERSION} Installer
+echo ============================================================
+echo {APP_NAME} v{APP_VERSION} Installer
+echo Copyright (c) 2026 {APP_AUTHOR}
+echo ============================================================
+echo.
+echo This will install {APP_NAME} to your computer.
+echo.
+set /p INSTALL_PATH="Installation directory [C:\\{APP_NAME}]: "
+if "%INSTALL_PATH%"=="" set INSTALL_PATH=C:\\{APP_NAME}
+echo.
+echo Installing to: %INSTALL_PATH%
+echo.
+if not exist "%INSTALL_PATH%" mkdir "%INSTALL_PATH%"
+echo Copying files...
+xcopy /E /I /Y "{portable_dir}" "%INSTALL_PATH%"
+echo.
+echo Creating shortcuts...
+powershell -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%USERPROFILE%\\Desktop\\{APP_NAME}.lnk'); $SC.TargetPath = '%INSTALL_PATH%\\{exe_file.name}'; $SC.Save()"
+powershell -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\{APP_NAME}.lnk'); $SC.TargetPath = '%INSTALL_PATH%\\{exe_file.name}'; $SC.Save()"
+echo.
+echo Installation complete!
+echo.
+pause
+''')
+    
+    print(f"\n[OK] Portable package: {zip_name}")
+    print(f"[OK] Installer script: {installer_bat}")
+    
+    print("\n" + "=" * 70)
+    print("BUILD COMPLETE!")
+    print("=" * 70)
+    print(f"\nPortable version: {zip_name}")
+    print(f"\nTo test the app, run:")
+    print(f"  {exe_file}")
+    print("\n" + "=" * 70)
 
 if __name__ == "__main__":
     build_all()
