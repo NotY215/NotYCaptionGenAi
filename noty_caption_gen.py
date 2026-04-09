@@ -197,13 +197,59 @@ class Language(Enum):
     SPANISH = ("es", "Spanish", True)
     KOREAN = ("ko", "Korean", True)
     CHINESE = ("zh", "Chinese (Mandarin)", True)
+    RUSSIAN = ("ru", "Russian", True)
     AUTO = ("auto", "Auto Detect", False)
 
-# Complete transliteration mappings for all languages
+# Complete transliteration mappings for all languages with precise conversion
 TRANSLITERATION_MAPS = {
+    # Russian (Cyrillic to Latin) - ISO 9 standard
+    "ru": {
+        # Lowercase
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+        'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+        'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+        'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
+        'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+        # Uppercase
+        'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
+        'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
+        'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
+        'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
+        'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
+    },
+    
+    # Spanish (accent removal and special chars)
+    "es": {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+        'ñ': 'ny', 'Ñ': 'Ny', 'ü': 'u', 'Ü': 'U',
+        '¿': '', '¡': '', 'º': 'o', 'ª': 'a',
+        'ç': 'c', 'Ç': 'C'
+    },
+    
+    # Chinese Pinyin (complete tone mark removal + common conversions)
+    "zh": {
+        'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
+        'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
+        'ī': 'i', 'í': 'i', 'ǐ': 'i', 'ì': 'i',
+        'ō': 'o', 'ó': 'o', 'ǒ': 'o', 'ò': 'o',
+        'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
+        'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v',
+        # Common Pinyin combinations
+        'zh': 'zh', 'ch': 'ch', 'sh': 'sh',
+        'ng': 'ng', 'er': 'er',
+        # Tone marks with macron
+        'ā': 'a', 'ē': 'e', 'ī': 'i', 'ō': 'o', 'ū': 'u',
+        'ǖ': 'v'
+    },
+    
+    # Hindi (Devanagari to Latin - improved mapping)
     "hi": {
+        # Vowels
         'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
         'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
+        'ऋ': 'ri', 'ॠ': 'ree', 'ऌ': 'li', 'ॡ': 'lee',
+        # Consonants
         'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
         'च': 'cha', 'छ': 'chha', 'ज': 'ja', 'झ': 'jha', 'ञ': 'nya',
         'ट': 'ta', 'ठ': 'tha', 'ड': 'da', 'ढ': 'dha', 'ण': 'na',
@@ -212,13 +258,18 @@ TRANSLITERATION_MAPS = {
         'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha',
         'ष': 'sha', 'स': 'sa', 'ह': 'ha', 'क्ष': 'ksha', 'त्र': 'tra',
         'ज्ञ': 'gya', 'श्र': 'shra',
+        # Vowel signs
         'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
         'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h',
         '्': '',
+        # Numbers
         '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
         '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
     },
+    
+    # Japanese (Kanji/Kana to Romaji - improved)
     "ja": {
+        # Hiragana
         'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
         'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
         'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
@@ -229,6 +280,7 @@ TRANSLITERATION_MAPS = {
         'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
         'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
         'わ': 'wa', 'を': 'wo', 'ん': 'n',
+        # Katakana
         'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
         'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
         'サ': 'sa', 'シ': 'shi', 'ス': 'su', 'セ': 'se', 'ソ': 'so',
@@ -239,34 +291,34 @@ TRANSLITERATION_MAPS = {
         'ヤ': 'ya', 'ユ': 'yu', 'ヨ': 'yo',
         'ラ': 'ra', 'リ': 'ri', 'ル': 'ru', 'レ': 're', 'ロ': 'ro',
         'ワ': 'wa', 'ヲ': 'wo', 'ン': 'n',
+        # Small characters
         'ゃ': 'ya', 'ゅ': 'yu', 'ょ': 'yo',
         'ャ': 'ya', 'ュ': 'yu', 'ョ': 'yo',
-        'っ': 't', 'ッ': 't'
+        'っ': 't', 'ッ': 't',
+        'ぁ': 'a', 'ぃ': 'i', 'ぅ': 'u', 'ぇ': 'e', 'ぉ': 'o',
+        'ァ': 'a', 'ィ': 'i', 'ゥ': 'u', 'ェ': 'e', 'ォ': 'o'
     },
-    "es": {
-        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
-        'ñ': 'ny', 'Ñ': 'Ny', 'ü': 'u', 'Ü': 'U',
-        '¿': '', '¡': ''
-    },
+    
+    # Korean (Hangul to Romanized - Revised Romanization)
     "ko": {
+        # Initial consonants
         'ㄱ': 'g', 'ㄲ': 'kk', 'ㄴ': 'n', 'ㄷ': 'd', 'ㄸ': 'tt',
         'ㄹ': 'r', 'ㅁ': 'm', 'ㅂ': 'b', 'ㅃ': 'pp', 'ㅅ': 's',
         'ㅆ': 'ss', 'ㅇ': '', 'ㅈ': 'j', 'ㅉ': 'jj', 'ㅊ': 'ch',
         'ㅋ': 'k', 'ㅌ': 't', 'ㅍ': 'p', 'ㅎ': 'h',
+        # Vowels
         'ㅏ': 'a', 'ㅐ': 'ae', 'ㅑ': 'ya', 'ㅒ': 'yae', 'ㅓ': 'eo',
         'ㅔ': 'e', 'ㅕ': 'yeo', 'ㅖ': 'ye', 'ㅗ': 'o', 'ㅘ': 'wa',
         'ㅙ': 'wae', 'ㅚ': 'oe', 'ㅛ': 'yo', 'ㅜ': 'u', 'ㅝ': 'wo',
         'ㅞ': 'we', 'ㅟ': 'wi', 'ㅠ': 'yu', 'ㅡ': 'eu', 'ㅢ': 'ui',
-        'ㅣ': 'i'
-    },
-    "zh": {
-        'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
-        'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
-        'ī': 'i', 'í': 'i', 'ǐ': 'i', 'ì': 'i',
-        'ō': 'o', 'ó': 'o', 'ǒ': 'o', 'ò': 'o',
-        'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
-        'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v'
+        'ㅣ': 'i',
+        # Final consonants
+        'ㄱ': 'k', 'ㄲ': 'k', 'ㄳ': 'k', 'ㄴ': 'n', 'ㄵ': 'n',
+        'ㄶ': 'n', 'ㄷ': 't', 'ㄹ': 'l', 'ㄺ': 'lg', 'ㄻ': 'lm',
+        'ㄼ': 'lb', 'ㄽ': 'ls', 'ㄾ': 'lt', 'ㄿ': 'lp', 'ㅀ': 'lh',
+        'ㅁ': 'm', 'ㅂ': 'p', 'ㅄ': 'ps', 'ㅅ': 't', 'ㅆ': 't',
+        'ㅇ': 'ng', 'ㅈ': 't', 'ㅊ': 't', 'ㅋ': 'k', 'ㅌ': 't',
+        'ㅍ': 'p', 'ㅎ': 't'
     }
 }
 
@@ -345,6 +397,7 @@ class NotYCaptionGenerator:
             (Language.SPANISH.value[1], Language.SPANISH.value[0]),
             (Language.KOREAN.value[1], Language.KOREAN.value[0]),
             (Language.CHINESE.value[1], Language.CHINESE.value[0]),
+            (Language.RUSSIAN.value[1], Language.RUSSIAN.value[0]),
             (Language.AUTO.value[1], Language.AUTO.value[0])
         ]
         
@@ -732,15 +785,25 @@ class NotYCaptionGenerator:
         return None, None
         
     def transliterate_text(self, text: str, language_code: str) -> str:
+        """Convert text from non-Latin scripts to Latin alphabet"""
         if language_code not in TRANSLITERATION_MAPS:
             return text
             
         mapping = TRANSLITERATION_MAPS[language_code]
         
-        for original, translit in mapping.items():
-            text = text.replace(original, translit)
-                
-        return text
+        # Sort keys by length (longest first) for proper replacement
+        sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
+        
+        result = text
+        for original in sorted_keys:
+            translit = mapping[original]
+            result = result.replace(original, translit)
+        
+        # Clean up extra spaces and normalize
+        result = re.sub(r'\s+', ' ', result)
+        result = result.strip()
+        
+        return result
         
     def load_model(self, model_name: str):
         if not WHISPER_AVAILABLE:
@@ -921,6 +984,7 @@ class NotYCaptionGenerator:
                     segment_start = segment.get("start", 0)
                     segment_end = segment.get("end", segment_start + 1)
                     
+                    # Apply transliteration if needed (Russian, Hindi, Japanese, Spanish, Korean, Chinese)
                     if language_code in TRANSLITERATION_MAPS:
                         segment_text = self.transliterate_text(segment_text, language_code)
                     
@@ -986,7 +1050,7 @@ class NotYCaptionGenerator:
         
         if not WHISPER_AVAILABLE:
             self.print_error("Whisper is not available!")
-            self.print_info("Please install: pip install openai-whisper torch")
+            self.print_info("Please install: pip install openai-whisper torch tqdm")
             input("\nPress Enter to exit...")
             return
             

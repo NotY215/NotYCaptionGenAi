@@ -31,8 +31,8 @@ def build_all():
         shutil.rmtree(dist_dir)
     dist_dir.mkdir(parents=True, exist_ok=True)
     
-    # Step 1: Build main executable
-    print("\n[1/3] Building main executable...")
+    # Step 1: Build main executable using Nuitka
+    print("\n[1/3] Building main executable with Nuitka...")
     
     build_exe_path = builder_dir / "build_exe.py"
     if not build_exe_path.exists():
@@ -55,8 +55,8 @@ def build_all():
     
     print(f"[OK] Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
     
-    # Step 2: Build uninstaller
-    print("\n[2/3] Building uninstaller executable...")
+    # Step 2: Build uninstaller with PyInstaller
+    print("\n[2/3] Building uninstaller executable with PyInstaller...")
     
     uninstaller_py = str(builder_dir / "uninstaller.py")
     
@@ -86,8 +86,8 @@ def build_all():
         print(f"[ERROR] Failed to build uninstaller: {e}")
         sys.exit(1)
     
-    # Step 3: Build installer
-    print("\n[3/3] Building installer...")
+    # Step 3: Build installer with PyInstaller
+    print("\n[3/3] Building installer with PyInstaller...")
     
     temp_dir = base_dir / "temp_installer"
     if temp_dir.exists():

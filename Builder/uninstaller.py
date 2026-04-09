@@ -107,32 +107,6 @@ def get_directory_size(path):
         pass
     return total / (1024 * 1024)
 
-def kill_processes():
-    """Kill any running instances of the app"""
-    try:
-        subprocess.run(['taskkill', '/f', '/im', 'NotYCaptionGenAI.exe'], capture_output=True)
-        time.sleep(1)
-    except:
-        pass
-
-def remove_shortcuts():
-    """Remove all shortcuts"""
-    shortcuts = [
-        Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAI.lnk",
-        Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAI.lnk",
-        Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo" / "NotYCaptionGenAI.lnk"
-    ]
-    removed = 0
-    for shortcut in shortcuts:
-        if shortcut.exists():
-            try:
-                shortcut.unlink()
-                print(f"  Removed: {shortcut.name}")
-                removed += 1
-            except:
-                pass
-    return removed
-
 def uninstall():
     # Check for admin privileges
     if not is_admin():
@@ -172,11 +146,6 @@ def uninstall():
     print()
     
     try:
-        # Kill running processes
-        print_info("Stopping running instances...")
-        kill_processes()
-        print_success("Processes stopped")
-        
         # Remove installation directory
         print_info("Removing application files...")
         shutil.rmtree(install_path, ignore_errors=True)
@@ -184,25 +153,20 @@ def uninstall():
         
         # Remove shortcuts
         print_info("Removing shortcuts...")
-        removed = remove_shortcuts()
-        print_success(f"Removed {removed} shortcuts")
+        shortcuts = [
+            Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAI.lnk",
+            Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAI.lnk",
+            Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo" / "NotYCaptionGenAI.lnk"
+        ]
+        for shortcut in shortcuts:
+            if shortcut.exists():
+                shortcut.unlink()
+                print(f"  Removed: {shortcut.name}")
+        print_success("Shortcuts removed")
         
         # Remove registry entries
         print_info("Removing registry entries...")
         remove_registry()
-        
-        # Clear cache directories
-        cache_dirs = [
-            Path(os.environ.get('TEMP', '.')) / "NotYCaptionGenAI",
-            Path(os.environ.get('LOCALAPPDATA', '.')) / "NotYCaptionGenAI",
-        ]
-        for cache_dir in cache_dirs:
-            if cache_dir.exists():
-                try:
-                    shutil.rmtree(cache_dir, ignore_errors=True)
-                    print(f"  Removed cache: {cache_dir}")
-                except:
-                    pass
         
         print()
         print_success("Uninstallation complete!")
@@ -218,7 +182,6 @@ def uninstall():
             bat_content = f'''@echo off
 timeout /t 2 /nobreak >nul
 del "{uninstaller_path}" 2>nul
-rmdir /s /q "{install_path}" 2>nul
 del "%~f0" 2>nul
 exit
 '''
@@ -230,8 +193,6 @@ exit
         
     except Exception as e:
         print_error(f"Uninstallation failed: {e}")
-        import traceback
-        traceback.print_exc()
         return False
 
 if __name__ == "__main__":
