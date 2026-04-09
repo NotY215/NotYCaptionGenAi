@@ -36,3 +36,4 @@ extract_temp/
 temp_installer
 temp_build/
 Builder/*.txt
+*_info.txt
