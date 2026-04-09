@@ -9,12 +9,12 @@ import os
 import sys
 import shutil
 import subprocess
-import zipfile
 from pathlib import Path
 
 APP_NAME = "NotYCaptionGenAI"
 APP_VERSION = "5.2"
 APP_AUTHOR = "NotY215"
+INSTALLER_NAME = f"{APP_NAME}_Installer_v{APP_VERSION}.exe"
 
 def build_all():
     print("=" * 60)
@@ -26,205 +26,185 @@ def build_all():
     builder_dir = Path(__file__).parent
     dist_dir = base_dir / "dist"
     
-    # Clean previous builds
     if dist_dir.exists():
-        print("\nCleaning previous build...")
+        print("Cleaning previous build...")
         shutil.rmtree(dist_dir)
     dist_dir.mkdir(parents=True, exist_ok=True)
     
-    # Step 1: Build main executable
-    print("\n[1/2] Building main executable...")
+    # Step 1: Build main executable (using your working build_exe.py)
+    print("\n[1/3] Building main executable...")
     
-    # Run build_exe.py
     build_exe_path = builder_dir / "build_exe.py"
     if not build_exe_path.exists():
         print("[ERROR] build_exe.py not found!")
         sys.exit(1)
     
-    result = subprocess.run(
-        [sys.executable, str(build_exe_path)],
-        cwd=base_dir
-    )
-    
-    if result.returncode != 0:
-        print("[ERROR] Main executable build failed!")
+    try:
+        subprocess.run([sys.executable, str(build_exe_path)], check=True, timeout=3600)
+    except subprocess.TimeoutExpired:
+        print("[ERROR] Build timed out!")
+        sys.exit(1)
+    except Exception as e:
+        print(f"[ERROR] Build failed: {e}")
         sys.exit(1)
     
-    exe_file = dist_dir / f"{APP_NAME}.exe"
-    if not exe_file.exists():
+    main_exe = dist_dir / f"{APP_NAME}.exe"
+    if not main_exe.exists():
         print("[ERROR] Main executable not found!")
         sys.exit(1)
     
-    size_mb = exe_file.stat().st_size / (1024 * 1024)
-    print(f"\n[OK] Main executable: {exe_file} ({size_mb:.2f} MB)")
+    print(f"[OK] Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
     
-    # Step 2: Create portable package
-    print("\n[2/2] Creating portable package...")
+    # Step 2: Build uninstaller with PyInstaller
+    print("\n[2/3] Building uninstaller executable...")
     
-    # Change to dist directory
-    os.chdir(dist_dir)
+    uninstaller_py = str(builder_dir / "uninstaller.py")
     
-    # Create portable ZIP
-    zip_name = dist_dir / f"{APP_NAME}_Portable_v{APP_VERSION}.zip"
-    with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        # Add executable
-        zipf.write(exe_file.name, exe_file.name)
-        
-        # Add ffmpeg folder
-        ffmpeg_dir = dist_dir / "ffmpeg"
-        if ffmpeg_dir.exists():
-            for file in ffmpeg_dir.rglob('*'):
-                if file.is_file():
-                    zipf.write(file, str(file.relative_to(dist_dir)))
-        
-        # Add resources folder
-        res_dir = dist_dir / "resources"
-        if res_dir.exists():
-            for file in res_dir.rglob('*'):
-                if file.is_file():
-                    zipf.write(file, str(file.relative_to(dist_dir)))
-        
-        # Add models folder if exists
-        models_dir = dist_dir / "models"
-        if models_dir.exists():
-            for file in models_dir.rglob('*.pt'):
-                if file.is_file():
-                    zipf.write(file, str(file.relative_to(dist_dir)))
-        
-        # Add README
-        readme_content = f'''NotY Caption Generator AI v{APP_VERSION}
-=====================================
-
-Portable Version - No installation required!
-
-HOW TO USE:
-1. Extract all files to any folder
-2. Double-click {APP_NAME}.exe
-3. First run will download Whisper models automatically
-
-FEATURES:
-- YouTube video captioning
-- Local video/audio captioning
-- 7 languages (English, Hindi, Japanese, Spanish, Korean, Chinese, Russian)
-- Smart line breaking
-- Lyrics search
-
-REQUIREMENTS:
-- Windows 10 or later
-- 4GB RAM (8GB recommended)
-- 4GB free disk space
-
-SUPPORT:
-Telegram: https://t.me/Noty_215
-YouTube: https://www.youtube.com/@NotY215
-
-Copyright (c) 2026 {APP_AUTHOR}
-'''
-        zipf.writestr("README.txt", readme_content)
-        
-        # Add run script
-        run_script = f'''@echo off
-cd /d "%~dp0"
-set TORCH_USE_RTLD_GLOBAL=1
-set CUDA_VISIBLE_DEVICES=-1
-start "" "{APP_NAME}.exe"
-'''
-        zipf.writestr(f"Run_{APP_NAME}.bat", run_script)
+    cmd = [
+        sys.executable, "-m", "PyInstaller",
+        "--name=NotYCaptionGenAI_Uninstaller",
+        "--onefile",
+        "--console",
+        "--noconfirm",
+        "--clean",
+        uninstaller_py
+    ]
     
-    zip_size = zip_name.stat().st_size / (1024 * 1024)
-    print(f"[OK] Portable ZIP: {zip_name} ({zip_size:.2f} MB)")
+    temp_build_dir = base_dir / "temp_build"
+    if temp_build_dir.exists():
+        shutil.rmtree(temp_build_dir)
+    temp_build_dir.mkdir(parents=True, exist_ok=True)
     
-    # Create simple installer batch
-    installer_content = f'''@echo off
-title {APP_NAME} v{APP_VERSION} Installer
-color 0A
-
-echo ============================================================
-echo    {APP_NAME} v{APP_VERSION} Installer
-echo    Copyright (c) 2026 {APP_AUTHOR}
-echo ============================================================
-echo.
-
-:: Check admin rights
-net session >nul 2>&1
-if %errorLevel% neq 0 (
-    echo [ERROR] Administrator rights required!
-    echo Please right-click and select "Run as Administrator"
-    pause
-    exit /b 1
-)
-
-:: Installation path
-set /p "INSTALL_PATH=Installation directory [C:\\{APP_NAME}]: "
-if "%INSTALL_PATH%"=="" set INSTALL_PATH=C:\\{APP_NAME}
-
-echo.
-echo Installing to: %INSTALL_PATH%
-echo.
-
-:: Create directories
-mkdir "%INSTALL_PATH%" 2>nul
-mkdir "%INSTALL_PATH%\\ffmpeg" 2>nul
-mkdir "%INSTALL_PATH%\\resources" 2>nul
-mkdir "%INSTALL_PATH%\\models" 2>nul
-
-:: Copy files
-copy /Y "{APP_NAME}.exe" "%INSTALL_PATH%\\" >nul
-xcopy /E /I /Y "ffmpeg" "%INSTALL_PATH%\\ffmpeg\\" >nul
-xcopy /E /I /Y "resources" "%INSTALL_PATH%\\resources\\" >nul
-if exist "models\\*.pt" xcopy /E /I /Y "models" "%INSTALL_PATH%\\models\\" >nul
-
-:: Create shortcuts
-powershell -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%USERPROFILE%\\Desktop\\{APP_NAME}.lnk'); $SC.TargetPath = '%INSTALL_PATH%\\{APP_NAME}.exe'; $SC.Save()"
-powershell -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\{APP_NAME}.lnk'); $SC.TargetPath = '%INSTALL_PATH%\\{APP_NAME}.exe'; $SC.Save()"
-powershell -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%APPDATA%\\Microsoft\\Windows\\SendTo\\{APP_NAME}.lnk'); $SC.TargetPath = '%INSTALL_PATH%\\{APP_NAME}.exe'; $SC.Save()"
-
-:: Registry
-reg add "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{APP_NAME}" /v "DisplayName" /d "{APP_NAME} v{APP_VERSION}" /f
-reg add "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{APP_NAME}" /v "UninstallString" /d "%INSTALL_PATH%\\Uninstall.bat" /f
-reg add "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{APP_NAME}" /v "Publisher" /d "{APP_AUTHOR}" /f
-reg add "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{APP_NAME}" /v "DisplayVersion" /d "{APP_VERSION}" /f
-
-:: Create uninstaller
-echo @echo off > "%INSTALL_PATH%\\Uninstall.bat"
-echo title {APP_NAME} Uninstaller >> "%INSTALL_PATH%\\Uninstall.bat"
-echo echo Uninstalling {APP_NAME}... >> "%INSTALL_PATH%\\Uninstall.bat"
-echo rmdir /s /q "%INSTALL_PATH%" >> "%INSTALL_PATH%\\Uninstall.bat"
-echo del "%%USERPROFILE%%\\Desktop\\{APP_NAME}.lnk" >> "%INSTALL_PATH%\\Uninstall.bat"
-echo del "%%APPDATA%%\\Microsoft\\Windows\\Start Menu\\Programs\\{APP_NAME}.lnk" >> "%INSTALL_PATH%\\Uninstall.bat"
-echo del "%%APPDATA%%\\Microsoft\\Windows\\SendTo\\{APP_NAME}.lnk" >> "%INSTALL_PATH%\\Uninstall.bat"
-echo reg delete "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{APP_NAME}" /f >> "%INSTALL_PATH%\\Uninstall.bat"
-echo echo Uninstall complete! >> "%INSTALL_PATH%\\Uninstall.bat"
-echo pause >> "%INSTALL_PATH%\\Uninstall.bat"
-
-echo.
-echo ============================================================
-echo Installation Complete!
-echo ============================================================
-echo.
-echo Installed to: %INSTALL_PATH%
-echo.
-echo You can now run {APP_NAME} from Desktop or Start Menu
-echo.
-pause
-'''
+    try:
+        subprocess.run(cmd, cwd=str(temp_build_dir), check=True, timeout=180)
+        uninstaller_exe = temp_build_dir / "dist" / "NotYCaptionGenAI_Uninstaller.exe"
+        if uninstaller_exe.exists():
+            size_kb = uninstaller_exe.stat().st_size / 1024
+            print(f"[OK] Uninstaller built: {size_kb:.2f} KB")
+        else:
+            print("[ERROR] Uninstaller not found!")
+            sys.exit(1)
+    except Exception as e:
+        print(f"[ERROR] Failed to build uninstaller: {e}")
+        sys.exit(1)
     
-    installer_bat = dist_dir / "Install.bat"
-    with open(installer_bat, 'w', encoding='utf-8') as f:
-        f.write(installer_content)
+    # Step 3: Build installer with PyInstaller
+    print("\n[3/3] Building installer...")
     
-    print(f"[OK] Installer: {installer_bat}")
+    temp_dir = base_dir / "temp_installer"
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Copy main executable
+    shutil.copy2(main_exe, temp_dir / f"{APP_NAME}.exe")
+    print("  Copied main executable")
+    
+    # Copy uninstaller
+    shutil.copy2(uninstaller_exe, temp_dir / "NotYCaptionGenAI_Uninstaller.exe")
+    print("  Copied uninstaller")
+    
+    # Copy resources
+    resources_dir = base_dir / "resources"
+    if resources_dir.exists():
+        shutil.copytree(resources_dir, temp_dir / "resources")
+        print("  Copied resources")
+    
+    # Copy ffmpeg folder
+    ffmpeg_dir = base_dir / "ffmpeg"
+    if ffmpeg_dir.exists() and any(ffmpeg_dir.iterdir()):
+        print("  Including ffmpeg...")
+        shutil.copytree(ffmpeg_dir, temp_dir / "ffmpeg")
+        ffmpeg_count = len(list((temp_dir / "ffmpeg").glob("*")))
+        print(f"    Added {ffmpeg_count} ffmpeg files")
+    
+    # Copy models
+    models_dir = base_dir / "models"
+    if models_dir.exists() and any(models_dir.iterdir()):
+        print("  Including models...")
+        shutil.copytree(models_dir, temp_dir / "models")
+        model_count = len(list((temp_dir / "models").glob("*.pt")))
+        print(f"    Added {model_count} models")
+    
+    installer_py = str(builder_dir / "installer_console.py")
+    
+    cmd = [
+        sys.executable, "-m", "PyInstaller",
+        f"--name={APP_NAME}_Installer_v{APP_VERSION}",
+        "--onefile",
+        f"--add-data={temp_dir / f'{APP_NAME}.exe'}{os.pathsep}.",
+        f"--add-data={temp_dir / 'NotYCaptionGenAI_Uninstaller.exe'}{os.pathsep}.",
+        f"--add-data={temp_dir / 'resources'}{os.pathsep}resources",
+        "--hidden-import=ctypes",
+        "--hidden-import=subprocess",
+        "--hidden-import=shutil",
+        "--hidden-import=pathlib",
+        "--hidden-import=platform",
+        "--hidden-import=tkinter",
+        "--hidden-import=tkinter.filedialog",
+        "--hidden-import=tkinter.messagebox",
+        "--hidden-import=tempfile",
+        "--hidden-import=winreg",
+        "--hidden-import=sqlite3",
+        "--hidden-import=yt_dlp",
+        "--console",
+        "--noconfirm",
+        "--clean",
+        installer_py
+    ]
+    
+    # Add ffmpeg if exists
+    if (temp_dir / "ffmpeg").exists():
+        cmd.insert(4, f"--add-data={temp_dir / 'ffmpeg'}{os.pathsep}ffmpeg")
+    
+    # Add models if exists
+    if (temp_dir / "models").exists():
+        cmd.insert(4, f"--add-data={temp_dir / 'models'}{os.pathsep}models")
+    
+    # Add icon
+    icon_path = temp_dir / "resources" / "app.ico"
+    if icon_path.exists():
+        cmd.insert(4, f"--icon={icon_path}")
+    
+    installer_build_dir = temp_dir / "installer_build"
+    installer_build_dir.mkdir(exist_ok=True)
+    
+    try:
+        subprocess.run(cmd, cwd=str(installer_build_dir), check=True, timeout=600)
+        print("\n[OK] Installer built successfully!")
+    except subprocess.TimeoutExpired:
+        print("\n[ERROR] Installer build timed out!")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n[ERROR] Installer build failed: {e}")
+        sys.exit(1)
+    
+    installer_exe = installer_build_dir / "dist" / f"{APP_NAME}_Installer_v{APP_VERSION}.exe"
+    if installer_exe.exists():
+        final_installer = base_dir / INSTALLER_NAME
+        shutil.copy2(installer_exe, final_installer)
+        size = final_installer.stat().st_size / 1024 / 1024
+        print(f"\n[OK] Installer created: {final_installer} ({size:.2f} MB)")
+    else:
+        print("\n[ERROR] Installer not found!")
+        sys.exit(1)
+    
+    # Clean up
+    shutil.rmtree(temp_dir, ignore_errors=True)
+    shutil.rmtree(temp_build_dir, ignore_errors=True)
+    shutil.rmtree(builder_dir / "build", ignore_errors=True)
     
     print("\n" + "=" * 60)
-    print("BUILD COMPLETE!")
+    print("Build complete!")
+    print(f"Installer: {base_dir / INSTALLER_NAME}")
+    print("\nThe installer will:");
+    print("  - Install the main executable")
+    print("  - Install the uninstaller")
+    print("  - Copy ffmpeg, resources, and models")
+    print("  - Create Desktop and Start Menu shortcuts")
+    print("  - Add to Send To menu")
+    print("  - Register in Windows Add/Remove Programs")
     print("=" * 60)
-    print(f"\nOutput directory: {dist_dir}")
-    print("\nFiles created:")
-    for file in dist_dir.iterdir():
-        if file.is_file():
-            size = file.stat().st_size / (1024 * 1024)
-            print(f"  - {file.name} ({size:.2f} MB)")
-    print("\n" + "=" * 60)
 
 if __name__ == "__main__":
     build_all()
