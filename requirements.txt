@@ -1,22 +1,10 @@
-# Core - Faster alternatives
 openai-whisper>=20231117
-torch>=2.0.0 --index-url https://download.pytorch.org/whl/cpu
-torchaudio>=2.0.0 --index-url https://download.pytorch.org/whl/cpu
-
-# Optimized numpy
+torch>=2.0.0
+torchaudio>=2.0.0
 numpy>=1.24.0,<2.0.0
-
-# Faster YouTube download
 yt-dlp>=2023.0.0
-
-# Lightweight UI
 colorama>=0.4.6
 tiktoken>=0.5.0
 regex>=2023.12.25
-
-# Network
 requests>=2.31.0
-
-# Build tools
 pyinstaller>=6.0.0
-nuitka>=2.0
