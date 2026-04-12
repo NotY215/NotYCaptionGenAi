@@ -37,3 +37,4 @@ temp_installer
 temp_build/
 Builder/*.txt
 *_info.txt
+cache
