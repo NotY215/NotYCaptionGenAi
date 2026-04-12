@@ -13,20 +13,13 @@ import sys
 
 # Fix for PyInstaller/Nuitka packaged app
 if getattr(sys, 'frozen', False):
-    # Running in a bundle
     application_path = os.path.dirname(sys.executable)
     os.environ['PATH'] = application_path + os.pathsep + os.environ.get('PATH', '')
-    
-    # Add the application path to Python path
     if application_path not in sys.path:
         sys.path.insert(0, application_path)
-    
-    # Set environment variables for torch
     os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
     os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
     os.environ['OMP_NUM_THREADS'] = '4'
-    
-    # Try to add torch paths if they exist
     torch_path = os.path.join(application_path, 'torch')
     if os.path.exists(torch_path):
         sys.path.insert(0, torch_path)
@@ -44,7 +37,6 @@ class _MockCuda:
         self.is_available = lambda: False
         self.device_count = lambda: 0
         self.current_device = lambda: -1
-        
     def __getattr__(self, name):
         return lambda *args, **kwargs: None
 
@@ -76,8 +68,6 @@ import urllib.request
 import urllib.parse
 import tempfile
 import shutil
-import threading
-import queue
 import hashlib
 import sqlite3
 from dataclasses import dataclass
@@ -90,7 +80,6 @@ try:
 except ImportError as e:
     WHISPER_AVAILABLE = False
     whisper = None
-    print(f"Warning: Whisper not available: {e}")
 
 # Try to import yt-dlp
 try:
@@ -130,7 +119,6 @@ if platform.system() == "Windows":
                 setattr(Colors, attr, '')
 
 def select_file_dialog():
-    """Open file selection dialog for video/audio"""
     try:
         root = tk.Tk()
         root.withdraw()
@@ -141,18 +129,31 @@ def select_file_dialog():
             ("Audio Files", "*.mp3;*.wav;*.m4a;*.flac"),
             ("All Files", "*.*")
         ]
-        file_path = filedialog.askopenfilename(
-            title="Select Video/Audio File",
-            filetypes=file_types
-        )
+        file_path = filedialog.askopenfilename(title="Select Video/Audio File", filetypes=file_types)
         root.destroy()
         return file_path
     except Exception as e:
         print(f"{Colors.RED}[ERROR] Could not open file dialog: {e}{Colors.RESET}")
         return None
 
+def save_file_dialog(default_name: str) -> str:
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        file_path = filedialog.asksaveasfilename(
+            title="Save Subtitle File",
+            defaultextension=".srt",
+            filetypes=[("SubRip Subtitle", "*.srt"), ("All Files", "*.*")],
+            initialfile=default_name
+        )
+        root.destroy()
+        return file_path
+    except Exception as e:
+        print(f"{Colors.RED}[ERROR] Could not open save dialog: {e}{Colors.RESET}")
+        return None
+
 def show_message_box(title: str, message: str, icon: str = 'info'):
-    """Show a message box"""
     try:
         root = tk.Tk()
         root.withdraw()
@@ -168,7 +169,6 @@ def show_message_box(title: str, message: str, icon: str = 'info'):
         pass
 
 def print_header(title: str = None):
-    """Print application header"""
     if title is None:
         title = f"{APP_NAME} v{APP_VERSION}"
     print(f"{Colors.CYAN}{Colors.BOLD}")
@@ -200,25 +200,20 @@ class Language(Enum):
     RUSSIAN = ("ru", "Russian", True)
     AUTO = ("auto", "Auto Detect", False)
 
-# Complete transliteration mappings for all languages with precise conversion
+# Complete transliteration mappings
 TRANSLITERATION_MAPS = {
-    # Russian (Cyrillic to Latin) - ISO 9 standard
     "ru": {
-        # Lowercase
         'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
         'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
         'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
         'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
         'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-        # Uppercase
         'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
         'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
         'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
         'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
         'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
     },
-    
-    # Spanish (accent removal and special chars)
     "es": {
         'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
         'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
@@ -226,8 +221,6 @@ TRANSLITERATION_MAPS = {
         '¿': '', '¡': '', 'º': 'o', 'ª': 'a',
         'ç': 'c', 'Ç': 'C'
     },
-    
-    # Chinese Pinyin (complete tone mark removal + common conversions)
     "zh": {
         'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
         'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
@@ -235,21 +228,11 @@ TRANSLITERATION_MAPS = {
         'ō': 'o', 'ó': 'o', 'ǒ': 'o', 'ò': 'o',
         'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
         'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v',
-        # Common Pinyin combinations
-        'zh': 'zh', 'ch': 'ch', 'sh': 'sh',
-        'ng': 'ng', 'er': 'er',
-        # Tone marks with macron
-        'ā': 'a', 'ē': 'e', 'ī': 'i', 'ō': 'o', 'ū': 'u',
-        'ǖ': 'v'
+        'zh': 'zh', 'ch': 'ch', 'sh': 'sh', 'ng': 'ng', 'er': 'er'
     },
-    
-    # Hindi (Devanagari to Latin - improved mapping)
     "hi": {
-        # Vowels
         'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
         'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
-        'ऋ': 'ri', 'ॠ': 'ree', 'ऌ': 'li', 'ॡ': 'lee',
-        # Consonants
         'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
         'च': 'cha', 'छ': 'chha', 'ज': 'ja', 'झ': 'jha', 'ञ': 'nya',
         'ट': 'ta', 'ठ': 'tha', 'ड': 'da', 'ढ': 'dha', 'ण': 'na',
@@ -258,18 +241,13 @@ TRANSLITERATION_MAPS = {
         'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha',
         'ष': 'sha', 'स': 'sa', 'ह': 'ha', 'क्ष': 'ksha', 'त्र': 'tra',
         'ज्ञ': 'gya', 'श्र': 'shra',
-        # Vowel signs
         'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
         'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h',
         '्': '',
-        # Numbers
         '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
         '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
     },
-    
-    # Japanese (Kanji/Kana to Romaji - improved)
     "ja": {
-        # Hiragana
         'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
         'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
         'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
@@ -280,7 +258,6 @@ TRANSLITERATION_MAPS = {
         'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
         'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
         'わ': 'wa', 'を': 'wo', 'ん': 'n',
-        # Katakana
         'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
         'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
         'サ': 'sa', 'シ': 'shi', 'ス': 'su', 'セ': 'se', 'ソ': 'so',
@@ -291,34 +268,22 @@ TRANSLITERATION_MAPS = {
         'ヤ': 'ya', 'ユ': 'yu', 'ヨ': 'yo',
         'ラ': 'ra', 'リ': 'ri', 'ル': 'ru', 'レ': 're', 'ロ': 'ro',
         'ワ': 'wa', 'ヲ': 'wo', 'ン': 'n',
-        # Small characters
         'ゃ': 'ya', 'ゅ': 'yu', 'ょ': 'yo',
         'ャ': 'ya', 'ュ': 'yu', 'ョ': 'yo',
         'っ': 't', 'ッ': 't',
         'ぁ': 'a', 'ぃ': 'i', 'ぅ': 'u', 'ぇ': 'e', 'ぉ': 'o',
         'ァ': 'a', 'ィ': 'i', 'ゥ': 'u', 'ェ': 'e', 'ォ': 'o'
     },
-    
-    # Korean (Hangul to Romanized - Revised Romanization)
     "ko": {
-        # Initial consonants
         'ㄱ': 'g', 'ㄲ': 'kk', 'ㄴ': 'n', 'ㄷ': 'd', 'ㄸ': 'tt',
         'ㄹ': 'r', 'ㅁ': 'm', 'ㅂ': 'b', 'ㅃ': 'pp', 'ㅅ': 's',
         'ㅆ': 'ss', 'ㅇ': '', 'ㅈ': 'j', 'ㅉ': 'jj', 'ㅊ': 'ch',
         'ㅋ': 'k', 'ㅌ': 't', 'ㅍ': 'p', 'ㅎ': 'h',
-        # Vowels
         'ㅏ': 'a', 'ㅐ': 'ae', 'ㅑ': 'ya', 'ㅒ': 'yae', 'ㅓ': 'eo',
         'ㅔ': 'e', 'ㅕ': 'yeo', 'ㅖ': 'ye', 'ㅗ': 'o', 'ㅘ': 'wa',
         'ㅙ': 'wae', 'ㅚ': 'oe', 'ㅛ': 'yo', 'ㅜ': 'u', 'ㅝ': 'wo',
         'ㅞ': 'we', 'ㅟ': 'wi', 'ㅠ': 'yu', 'ㅡ': 'eu', 'ㅢ': 'ui',
-        'ㅣ': 'i',
-        # Final consonants
-        'ㄱ': 'k', 'ㄲ': 'k', 'ㄳ': 'k', 'ㄴ': 'n', 'ㄵ': 'n',
-        'ㄶ': 'n', 'ㄷ': 't', 'ㄹ': 'l', 'ㄺ': 'lg', 'ㄻ': 'lm',
-        'ㄼ': 'lb', 'ㄽ': 'ls', 'ㄾ': 'lt', 'ㄿ': 'lp', 'ㅀ': 'lh',
-        'ㅁ': 'm', 'ㅂ': 'p', 'ㅄ': 'ps', 'ㅅ': 't', 'ㅆ': 't',
-        'ㅇ': 'ng', 'ㅈ': 't', 'ㅊ': 't', 'ㅋ': 'k', 'ㅌ': 't',
-        'ㅍ': 'p', 'ㅎ': 't'
+        'ㅣ': 'i'
     }
 }
 
@@ -337,25 +302,6 @@ SUPPORTED_EXTENSIONS = {
     'audio': ['.mp3', '.wav', '.m4a', '.flac'],
     'all': ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm', '.mp3', '.wav', '.m4a', '.flac']
 }
-
-class ProgressTracker:
-    def __init__(self):
-        self.progress = 0
-        self.message = ""
-        self.is_complete = False
-        self.error = None
-        
-    def update(self, progress: int, message: str):
-        self.progress = progress
-        self.message = message
-        
-    def complete(self):
-        self.is_complete = True
-        self.progress = 100
-        
-    def fail(self, error: str):
-        self.error = error
-        self.is_complete = True
 
 @dataclass
 class SubtitleEntry:
@@ -377,7 +323,6 @@ class NotYCaptionGenerator:
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
-        # Setup ffmpeg path
         if platform.system() == "Windows":
             self.ffmpeg_exe = self.ffmpeg_dir / "ffmpeg.exe"
             self.ffprobe_exe = self.ffmpeg_dir / "ffprobe.exe"
@@ -409,6 +354,12 @@ class NotYCaptionGenerator:
             ("large", WHISPER_MODELS["large"]["size"], WHISPER_MODELS["large"]["desc"])
         ]
         
+        self.modes = [
+            ("Normal Mode", "normal", "Standard transcription without lyrics search"),
+            ("Transliteration Mode", "transliterate", "Convert non-Latin scripts to Latin alphabet"),
+            ("Translate Mode", "translate", "Translate to English while transcribing")
+        ]
+        
         self.line_types = [
             ("Words", "words", "Break by word count (1-30)"),
             ("Letters", "letters", "Break by character limit (1-30)"),
@@ -417,9 +368,11 @@ class NotYCaptionGenerator:
         
         self.selected_model = None
         self.selected_language = None
+        self.selected_mode = None
         self.selected_line_type = None
         self.media_path_arg = media_path
         self.model = None
+        self.is_sendto = media_path is not None
         
     def init_database(self):
         self.db_path = self.cache_dir / "cache.db"
@@ -432,6 +385,7 @@ class NotYCaptionGenerator:
                 file_hash TEXT UNIQUE,
                 model_name TEXT,
                 language TEXT,
+                mode TEXT,
                 result TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -456,48 +410,25 @@ class NotYCaptionGenerator:
                 hasher.update(chunk)
         return hasher.hexdigest()
         
-    def cache_transcription(self, file_hash: str, model_name: str, language: str, result: dict):
+    def cache_transcription(self, file_hash: str, model_name: str, language: str, mode: str, result: dict):
         try:
             self.cursor.execute(
-                "INSERT OR REPLACE INTO transcriptions (file_hash, model_name, language, result) VALUES (?, ?, ?, ?)",
-                (file_hash, model_name, language, json.dumps(result))
+                "INSERT OR REPLACE INTO transcriptions (file_hash, model_name, language, mode, result) VALUES (?, ?, ?, ?, ?)",
+                (file_hash, model_name, language, mode, json.dumps(result))
             )
             self.conn.commit()
         except:
             pass
             
-    def get_cached_transcription(self, file_hash: str, model_name: str, language: str) -> Optional[dict]:
+    def get_cached_transcription(self, file_hash: str, model_name: str, language: str, mode: str) -> Optional[dict]:
         try:
             self.cursor.execute(
-                "SELECT result FROM transcriptions WHERE file_hash = ? AND model_name = ? AND language = ?",
-                (file_hash, model_name, language)
+                "SELECT result FROM transcriptions WHERE file_hash = ? AND model_name = ? AND language = ? AND mode = ?",
+                (file_hash, model_name, language, mode)
             )
             row = self.cursor.fetchone()
             if row:
                 return json.loads(row[0])
-        except:
-            pass
-        return None
-        
-    def cache_lyrics(self, song_name: str, lyrics: str, source: str):
-        try:
-            self.cursor.execute(
-                "INSERT OR REPLACE INTO lyrics_cache (song_name, lyrics, source) VALUES (?, ?, ?)",
-                (song_name.lower(), lyrics, source)
-            )
-            self.conn.commit()
-        except:
-            pass
-            
-    def get_cached_lyrics(self, song_name: str) -> Optional[Tuple[str, str]]:
-        try:
-            self.cursor.execute(
-                "SELECT lyrics, source FROM lyrics_cache WHERE song_name = ?",
-                (song_name.lower(),)
-            )
-            row = self.cursor.fetchone()
-            if row:
-                return row[0], row[1]
         except:
             pass
         return None
@@ -586,46 +517,22 @@ class NotYCaptionGenerator:
                 return -1
             return choice - 1
             
-    def get_media_path(self, allowed_extensions: List[str]) -> Path:
-        if self.media_path_arg:
-            path = Path(self.media_path_arg.strip('"'))
-            if path.exists() and path.suffix.lower() in allowed_extensions:
-                self.print_success(f"Using file: {path}")
-                return path
-        
-        self.print_info("Opening file selection dialog...")
-        self.print_info(f"Supported formats: {', '.join(allowed_extensions)}")
-        file_path = select_file_dialog()
-        
-        if file_path:
-            path = Path(file_path)
-            if path.exists() and path.suffix.lower() in allowed_extensions:
-                self.print_success(f"Selected: {path}")
-                return path
-            else:
-                self.print_error("Invalid file selected!")
-        
-        while True:
-            print(f"\n{Colors.CYAN}Provide Video/Audio Path{Colors.RESET}")
-            print(f"   Supported formats: {', '.join(allowed_extensions)}")
-            print(f"   Tip: You can drag and drop a file here, then press Enter")
-            path_str = self.get_input("> ").strip().strip('"')
-            
-            if not path_str:
-                self.print_error("Path cannot be empty!")
-                continue
-                
-            path = Path(path_str)
-            if not path.exists():
-                self.print_error(f"File not found: {path}")
-                continue
-                
-            if path.suffix.lower() not in allowed_extensions:
-                self.print_error(f"Invalid extension! Supported: {', '.join(allowed_extensions)}")
-                continue
-                
+    def get_media_path_sendto(self, file_path: str) -> Path:
+        path = Path(file_path)
+        if path.exists() and path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
+            self.print_success(f"File received from Send To: {path}")
             return path
-            
+        return None
+        
+    def get_youtube_url(self) -> Optional[str]:
+        print(f"\n{Colors.CYAN}Paste YouTube URL:{Colors.RESET}")
+        print(f"   Example: https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        url = self.get_input("\n> ").strip()
+        if not url:
+            self.print_error("URL cannot be empty!")
+            return None
+        return url
+        
     def download_youtube_audio(self, url: str) -> Tuple[Optional[Path], Optional[str]]:
         if not YTDLP_AVAILABLE:
             self.print_error("yt-dlp not available. Please install: pip install yt-dlp")
@@ -654,10 +561,8 @@ class NotYCaptionGenerator:
                 video_title = info.get('title', '')
                 self.print_info(f"Video: {video_title}")
                 
-                # Find downloaded file
                 for f in temp_dir.glob("youtube_audio_*"):
                     if f.suffix in ['.wav', '.mp3', '.m4a']:
-                        # Ensure WAV format
                         if f.suffix != '.wav':
                             wav_path = f.with_suffix('.wav')
                             if self.check_ffmpeg():
@@ -668,10 +573,8 @@ class NotYCaptionGenerator:
                                 f = wav_path
                         self.print_success("Download complete!")
                         return f, video_title
-                        
         except Exception as e:
             self.print_error(f"Download failed: {e}")
-            
         return None, None
         
     def check_ffmpeg(self) -> bool:
@@ -712,86 +615,13 @@ class NotYCaptionGenerator:
                 return audio_path
         except:
             pass
-        
         return None
         
-    def clean_lyrics_text(self, lyrics: str) -> str:
-        if not lyrics:
-            return lyrics
-            
-        unwanted_patterns = [
-            r'(?i)^song:.*$', r'(?i)^artist:.*$', r'(?i)^album:.*$',
-            r'(?i)^copyright.*$', r'(?i)^no copyright infringement.*$',
-            r'(?i)^all rights reserved.*$', r'(?i)^subscribe.*$',
-            r'(?i)^like.*$', r'(?i)^comment.*$', r'(?i)^share.*$',
-            r'(?i)^follow.*$', r'(?i)^instagram.*$', r'(?i)^facebook.*$',
-            r'(?i)^twitter.*$', r'(?i)^tiktok.*$', r'(?i)^discord.*$',
-            r'(?i)^#.*$', r'(?i)^@.*$', r'(?i)^https?://.*$',
-            r'(?i)^www\..*$',
-        ]
-        
-        lines = lyrics.split('\n')
-        cleaned_lines = []
-        
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            should_skip = False
-            for pattern in unwanted_patterns:
-                if re.match(pattern, line, re.IGNORECASE):
-                    should_skip = True
-                    break
-            if not should_skip and len(line) > 1:
-                cleaned_lines.append(line)
-        
-        return '\n'.join(cleaned_lines)
-        
-    def search_lyrics_online(self, song_name: str) -> Tuple[Optional[str], Optional[str]]:
-        cached = self.get_cached_lyrics(song_name)
-        if cached:
-            self.print_progress("Found cached lyrics", 50)
-            return cached
-            
-        self.print_progress(f"Searching lyrics: {song_name}", 45)
-        
-        if not song_name:
-            return None, None
-            
-        song_name = re.sub(r'[_\-\[\]\(\)]', ' ', song_name)
-        song_name = re.sub(r'\s+', ' ', song_name).strip()
-        
-        # Try Lyrics.ovh API
-        try:
-            parts = song_name.split('-')
-            if len(parts) >= 2:
-                artist = parts[0].strip()
-                song = parts[1].strip()
-                api_url = f"https://api.lyrics.ovh/v1/{urllib.parse.quote(artist)}/{urllib.parse.quote(song)}"
-                
-                req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    data = json.loads(response.read().decode('utf-8'))
-                    if 'lyrics' in data and data['lyrics']:
-                        lyrics = data['lyrics'].strip()
-                        if len(lyrics) > 100:
-                            cleaned = self.clean_lyrics_text(lyrics)
-                            if len(cleaned) > 50:
-                                self.cache_lyrics(song_name, cleaned, "Lyrics.ovh")
-                                return cleaned, "Lyrics.ovh"
-        except:
-            pass
-        
-        return None, None
-        
     def transliterate_text(self, text: str, language_code: str) -> str:
-        """Convert text from non-Latin scripts to Latin alphabet"""
         if language_code not in TRANSLITERATION_MAPS:
             return text
             
         mapping = TRANSLITERATION_MAPS[language_code]
-        
-        # Sort keys by length (longest first) for proper replacement
         sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
         
         result = text
@@ -799,11 +629,8 @@ class NotYCaptionGenerator:
             translit = mapping[original]
             result = result.replace(original, translit)
         
-        # Clean up extra spaces and normalize
         result = re.sub(r'\s+', ' ', result)
-        result = result.strip()
-        
-        return result
+        return result.strip()
         
     def load_model(self, model_name: str):
         if not WHISPER_AVAILABLE:
@@ -914,10 +741,9 @@ class NotYCaptionGenerator:
                 ))
                 index += 1
                 i = j
-                
         return subtitles
         
-    def generate_captions(self, media_path: Path, model_name: str, line_type: str, 
+    def generate_captions(self, media_path: Path, model_name: str, mode: str, line_type: str, 
                           number_per_line: int, language_code: str) -> bool:
         try:
             if not WHISPER_AVAILABLE:
@@ -925,7 +751,7 @@ class NotYCaptionGenerator:
                 return False
                 
             file_hash = self.get_file_hash(media_path)
-            cached_result = self.get_cached_transcription(file_hash, model_name, language_code)
+            cached_result = self.get_cached_transcription(file_hash, model_name, language_code, mode)
             
             if cached_result:
                 self.print_success("Using cached transcription")
@@ -944,16 +770,19 @@ class NotYCaptionGenerator:
                         
                 self.print_progress("Transcribing...", 70)
                 
+                # Set language and task based on mode
                 language = language_code if language_code != "auto" else None
+                task = "translate" if mode == "translate" else "transcribe"
                 
                 result = self.model.transcribe(
                     str(audio_path),
                     language=language,
+                    task=task,
                     verbose=False,
                     word_timestamps=True
                 )
                 
-                self.cache_transcription(file_hash, model_name, language_code, result)
+                self.cache_transcription(file_hash, model_name, language_code, mode, result)
                 
                 if audio_path != media_path and audio_path and audio_path.exists():
                     try:
@@ -963,10 +792,15 @@ class NotYCaptionGenerator:
             
             self.print_progress("Processing...", 80)
             
-            output_path = media_path.parent / f"{media_path.stem}"
-            if language_code != "auto":
-                output_path = output_path.with_name(f"{media_path.stem}_{language_code}")
-            output_path = output_path.with_suffix(".srt")
+            # Ask for save location
+            default_name = f"{media_path.stem}_{language_code}_{mode}.srt"
+            save_path = save_file_dialog(default_name)
+            
+            if not save_path:
+                self.print_warning("No save location selected. Using default location.")
+                output_path = media_path.parent / f"{media_path.stem}_{language_code}_{mode}.srt"
+            else:
+                output_path = Path(save_path)
             
             segments = result.get("segments", [])
             
@@ -984,8 +818,8 @@ class NotYCaptionGenerator:
                     segment_start = segment.get("start", 0)
                     segment_end = segment.get("end", segment_start + 1)
                     
-                    # Apply transliteration if needed (Russian, Hindi, Japanese, Spanish, Korean, Chinese)
-                    if language_code in TRANSLITERATION_MAPS:
+                    # Apply transliteration if mode is transliterate
+                    if mode == "transliterate" and language_code in TRANSLITERATION_MAPS:
                         segment_text = self.transliterate_text(segment_text, language_code)
                     
                     words_data = segment.get("words", [])
@@ -1050,54 +884,81 @@ class NotYCaptionGenerator:
         
         if not WHISPER_AVAILABLE:
             self.print_error("Whisper is not available!")
-            self.print_info("Please install: pip install openai-whisper torch tqdm")
+            self.print_info("Please install: pip install openai-whisper torch")
             input("\nPress Enter to exit...")
             return
             
+        # Check if file was sent via Send To
+        if self.media_path_arg and not self.is_sendto:
+            # Manual file argument
+            media_path = Path(self.media_path_arg)
+            if media_path.exists() and media_path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
+                self.print_success(f"File received: {media_path}")
+                # Auto-select local mode with this file
+                platform_choice = 2  # Local File mode
+                passed_file = media_path
+            else:
+                self.print_error(f"File not found: {media_path}")
+                self.is_sendto = False
+                passed_file = None
+        elif self.media_path_arg and self.is_sendto:
+            # File from Send To menu
+            media_path = Path(self.media_path_arg)
+            if media_path.exists() and media_path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
+                self.print_success(f"File received from Send To: {media_path}")
+                platform_choice = 2  # Auto-select Local File mode
+                passed_file = media_path
+            else:
+                self.print_error(f"Invalid file: {media_path}")
+                self.is_sendto = False
+                passed_file = None
+        else:
+            platform_choice = None
+            passed_file = None
+        
         self.print_success("Whisper loaded successfully")
         
         while True:
             try:
-                self.clear_screen()
-                print_header()
-                print(f"\n{Colors.CYAN}{Colors.BOLD}SELECT PLATFORM{Colors.RESET}")
-                print(f"{Colors.CYAN}┌{'─' * 50}┐{Colors.RESET}")
-                print(f"{Colors.CYAN}│{Colors.RESET}  1) YouTube - Download and generate captions{Colors.CYAN}│{Colors.RESET}")
-                print(f"{Colors.CYAN}│{Colors.RESET}  2) Local File - Use local video/audio file{Colors.CYAN}│{Colors.RESET}")
-                print(f"{Colors.CYAN}│{Colors.RESET}  0) Exit{Colors.CYAN}│{Colors.RESET}")
-                print(f"{Colors.CYAN}└{'─' * 50}┘{Colors.RESET}")
-                
-                platform_choice = self.get_number_input("Choose option (0-2): ", 0, 2)
-                
-                if platform_choice == 0:
-                    break
+                if platform_choice is None:
+                    self.clear_screen()
+                    print_header()
+                    print(f"\n{Colors.CYAN}{Colors.BOLD}SELECT PLATFORM{Colors.RESET}")
+                    print(f"{Colors.CYAN}┌{'─' * 50}┐{Colors.RESET}")
+                    print(f"{Colors.CYAN}│{Colors.RESET}  1) YouTube - Download and generate captions{Colors.CYAN}│{Colors.RESET}")
+                    print(f"{Colors.CYAN}│{Colors.RESET}  2) Local File - Use local video/audio file{Colors.CYAN}│{Colors.RESET}")
+                    print(f"{Colors.CYAN}│{Colors.RESET}  0) Exit{Colors.CYAN}│{Colors.RESET}")
+                    print(f"{Colors.CYAN}└{'─' * 50}┘{Colors.RESET}")
                     
-                platform_name = "YouTube" if platform_choice == 1 else "Local File"
-                self.clear_screen()
-                print_header()
-                print(f"\n{Colors.CYAN}Use {platform_name}?{Colors.RESET}")
-                print(f"\n  1) Continue")
-                print(f"  0) Back")
-                
-                confirm_choice = self.get_number_input("\nChoose option (0-1): ", 0, 1)
-                if confirm_choice == 0:
-                    continue
+                    platform_choice = self.get_number_input("Choose option (0-2): ", 0, 2)
+                    
+                    if platform_choice == 0:
+                        break
+                    
+                    platform_name = "YouTube" if platform_choice == 1 else "Local File"
+                    self.clear_screen()
+                    print_header()
+                    print(f"\n{Colors.CYAN}Use {platform_name}?{Colors.RESET}")
+                    print(f"\n  1) Continue")
+                    print(f"  0) Back")
+                    
+                    confirm_choice = self.get_number_input("\nChoose option (0-1): ", 0, 1)
+                    if confirm_choice == 0:
+                        platform_choice = None
+                        continue
                 
                 media_path = None
                 video_title = None
                 
                 if platform_choice == 1:
+                    # YouTube mode
                     while True:
                         self.clear_screen()
                         print_header()
-                        print(f"\n{Colors.CYAN}Paste YouTube URL:{Colors.RESET}")
-                        print(f"   Example: https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-                        url = self.get_input("\n> ").strip()
-                        
+                        url = self.get_youtube_url()
                         if not url:
-                            self.print_error("URL cannot be empty!")
-                            input("Press Enter...")
-                            continue
+                            platform_choice = None
+                            break
                         
                         self.clear_screen()
                         print_header()
@@ -1108,6 +969,7 @@ class NotYCaptionGenerator:
                         
                         url_choice = self.get_number_input("\nChoose option (0-2): ", 0, 2)
                         if url_choice == 0:
+                            platform_choice = None
                             break
                         elif url_choice == 2:
                             continue
@@ -1119,26 +981,36 @@ class NotYCaptionGenerator:
                             self.print_error("Download failed!")
                             input("Press Enter...")
                             continue
-                        
                         break
                     
                     if not media_path:
                         continue
                         
                 else:
-                    self.clear_screen()
-                    print_header()
-                    print(f"\n{Colors.CYAN}Supported Formats:{Colors.RESET}")
-                    print(f"  Video: {', '.join(SUPPORTED_EXTENSIONS['video'])}")
-                    print(f"  Audio: {', '.join(SUPPORTED_EXTENSIONS['audio'])}")
-                    print()
+                    # Local file mode
+                    if passed_file:
+                        media_path = passed_file
+                        passed_file = None
+                    else:
+                        self.clear_screen()
+                        print_header()
+                        print(f"\n{Colors.CYAN}Supported Formats:{Colors.RESET}")
+                        print(f"  Video: {', '.join(SUPPORTED_EXTENSIONS['video'])}")
+                        print(f"  Audio: {', '.join(SUPPORTED_EXTENSIONS['audio'])}")
+                        print()
+                        
+                        media_path_str = select_file_dialog()
+                        if not media_path_str:
+                            platform_choice = None
+                            continue
+                        media_path = Path(media_path_str)
                     
-                    media_path = self.get_media_path(SUPPORTED_EXTENSIONS['all'])
-                    
-                    if not media_path:
+                    if not media_path.exists():
+                        self.print_error("File not found!")
+                        platform_choice = None
                         continue
                 
-                self.print_success(f"Source ready")
+                self.print_success(f"Source: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}")
                 
                 # Select model
                 self.clear_screen()
@@ -1153,14 +1025,35 @@ class NotYCaptionGenerator:
                             media_path.unlink()
                         except:
                             pass
+                    platform_choice = None
                     continue
                 self.selected_model = self.models[model_choice][0]
+                
+                # Select mode (Normal/Transliterate/Translate)
+                self.clear_screen()
+                print_header()
+                print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
+                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}\n")
+                
+                mode_options = [f"{m[0]} - {m[2]}" for m in self.modes]
+                mode_choice = self.show_menu("SELECT MODE", mode_options)
+                if mode_choice == -1:
+                    if platform_choice == 1 and media_path and media_path.exists():
+                        try:
+                            media_path.unlink()
+                        except:
+                            pass
+                    platform_choice = None
+                    continue
+                self.selected_mode = self.modes[mode_choice]
+                mode = self.selected_mode[1]
                 
                 # Select language
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
-                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}\n")
+                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
+                print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}\n")
                 
                 lang_options = [f"{lang[0]} ({lang[1]})" for lang in self.languages]
                 lang_choice = self.show_menu("SELECT LANGUAGE", lang_options)
@@ -1170,6 +1063,7 @@ class NotYCaptionGenerator:
                             media_path.unlink()
                         except:
                             pass
+                    platform_choice = None
                     continue
                 self.selected_language = self.languages[lang_choice]
                 language_code = self.selected_language[1]
@@ -1180,16 +1074,18 @@ class NotYCaptionGenerator:
                 print_header()
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
+                print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}")
                 print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
                 
                 line_options = [f"{l[0]} - {l[2]}" for l in self.line_types]
-                line_choice = self.show_menu("LINE TYPE", line_options)
+                line_choice = self.show_menu("LINE BREAK TYPE", line_options)
                 if line_choice == -1:
                     if platform_choice == 1 and media_path and media_path.exists():
                         try:
                             media_path.unlink()
                         except:
                             pass
+                    platform_choice = None
                     continue
                 self.selected_line_type = self.line_types[line_choice]
                 line_type = self.selected_line_type[1]
@@ -1206,8 +1102,9 @@ class NotYCaptionGenerator:
                     f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
                     f"File: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}",
                     f"Model: {self.selected_model.upper()}",
+                    f"Mode: {self.selected_mode[0]}",
                     f"Language: {language_name}",
-                    f"Line Type: {self.selected_line_type[0]}",
+                    f"Line Break: {self.selected_line_type[0]}",
                     f"Settings: {number_per_line if line_type != 'auto' else 'Auto-detect'}"
                 ])
                 
@@ -1217,12 +1114,14 @@ class NotYCaptionGenerator:
                             media_path.unlink()
                         except:
                             pass
+                    platform_choice = None
                     continue
                 
                 self.print_info("Generating captions... This may take several minutes.")
                 success = self.generate_captions(
                     media_path,
                     self.selected_model,
+                    mode,
                     line_type,
                     number_per_line,
                     language_code
@@ -1245,9 +1144,14 @@ class NotYCaptionGenerator:
                     
                     if not self.confirm("Process another file?"):
                         break
+                    else:
+                        platform_choice = None
+                        passed_file = None
+                        self.is_sendto = False
                 else:
                     self.print_error("Failed to generate captions")
                     if not self.confirm("Try again?"):
+                        platform_choice = None
                         continue
                         
             except KeyboardInterrupt:
@@ -1266,7 +1170,7 @@ class NotYCaptionGenerator:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=f'{APP_NAME} - {APP_AUTHOR}')
-    parser.add_argument('file', nargs='?', help='Video/Audio file to process')
+    parser.add_argument('file', nargs='?', help='Video/Audio file to process (supports Send To)')
     args = parser.parse_args()
     
     app = NotYCaptionGenerator(args.file)
