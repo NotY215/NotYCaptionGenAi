@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Setup script for building NotY Caption Generator AI v5.2
+Setup script for building NotY Caption Generator AI v6.1
 Copyright (c) 2026 NotY215
 """
 
@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 
 APP_NAME = "NotYCaptionGenAI"
-APP_VERSION = "5.2"
+APP_VERSION = "6.1"
 APP_AUTHOR = "NotY215"
 INSTALLER_NAME = f"{APP_NAME}_Installer_v{APP_VERSION}.exe"
 
@@ -197,7 +197,7 @@ def build_all():
     print("\n" + "=" * 60)
     print("Build complete!")
     print(f"Installer: {base_dir / INSTALLER_NAME}")
-    print("\nThe installer will:");
+    print("\nThe installer will:")
     print("  - Install the main executable")
     print("  - Install the uninstaller")
     print("  - Copy ffmpeg, resources, and models")

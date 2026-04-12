@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NotY Caption Generator AI Uninstaller v5.2 (Console)
+Setup script for building NotY Caption Generator AI v6.1
 Copyright (c) 2026 NotY215
 """
 
@@ -9,198 +9,202 @@ import os
 import sys
 import shutil
 import subprocess
-import time
-import platform
-import ctypes
 from pathlib import Path
-import winreg
 
-# Application metadata
-APP_NAME = "NotY Caption Generator AI"
-APP_VERSION = "5.2"
+APP_NAME = "NotYCaptionGenAI"
+APP_VERSION = "6.1"
 APP_AUTHOR = "NotY215"
+INSTALLER_NAME = f"{APP_NAME}_Installer_v{APP_VERSION}.exe"
 
-class Colors:
-    RESET = '\033[0m'
-    RED = '\033[91m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    PURPLE = '\033[95m'
-    CYAN = '\033[96m'
-    WHITE = '\033[97m'
-    BOLD = '\033[1m'
-
-if platform.system() == "Windows":
-    os.system('color')
-
-def is_admin():
-    """Check if running as administrator"""
+def build_all():
+    print("=" * 60)
+    print(f"Building {APP_NAME} v{APP_VERSION}")
+    print(f"Copyright (c) 2026 {APP_AUTHOR}")
+    print("=" * 60)
+    
+    base_dir = Path(__file__).parent.parent
+    builder_dir = Path(__file__).parent
+    dist_dir = base_dir / "dist"
+    
+    if dist_dir.exists():
+        print("Cleaning previous build...")
+        shutil.rmtree(dist_dir)
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Step 1: Build main executable (using your working build_exe.py)
+    print("\n[1/3] Building main executable...")
+    
+    build_exe_path = builder_dir / "build_exe.py"
+    if not build_exe_path.exists():
+        print("[ERROR] build_exe.py not found!")
+        sys.exit(1)
+    
     try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
-
-def run_as_admin():
-    """Re-run the script as administrator"""
-    try:
-        ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", sys.executable, " ".join(sys.argv), None, 1
-        )
-        return True
-    except:
-        return False
-
-def print_header():
-    print(f"{Colors.CYAN}{Colors.BOLD}")
-    print("+" + "=" * 58 + "+")
-    print("|" + f"{APP_NAME} Uninstaller v{APP_VERSION}".center(58) + "|")
-    print("|" + f"Copyright (c) 2026 {APP_AUTHOR}".center(58) + "|")
-    print("+" + "=" * 58 + "+")
-    print(f"{Colors.RESET}")
-
-def print_success(message):
-    print(f"{Colors.GREEN}[OK] {message}{Colors.RESET}")
-
-def print_error(message):
-    print(f"{Colors.RED}[ERROR] {message}{Colors.RESET}")
-
-def print_info(message):
-    print(f"{Colors.CYAN}[INFO] {message}{Colors.RESET}")
-
-def get_install_path():
-    """Get install path from registry"""
-    try:
-        key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NotYCaptionGenAI"
-        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path, 0, winreg.KEY_READ)
-        install_path, _ = winreg.QueryValueEx(key, "InstallLocation")
-        winreg.CloseKey(key)
-        return Path(install_path)
-    except:
-        return None
-
-def remove_registry():
-    """Remove registry entries"""
-    try:
-        key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NotYCaptionGenAI"
-        winreg.DeleteKey(winreg.HKEY_LOCAL_MACHINE, key_path)
-        print_success("Registry entries removed")
-        return True
-    except FileNotFoundError:
-        print_info("Registry entries not found")
-        return True
-    except PermissionError:
-        print_error("Permission denied - run as administrator")
-        return False
+        subprocess.run([sys.executable, str(build_exe_path)], check=True, timeout=3600)
+    except subprocess.TimeoutExpired:
+        print("[ERROR] Build timed out!")
+        sys.exit(1)
     except Exception as e:
-        print_error(f"Failed to remove registry: {e}")
-        return False
-
-def get_directory_size(path):
-    """Get directory size in MB"""
-    total = 0
+        print(f"[ERROR] Build failed: {e}")
+        sys.exit(1)
+    
+    main_exe = dist_dir / f"{APP_NAME}.exe"
+    if not main_exe.exists():
+        print("[ERROR] Main executable not found!")
+        sys.exit(1)
+    
+    print(f"[OK] Main executable: {main_exe} ({main_exe.stat().st_size / 1024 / 1024:.2f} MB)")
+    
+    # Step 2: Build uninstaller with PyInstaller
+    print("\n[2/3] Building uninstaller executable...")
+    
+    uninstaller_py = str(builder_dir / "uninstaller.py")
+    
+    cmd = [
+        sys.executable, "-m", "PyInstaller",
+        "--name=NotYCaptionGenAI_Uninstaller",
+        "--onefile",
+        "--console",
+        "--noconfirm",
+        "--clean",
+        uninstaller_py
+    ]
+    
+    temp_build_dir = base_dir / "temp_build"
+    if temp_build_dir.exists():
+        shutil.rmtree(temp_build_dir)
+    temp_build_dir.mkdir(parents=True, exist_ok=True)
+    
     try:
-        for item in path.rglob('*'):
-            if item.is_file():
-                total += item.stat().st_size
-    except:
-        pass
-    return total / (1024 * 1024)
-
-def uninstall():
-    # Check for admin privileges
-    if not is_admin():
-        print_warning = lambda x: print(f"{Colors.YELLOW}[WARNING] {x}{Colors.RESET}")
-        print_warning("Administrator privileges required for complete uninstallation!")
-        print_info("The uninstaller will now restart with administrator privileges...")
-        time.sleep(2)
-        if run_as_admin():
-            sys.exit(0)
+        subprocess.run(cmd, cwd=str(temp_build_dir), check=True, timeout=180)
+        uninstaller_exe = temp_build_dir / "dist" / "NotYCaptionGenAI_Uninstaller.exe"
+        if uninstaller_exe.exists():
+            size_kb = uninstaller_exe.stat().st_size / 1024
+            print(f"[OK] Uninstaller built: {size_kb:.2f} KB")
         else:
-            print_error("Failed to elevate privileges. Uninstallation will continue but registry may not be removed.")
+            print("[ERROR] Uninstaller not found!")
+            sys.exit(1)
+    except Exception as e:
+        print(f"[ERROR] Failed to build uninstaller: {e}")
+        sys.exit(1)
     
-    print_header()
-    print_info("Starting uninstallation process...")
-    print()
+    # Step 3: Build installer with PyInstaller
+    print("\n[3/3] Building installer...")
     
-    install_path = get_install_path()
+    temp_dir = base_dir / "temp_installer"
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+    temp_dir.mkdir(parents=True, exist_ok=True)
     
-    if not install_path or not install_path.exists():
-        print_error("Installation not found in registry!")
-        print_info("If the application was installed manually, please delete the folder manually.")
-        return False
+    # Copy main executable
+    shutil.copy2(main_exe, temp_dir / f"{APP_NAME}.exe")
+    print("  Copied main executable")
     
-    print_info(f"Found installation at: {install_path}")
-    print_info(f"Installation size: {get_directory_size(install_path):.2f} MB")
-    print()
+    # Copy uninstaller
+    shutil.copy2(uninstaller_exe, temp_dir / "NotYCaptionGenAI_Uninstaller.exe")
+    print("  Copied uninstaller")
     
-    print(f"{Colors.YELLOW}[WARNING] This will permanently remove {APP_NAME}{Colors.RESET}")
-    print(f"{Colors.YELLOW}   and all its components from your computer.{Colors.RESET}")
-    print()
+    # Copy resources
+    resources_dir = base_dir / "resources"
+    if resources_dir.exists():
+        shutil.copytree(resources_dir, temp_dir / "resources")
+        print("  Copied resources")
     
-    response = input(f"{Colors.CYAN}Are you sure you want to uninstall? (y/n): {Colors.RESET}").lower()
-    if response not in ['y', 'yes']:
-        print_info("Uninstallation cancelled.")
-        return False
+    # Copy ffmpeg folder
+    ffmpeg_dir = base_dir / "ffmpeg"
+    if ffmpeg_dir.exists() and any(ffmpeg_dir.iterdir()):
+        print("  Including ffmpeg...")
+        shutil.copytree(ffmpeg_dir, temp_dir / "ffmpeg")
+        ffmpeg_count = len(list((temp_dir / "ffmpeg").glob("*")))
+        print(f"    Added {ffmpeg_count} ffmpeg files")
     
-    print()
+    # Copy models
+    models_dir = base_dir / "models"
+    if models_dir.exists() and any(models_dir.iterdir()):
+        print("  Including models...")
+        shutil.copytree(models_dir, temp_dir / "models")
+        model_count = len(list((temp_dir / "models").glob("*.pt")))
+        print(f"    Added {model_count} models")
+    
+    installer_py = str(builder_dir / "installer_console.py")
+    
+    cmd = [
+        sys.executable, "-m", "PyInstaller",
+        f"--name={APP_NAME}_Installer_v{APP_VERSION}",
+        "--onefile",
+        f"--add-data={temp_dir / f'{APP_NAME}.exe'}{os.pathsep}.",
+        f"--add-data={temp_dir / 'NotYCaptionGenAI_Uninstaller.exe'}{os.pathsep}.",
+        f"--add-data={temp_dir / 'resources'}{os.pathsep}resources",
+        "--hidden-import=ctypes",
+        "--hidden-import=subprocess",
+        "--hidden-import=shutil",
+        "--hidden-import=pathlib",
+        "--hidden-import=platform",
+        "--hidden-import=tkinter",
+        "--hidden-import=tkinter.filedialog",
+        "--hidden-import=tkinter.messagebox",
+        "--hidden-import=tempfile",
+        "--hidden-import=winreg",
+        "--hidden-import=sqlite3",
+        "--hidden-import=yt_dlp",
+        "--console",
+        "--noconfirm",
+        "--clean",
+        installer_py
+    ]
+    
+    # Add ffmpeg if exists
+    if (temp_dir / "ffmpeg").exists():
+        cmd.insert(4, f"--add-data={temp_dir / 'ffmpeg'}{os.pathsep}ffmpeg")
+    
+    # Add models if exists
+    if (temp_dir / "models").exists():
+        cmd.insert(4, f"--add-data={temp_dir / 'models'}{os.pathsep}models")
+    
+    # Add icon
+    icon_path = temp_dir / "resources" / "app.ico"
+    if icon_path.exists():
+        cmd.insert(4, f"--icon={icon_path}")
+    
+    installer_build_dir = temp_dir / "installer_build"
+    installer_build_dir.mkdir(exist_ok=True)
     
     try:
-        # Remove installation directory
-        print_info("Removing application files...")
-        shutil.rmtree(install_path, ignore_errors=True)
-        print_success("Application files removed")
-        
-        # Remove shortcuts
-        print_info("Removing shortcuts...")
-        shortcuts = [
-            Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "NotYCaptionGenAI.lnk",
-            Path(os.environ["USERPROFILE"]) / "Desktop" / "NotYCaptionGenAI.lnk",
-            Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo" / "NotYCaptionGenAI.lnk"
-        ]
-        for shortcut in shortcuts:
-            if shortcut.exists():
-                shortcut.unlink()
-                print(f"  Removed: {shortcut.name}")
-        print_success("Shortcuts removed")
-        
-        # Remove registry entries
-        print_info("Removing registry entries...")
-        remove_registry()
-        
-        print()
-        print_success("Uninstallation complete!")
-        print_info(f"{APP_NAME} has been removed from your computer.")
-        
-        # Self-delete
-        if getattr(sys, 'frozen', False):
-            uninstaller_path = Path(sys.executable)
-            print_info("The uninstaller will now delete itself...")
-            time.sleep(2)
-            
-            bat_path = Path(os.environ["TEMP"]) / f"delete_uninstaller_{int(time.time())}.bat"
-            bat_content = f'''@echo off
-timeout /t 2 /nobreak >nul
-del "{uninstaller_path}" 2>nul
-del "%~f0" 2>nul
-exit
-'''
-            with open(bat_path, 'w') as f:
-                f.write(bat_content)
-            
-            subprocess.Popen([str(bat_path)], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            return True
-        
+        subprocess.run(cmd, cwd=str(installer_build_dir), check=True, timeout=600)
+        print("\n[OK] Installer built successfully!")
+    except subprocess.TimeoutExpired:
+        print("\n[ERROR] Installer build timed out!")
+        sys.exit(1)
     except Exception as e:
-        print_error(f"Uninstallation failed: {e}")
-        return False
+        print(f"\n[ERROR] Installer build failed: {e}")
+        sys.exit(1)
+    
+    installer_exe = installer_build_dir / "dist" / f"{APP_NAME}_Installer_v{APP_VERSION}.exe"
+    if installer_exe.exists():
+        final_installer = base_dir / INSTALLER_NAME
+        shutil.copy2(installer_exe, final_installer)
+        size = final_installer.stat().st_size / 1024 / 1024
+        print(f"\n[OK] Installer created: {final_installer} ({size:.2f} MB)")
+    else:
+        print("\n[ERROR] Installer not found!")
+        sys.exit(1)
+    
+    # Clean up
+    shutil.rmtree(temp_dir, ignore_errors=True)
+    shutil.rmtree(temp_build_dir, ignore_errors=True)
+    shutil.rmtree(builder_dir / "build", ignore_errors=True)
+    
+    print("\n" + "=" * 60)
+    print("Build complete!")
+    print(f"Installer: {base_dir / INSTALLER_NAME}")
+    print("\nThe installer will:")
+    print("  - Install the main executable")
+    print("  - Install the uninstaller")
+    print("  - Copy ffmpeg, resources, and models")
+    print("  - Create Desktop and Start Menu shortcuts")
+    print("  - Add to Send To menu")
+    print("  - Register in Windows Add/Remove Programs")
+    print("=" * 60)
 
 if __name__ == "__main__":
-    success = uninstall()
-    
-    if success:
-        print_success("\nUninstallation completed successfully!")
-    else:
-        print_error("\nUninstallation failed!")
-    
-    input("\nPress Enter to exit...")
+    build_all()

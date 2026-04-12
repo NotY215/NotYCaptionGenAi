@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NotY Caption Generator AI Installer v5.2 (Console)
+NotY Caption Generator AI Installer v6.1 (Console)
 Copyright (c) 2026 NotY215
 """
 
@@ -20,7 +20,7 @@ import winreg
 
 # Application metadata
 APP_NAME = "NotY Caption Generator AI"
-APP_VERSION = "5.2"
+APP_VERSION = "6.1"
 APP_AUTHOR = "NotY215"
 APP_YEAR = "2026"
 MAIN_EXE = "NotYCaptionGenAI.exe"

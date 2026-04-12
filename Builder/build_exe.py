@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build NotY Caption Generator AI Executable v5.2 - PyInstaller Fixed
+Build NotY Caption Generator AI Executable v6.1 - PyInstaller Fixed
 Copyright (c) 2026 NotY215
 """
 
@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 
 APP_NAME = "NotYCaptionGenAI"
-APP_VERSION = "5.2"
+APP_VERSION = "6.1"
 APP_AUTHOR = "NotY215"
 
 def build_exe():

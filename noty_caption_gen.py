@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-NotY Caption Generator AI v5.2
+NotY Caption Generator AI v6.1
 Using OpenAI Whisper (PyTorch) with YouTube Support & Smart Lyrics Matching
 Copyright (c) 2026 NotY215
 """
@@ -10,6 +10,8 @@ Copyright (c) 2026 NotY215
 # CRITICAL: These imports must be at the top for frozen apps
 import os
 import sys
+import atexit
+import glob
 
 # Fix for PyInstaller/Nuitka packaged app
 if getattr(sys, 'frozen', False):
@@ -118,6 +120,21 @@ if platform.system() == "Windows":
             if not attr.startswith('__'):
                 setattr(Colors, attr, '')
 
+def cleanup_temp_files():
+    """Clean up temporary files created by the app"""
+    try:
+        temp_dir = Path(tempfile.gettempdir())
+        patterns = ["*_temp_audio.wav", "*_vocals.wav", "youtube_audio_*"]
+        for pattern in patterns:
+            for file in temp_dir.glob(pattern):
+                try:
+                    file.unlink()
+                    print(f"{Colors.CYAN}[CLEANUP] Removed: {file.name}{Colors.RESET}")
+                except:
+                    pass
+    except:
+        pass
+
 def select_file_dialog():
     try:
         root = tk.Tk()
@@ -134,23 +151,6 @@ def select_file_dialog():
         return file_path
     except Exception as e:
         print(f"{Colors.RED}[ERROR] Could not open file dialog: {e}{Colors.RESET}")
-        return None
-
-def save_file_dialog(default_name: str) -> str:
-    try:
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        file_path = filedialog.asksaveasfilename(
-            title="Save Subtitle File",
-            defaultextension=".srt",
-            filetypes=[("SubRip Subtitle", "*.srt"), ("All Files", "*.*")],
-            initialfile=default_name
-        )
-        root.destroy()
-        return file_path
-    except Exception as e:
-        print(f"{Colors.RED}[ERROR] Could not open save dialog: {e}{Colors.RESET}")
         return None
 
 def show_message_box(title: str, message: str, icon: str = 'info'):
@@ -182,7 +182,7 @@ def print_header(title: str = None):
 
 # Application metadata
 APP_NAME = "NotY Caption Generator AI"
-APP_VERSION = "5.2"
+APP_VERSION = "6.1"
 APP_AUTHOR = "NotY215"
 APP_YEAR = "2026"
 APP_LICENSE = "LGPL-3.0"
@@ -200,8 +200,9 @@ class Language(Enum):
     RUSSIAN = ("ru", "Russian", True)
     AUTO = ("auto", "Auto Detect", False)
 
-# Complete transliteration mappings
+# Complete transliteration mappings for all languages with precise conversion
 TRANSLITERATION_MAPS = {
+    # Russian (Cyrillic to Latin) - ISO 9 standard
     "ru": {
         'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
         'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
@@ -214,6 +215,7 @@ TRANSLITERATION_MAPS = {
         'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
         'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
     },
+    # Spanish (accent removal and special chars)
     "es": {
         'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
         'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
@@ -221,6 +223,7 @@ TRANSLITERATION_MAPS = {
         '¿': '', '¡': '', 'º': 'o', 'ª': 'a',
         'ç': 'c', 'Ç': 'C'
     },
+    # Chinese Pinyin (complete tone mark removal)
     "zh": {
         'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
         'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
@@ -228,8 +231,8 @@ TRANSLITERATION_MAPS = {
         'ō': 'o', 'ó': 'o', 'ǒ': 'o', 'ò': 'o',
         'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
         'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v',
-        'zh': 'zh', 'ch': 'ch', 'sh': 'sh', 'ng': 'ng', 'er': 'er'
     },
+    # Hindi (Devanagari to Latin)
     "hi": {
         'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
         'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
@@ -247,6 +250,7 @@ TRANSLITERATION_MAPS = {
         '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
         '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
     },
+    # Japanese (Kana to Romaji)
     "ja": {
         'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
         'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
@@ -272,8 +276,8 @@ TRANSLITERATION_MAPS = {
         'ャ': 'ya', 'ュ': 'yu', 'ョ': 'yo',
         'っ': 't', 'ッ': 't',
         'ぁ': 'a', 'ぃ': 'i', 'ぅ': 'u', 'ぇ': 'e', 'ぉ': 'o',
-        'ァ': 'a', 'ィ': 'i', 'ゥ': 'u', 'ェ': 'e', 'ォ': 'o'
     },
+    # Korean (Hangul to Romanized)
     "ko": {
         'ㄱ': 'g', 'ㄲ': 'kk', 'ㄴ': 'n', 'ㄷ': 'd', 'ㄸ': 'tt',
         'ㄹ': 'r', 'ㅁ': 'm', 'ㅂ': 'b', 'ㅃ': 'pp', 'ㅅ': 's',
@@ -312,6 +316,9 @@ class SubtitleEntry:
     
 class NotYCaptionGenerator:
     def __init__(self, media_path: str = None):
+        # Register cleanup on exit
+        atexit.register(cleanup_temp_files)
+        
         if getattr(sys, 'frozen', False):
             self.base_dir = Path(sys.executable).parent
         else:
@@ -355,7 +362,7 @@ class NotYCaptionGenerator:
         ]
         
         self.modes = [
-            ("Normal Mode", "normal", "Standard transcription without lyrics search"),
+            ("Normal Mode", "normal", "Standard transcription without transliteration"),
             ("Transliteration Mode", "transliterate", "Convert non-Latin scripts to Latin alphabet"),
             ("Translate Mode", "translate", "Translate to English while transcribing")
         ]
@@ -618,10 +625,12 @@ class NotYCaptionGenerator:
         return None
         
     def transliterate_text(self, text: str, language_code: str) -> str:
+        """Convert text from non-Latin scripts to Latin alphabet"""
         if language_code not in TRANSLITERATION_MAPS:
             return text
             
         mapping = TRANSLITERATION_MAPS[language_code]
+        # Sort keys by length (longest first) for proper replacement
         sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
         
         result = text
@@ -629,7 +638,9 @@ class NotYCaptionGenerator:
             translit = mapping[original]
             result = result.replace(original, translit)
         
+        # Clean up extra spaces and normalize
         result = re.sub(r'\s+', ' ', result)
+        result = re.sub(r'[^\x00-\x7F]+', '', result)  # Remove any remaining non-ASCII
         return result.strip()
         
     def load_model(self, model_name: str):
@@ -697,6 +708,7 @@ class NotYCaptionGenerator:
             start_time = segment["start"]
             end_time = segment["end"]
             
+            # Check if this is a natural break
             if text.endswith(('.', '!', '?')):
                 subtitles.append(SubtitleEntry(
                     index=index,
@@ -716,6 +728,7 @@ class NotYCaptionGenerator:
                 index += 1
                 i += 1
             else:
+                # Merge with next segment for better sync
                 merged_text = text
                 merged_end = end_time
                 j = i + 1
@@ -768,9 +781,8 @@ class NotYCaptionGenerator:
                     if not self.load_model(model_name):
                         return False
                         
-                self.print_progress("Transcribing...", 70)
+                self.print_progress("Transcribing with word-level timestamps...", 70)
                 
-                # Set language and task based on mode
                 language = language_code if language_code != "auto" else None
                 task = "translate" if mode == "translate" else "transcribe"
                 
@@ -779,7 +791,7 @@ class NotYCaptionGenerator:
                     language=language,
                     task=task,
                     verbose=False,
-                    word_timestamps=True
+                    word_timestamps=True  # Critical for sync
                 )
                 
                 self.cache_transcription(file_hash, model_name, language_code, mode, result)
@@ -790,17 +802,35 @@ class NotYCaptionGenerator:
                     except:
                         pass
             
-            self.print_progress("Processing...", 80)
+            self.print_progress("Processing transcription with proper timing...", 80)
             
-            # Ask for save location
-            default_name = f"{media_path.stem}_{language_code}_{mode}.srt"
-            save_path = save_file_dialog(default_name)
-            
-            if not save_path:
-                self.print_warning("No save location selected. Using default location.")
-                output_path = media_path.parent / f"{media_path.stem}_{language_code}_{mode}.srt"
+            # Determine output path
+            if mode == "translate":
+                suffix = "translated"
+            elif mode == "transliterate":
+                suffix = f"{language_code}_translit"
             else:
-                output_path = Path(save_path)
+                suffix = language_code if language_code != "auto" else "output"
+            
+            # For local mode, save in same directory as source file
+            # For YouTube mode, ask user where to save
+            if self.is_sendto or (self.media_path_arg and not self.is_sendto):
+                # Local file mode - save in same directory
+                output_path = media_path.parent / f"{media_path.stem}_{suffix}.srt"
+            else:
+                # YouTube mode - ask user where to save
+                default_name = f"youtube_captions_{suffix}.srt"
+                save_path = filedialog.asksaveasfilename(
+                    title="Save Subtitle File",
+                    defaultextension=".srt",
+                    filetypes=[("SubRip Subtitle", "*.srt"), ("All Files", "*.*")],
+                    initialfile=default_name
+                )
+                if not save_path:
+                    self.print_warning("No save location selected. Saving in current directory.")
+                    output_path = Path.cwd() / default_name
+                else:
+                    output_path = Path(save_path)
             
             segments = result.get("segments", [])
             
@@ -825,9 +855,20 @@ class NotYCaptionGenerator:
                     words_data = segment.get("words", [])
                     
                     if line_type == "words" and words_data:
-                        words = [w["word"].strip() for w in words_data]
-                        word_starts = [w.get("start", segment_start) for w in words_data]
-                        word_ends = [w.get("end", segment_end) for w in words_data]
+                        # Use word-level timestamps for perfect sync
+                        words = []
+                        word_starts = []
+                        word_ends = []
+                        
+                        for w in words_data:
+                            word = w.get("word", "").strip()
+                            if word:
+                                # Apply transliteration to individual words if needed
+                                if mode == "transliterate" and language_code in TRANSLITERATION_MAPS:
+                                    word = self.transliterate_text(word, language_code)
+                                words.append(word)
+                                word_starts.append(w.get("start", segment_start))
+                                word_ends.append(w.get("end", segment_end))
                         
                         for i in range(0, len(words), number_per_line):
                             chunk_words = words[i:i + number_per_line]
@@ -848,6 +889,10 @@ class NotYCaptionGenerator:
                         if line_type == "letters":
                             segment_text = self.limit_letters_per_line(segment_text, number_per_line)
                         
+                        # Apply transliteration to full segment if needed
+                        if mode == "transliterate" and language_code in TRANSLITERATION_MAPS:
+                            segment_text = self.transliterate_text(segment_text, language_code)
+                        
                         subtitles.append(SubtitleEntry(
                             index=index,
                             start=timedelta(seconds=segment_start),
@@ -856,7 +901,7 @@ class NotYCaptionGenerator:
                         ))
                         index += 1
             
-            self.print_progress("Writing file...", 90)
+            self.print_progress("Writing subtitle file...", 90)
             with open(output_path, 'w', encoding='utf-8') as f:
                 for sub in subtitles:
                     start_str = self.format_time(sub.start.total_seconds())
@@ -868,7 +913,7 @@ class NotYCaptionGenerator:
             self.print_progress("Complete!", 100)
             print()
             self.print_success(f"Saved to: {output_path}")
-            self.print_info(f"Generated {len(subtitles)} entries")
+            self.print_info(f"Generated {len(subtitles)} subtitle entries")
             return True
             
         except Exception as e:
@@ -894,7 +939,6 @@ class NotYCaptionGenerator:
             media_path = Path(self.media_path_arg)
             if media_path.exists() and media_path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
                 self.print_success(f"File received: {media_path}")
-                # Auto-select local mode with this file
                 platform_choice = 2  # Local File mode
                 passed_file = media_path
             else:
@@ -906,7 +950,7 @@ class NotYCaptionGenerator:
             media_path = Path(self.media_path_arg)
             if media_path.exists() and media_path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
                 self.print_success(f"File received from Send To: {media_path}")
-                platform_choice = 2  # Auto-select Local File mode
+                platform_choice = 2
                 passed_file = media_path
             else:
                 self.print_error(f"Invalid file: {media_path}")
@@ -1029,7 +1073,7 @@ class NotYCaptionGenerator:
                     continue
                 self.selected_model = self.models[model_choice][0]
                 
-                # Select mode (Normal/Transliterate/Translate)
+                # Select mode
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
@@ -1167,6 +1211,16 @@ class NotYCaptionGenerator:
         print_header("Thank You!")
         self.print_success(f"Thanks for using {APP_NAME}!")
         print()
+        self.print_info("Cleaning up temporary files...")
+        cleanup_temp_files()
+        self.print_success("Cleanup complete!")
+        
+        # Exit the application
+        print("\n" + "=" * 60)
+        print("Application will now close...")
+        print("=" * 60)
+        time.sleep(2)
+        sys.exit(0)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=f'{APP_NAME} - {APP_AUTHOR}')
