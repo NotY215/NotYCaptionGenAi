@@ -4,6 +4,7 @@
 """
 NotY Caption Generator AI v6.1
 Using OpenAI Whisper (PyTorch) with YouTube Support & Smart Lyrics Matching
+Professional Vocal Separation with Demucs
 Copyright (c) 2026 NotY215
 """
 
@@ -90,13 +91,6 @@ try:
 except ImportError:
     YTDLP_AVAILABLE = False
     yt_dlp = None
-
-# Try to import demucs for vocal separation
-try:
-    from demucs import separate
-    DEMUCS_AVAILABLE = True
-except ImportError:
-    DEMUCS_AVAILABLE = False
 
 # ANSI color codes
 class Colors:
@@ -224,7 +218,7 @@ class Language(Enum):
     RUSSIAN = ("ru", "Russian", True)
     AUTO = ("auto", "Auto Detect", False)
 
-# COMPLETE HINDI TRANSLITERATION (Devanagari to Hinglish) - FIXED
+# COMPLETE HINDI TRANSLITERATION (Devanagari to Hinglish)
 HINDI_TRANSLIT = {
     # Vowels (Swar)
     'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
@@ -240,7 +234,7 @@ HINDI_TRANSLIT = {
     'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha',
     'ष': 'sha', 'स': 'sa', 'ह': 'ha',
     
-    # Compound Consonants (Sanyukt Vyanjan)
+    # Compound Consonants
     'क्ष': 'ksha', 'त्र': 'tra', 'ज्ञ': 'gya', 'श्र': 'shra',
     'द्य': 'dya', 'द्व': 'dva', 'ह्म': 'hma', 'ह्न': 'hna',
     'ह्य': 'hya', 'ह्व': 'hva', 'ल्ल': 'lla', 'ल्य': 'lya',
@@ -249,18 +243,18 @@ HINDI_TRANSLIT = {
     'प्ल': 'pla', 'प्र': 'pra', 'प्य': 'pya', 'ब्ज': 'bja',
     'ब्द': 'bda', 'ब्र': 'bra', 'ब्य': 'bya', 'भ्र': 'bhra',
     'म्ब': 'mba', 'म्भ': 'mbha', 'न्द': 'nda', 'न्ध': 'ndha',
-    'न्न': 'nna', 'म्प': 'mpa', 'म्फ': 'mpha', 'न्त': 'nta',
-    'न्थ': 'ntha', 'न्द': 'nda', 'न्ध': 'ndha', 'न्न': 'nna',
-    'प्स': 'psa', 'प्ल': 'pla', 'ष्ण': 'shna', 'ष्प': 'shpa',
-    'ष्म': 'shma', 'स्य': 'sya', 'स्ख': 'skha', 'स्न': 'sna',
-    'स्प': 'spa', 'स्फ': 'spha', 'स्म': 'sma', 'स्य': 'sya',
-    'स्र': 'sra', 'स्व': 'sva', 'ह्ण': 'hna', 'ह्न': 'hna',
-    'ह्म': 'hma', 'ह्य': 'hya', 'ह्र': 'hra', 'ह्व': 'hva',
+    'म्प': 'mpa', 'म्फ': 'mpha', 'न्त': 'nta', 'न्थ': 'ntha',
+    'न्द': 'nda', 'न्ध': 'ndha', 'न्न': 'nna', 'प्स': 'psa',
+    'प्ल': 'pla', 'ष्ण': 'shna', 'ष्प': 'shpa', 'ष्म': 'shma',
+    'स्य': 'sya', 'स्ख': 'skha', 'स्न': 'sna', 'स्प': 'spa',
+    'स्फ': 'spha', 'स्म': 'sma', 'स्य': 'sya', 'स्र': 'sra',
+    'स्व': 'sva', 'ह्ण': 'hna', 'ह्न': 'hna', 'ह्म': 'hma',
+    'ह्य': 'hya', 'ह्र': 'hra', 'ह्व': 'hva',
     
     # Vowel signs (Matras)
     'ा': 'aa', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
     'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h',
-    '्': '',  # Halant (virama) - removes the inherent 'a'
+    '्': '',
     
     # Numbers
     '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
@@ -273,16 +267,12 @@ HINDI_WORD_MAP = {
     'से': 'se', 'में': 'mein', 'का': 'ka', 'की': 'ki', 'के': 'ke',
     'यह': 'yah', 'वह': 'vah', 'तो': 'to', 'भी': 'bhi', 'एक': 'ek',
     'पर': 'par', 'हो': 'ho', 'था': 'tha', 'थी': 'thi', 'थे': 'the',
-    'था': 'tha', 'थी': 'thi', 'थे': 'the', 'हूं': 'hun', 'हो': 'ho',
-    'हैं': 'hain', 'था': 'tha', 'थी': 'thi', 'थे': 'the', 'थीं': 'thin',
-    'कर': 'kar', 'किया': 'kiya', 'की': 'ki', 'के': 'ke', 'को': 'ko',
-    'ने': 'ne', 'में': 'mein', 'पर': 'par', 'से': 'se', 'तक': 'tak',
-    'लिए': 'liye', 'वाला': 'wala', 'वाले': 'wale', 'वाली': 'wali',
+    'हूं': 'hun', 'हैं': 'hain', 'कर': 'kar', 'किया': 'kiya', 'दिया': 'diya',
+    'लिया': 'liya', 'गया': 'gaya', 'जा': 'ja', 'जाता': 'jata', 'जाती': 'jati',
+    'जाते': 'jate', 'रहा': 'raha', 'रही': 'rahi', 'रहे': 'rahe',
     'सकता': 'sakta', 'सकती': 'sakti', 'सकते': 'sakte', 'चाहिए': 'chahiye',
-    'पड़ता': 'padta', 'पड़ती': 'padti', 'पड़ते': 'padte', 'रहा': 'raha',
-    'रही': 'rahi', 'रहे': 'rahe', 'दिया': 'diya', 'दी': 'di', 'दिए': 'diye',
-    'लिया': 'liya', 'ली': 'li', 'लिए': 'liye', 'गया': 'gaya', 'गई': 'gayi',
-    'गए': 'gaye', 'जा': 'ja', 'जाता': 'jata', 'जाती': 'jati', 'जाते': 'jate',
+    'पड़ता': 'padta', 'पड़ती': 'padti', 'पड़ते': 'padte', 'वाला': 'wala',
+    'वाले': 'wale', 'वाली': 'wali', 'ने': 'ne', 'तक': 'tak', 'लिए': 'liye',
 }
 
 # Complete Russian Transliteration
@@ -406,12 +396,22 @@ WHISPER_MODELS = {
     "large": {"size": "2.9 GB", "desc": "Best"}
 }
 
-# Demucs models for vocal separation
+# Demucs models for vocal separation (better than Spleeter)
 DEMUCS_MODELS = {
-    "htdemucs": "Hybrid Transformer Demucs (Best quality)",
+    "htdemucs": "Hybrid Transformer Demucs (Best quality, recommended)",
     "htdemucs_ft": "Fine-tuned Hybrid Transformer Demucs",
-    "mdx": "MDX-Net architecture",
+    "mdx": "MDX-Net architecture (Faster)",
     "mdx_extra": "MDX-Net extra (Better quality, slower)",
+    "demucs": "Original Demucs model",
+    "demucs48": "Demucs 48kHz model",
+}
+
+# Vocal separation quality presets
+VOCAL_QUALITY = {
+    "Low": {"model": "mdx", "shift": False, "overlap": 0.25, "description": "Fast, lower quality"},
+    "Medium": {"model": "htdemucs", "shift": False, "overlap": 0.5, "description": "Balanced speed/quality"},
+    "High": {"model": "htdemucs", "shift": True, "overlap": 0.75, "description": "Slow, best quality"},
+    "Ultra": {"model": "mdx_extra", "shift": True, "overlap": 0.75, "description": "Very slow, maximum quality"},
 }
 
 # Supported file extensions
@@ -487,9 +487,10 @@ class NotYCaptionGenerator:
             ("Auto", "auto", "Auto-detect sentence breaks by audio gaps")
         ]
         
-        # Vocal separation option
+        # Vocal separation settings
         self.use_vocal_separation = False
-        self.demucs_model = "htdemucs"
+        self.vocal_quality = "High"  # Low, Medium, High, Ultra
+        self.selected_model_name = "htdemucs"
         
         self.selected_model = None
         self.selected_language = None
@@ -738,43 +739,85 @@ class NotYCaptionGenerator:
         return None
         
     def separate_vocals_demucs(self, audio_path: Path) -> Tuple[Optional[Path], Optional[Path]]:
-        """Separate vocals using Demucs for higher quality"""
-        if not DEMUCS_AVAILABLE:
-            self.print_warning("Demucs not available. Install: pip install demucs")
-            return None, None
-            
-        self.print_progress("Separating vocals with Demucs (high quality)...", 30)
+        """Separate vocals using Demucs with professional quality settings"""
+        self.print_progress(f"Separating vocals with Demucs ({self.vocal_quality} quality)...", 30)
         
         temp_dir = Path(tempfile.gettempdir())
         output_dir = temp_dir / f"demucs_separated_{int(time.time())}"
         
+        quality_settings = VOCAL_QUALITY[self.vocal_quality]
+        model = quality_settings["model"]
+        shifts = "--shifts 1" if quality_settings["shift"] else ""
+        overlap = f"--overlap {quality_settings['overlap']}"
+        
         try:
-            # Run demucs separation
+            # Run demucs separation with optimized settings
             cmd = [
                 sys.executable, "-m", "demucs",
                 "--two-stems", "vocals",
-                "-n", self.demucs_model,
+                "-n", model,
+                shifts,
+                overlap,
+                "--clip-mode", "rescale",
+                "--float32",
                 "-o", str(output_dir),
                 str(audio_path)
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            # Remove empty strings
+            cmd = [c for c in cmd if c]
+            
+            self.print_info(f"Using Demucs model: {model}")
+            
+            # Calculate timeout based on audio length and quality
+            audio_size = audio_path.stat().st_size / (1024 * 1024)  # Size in MB
+            timeout = max(600, int(audio_size * 2))  # At least 10 minutes
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
             
             if result.returncode == 0:
                 # Find the separated files
+                vocals_path = None
+                no_vocals_path = None
+                
+                # Look for separated stems
                 for file in output_dir.rglob("*.wav"):
                     if "vocals" in file.name.lower():
                         vocals_path = file
                     elif "no_vocals" in file.name.lower() or "accompaniment" in file.name.lower():
                         no_vocals_path = file
                 
-                # Also look for standard demucs output structure
+                # Also check for standard demucs output structure
                 if not vocals_path:
                     for file in output_dir.rglob("*"):
-                        if "vocals.wav" in str(file):
+                        if file.name == "vocals.wav":
                             vocals_path = file
-                        elif "no_vocals.wav" in str(file) or "drums.wav" in str(file):
-                            no_vocals_path = file
+                        elif file.name in ["no_vocals.wav", "accompaniment.wav", "bass.wav", "drums.wav", "other.wav"]:
+                            if not no_vocals_path:
+                                no_vocals_path = file
+                
+                # If we only have vocals, create no_vocals by combining other stems
+                if vocals_path and not no_vocals_path:
+                    # Find all non-vocal stems
+                    other_stems = []
+                    for file in output_dir.rglob("*.wav"):
+                        if file != vocals_path and "vocals" not in file.name.lower():
+                            other_stems.append(file)
+                    
+                    if other_stems:
+                        # Combine other stems into no_vocals using ffmpeg
+                        no_vocals_path = temp_dir / f"{audio_path.stem}_no_vocals.wav"
+                        ffmpeg_cmd = [str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg']
+                        
+                        # Add all input files
+                        for stem in other_stems:
+                            ffmpeg_cmd.extend(['-i', str(stem)])
+                        
+                        # Mix them together
+                        filter_complex = f"amix=inputs={len(other_stems)}:duration=longest"
+                        ffmpeg_cmd.extend(['-filter_complex', filter_complex, '-y', str(no_vocals_path)])
+                        
+                        subprocess.run(ffmpeg_cmd, capture_output=True, timeout=300)
                 
                 self.print_progress("Vocal separation complete", 40)
                 
@@ -783,7 +826,8 @@ class NotYCaptionGenerator:
                 final_no_vocals = temp_dir / f"{audio_path.stem}_no_vocals.wav"
                 
                 if vocals_path and vocals_path.exists():
-                    shutil.copy2(vocals_path, final_vocals)
+                    # Apply post-processing to enhance vocals
+                    self.enhance_vocals(vocals_path, final_vocals)
                 if no_vocals_path and no_vocals_path.exists():
                     shutil.copy2(no_vocals_path, final_no_vocals)
                 
@@ -792,19 +836,36 @@ class NotYCaptionGenerator:
                 
                 return final_vocals if final_vocals.exists() else None, final_no_vocals if final_no_vocals.exists() else None
             else:
-                self.print_warning(f"Demucs separation failed: {result.stderr}")
+                self.print_warning(f"Demucs separation failed: {result.stderr[:200]}")
                 return None, None
                 
         except subprocess.TimeoutExpired:
-            self.print_warning("Demucs separation timed out")
+            self.print_warning(f"Demucs separation timed out after {timeout} seconds")
             return None, None
         except Exception as e:
             self.print_warning(f"Demucs error: {e}")
             return None, None
             
+    def enhance_vocals(self, input_path: Path, output_path: Path):
+        """Enhance vocals with post-processing for better clarity"""
+        ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
+        
+        # Apply vocal enhancement filters
+        cmd = [
+            ffmpeg_cmd, '-i', str(input_path),
+            '-af', 'highpass=f=80, lowpass=f=12000, volume=1.5, aemphasis=0.5, compand=attacks=0.1:decays=0.2:points=-80/-80|-30/-10|-20/-5|0/0',
+            '-y',
+            str(output_path)
+        ]
+        
+        try:
+            subprocess.run(cmd, capture_output=True, timeout=120)
+        except:
+            shutil.copy2(input_path, output_path)
+            
     def separate_vocals_ffmpeg(self, audio_path: Path) -> Optional[Path]:
         """Fallback vocal separation using FFmpeg filters"""
-        self.print_progress("Isolating vocals with FFmpeg...", 35)
+        self.print_progress("Isolating vocals with FFmpeg (fallback)...", 35)
         
         temp_dir = Path(tempfile.gettempdir())
         vocal_path = temp_dir / f"{audio_path.stem}_vocals.wav"
@@ -814,7 +875,7 @@ class NotYCaptionGenerator:
         # Enhanced vocal isolation using multiple filters
         cmd = [
             ffmpeg_cmd, '-i', str(audio_path),
-            '-af', 'highpass=f=100, lowpass=f=8000, volume=1.5, aemphasis=0.1',
+            '-af', 'highpass=f=100, lowpass=f=8000, volume=1.5, aemphasis=0.5, compand=attacks=0.1:decays=0.2:points=-80/-80|-30/-15|-20/-5|0/0',
             '-y',
             str(vocal_path)
         ]
@@ -989,11 +1050,11 @@ class NotYCaptionGenerator:
                 
                 # Apply vocal separation if enabled
                 if self.use_vocal_separation:
-                    self.print_info("Using Demucs for high-quality vocal separation...")
+                    self.print_info("Using Demucs for professional vocal separation...")
                     vocals_path, no_vocals_path = self.separate_vocals_demucs(audio_path)
                     if vocals_path and vocals_path.exists():
                         audio_path = vocals_path
-                        self.print_success("Using isolated vocals for better transcription")
+                        self.print_success("Using isolated vocals for better transcription accuracy")
                     else:
                         self.print_warning("Demucs separation failed, falling back to FFmpeg...")
                         vocals_path = self.separate_vocals_ffmpeg(audio_path)
@@ -1154,12 +1215,6 @@ class NotYCaptionGenerator:
             input("\nPress Enter to exit...")
             return
             
-        # Check if Demucs is available for vocal separation
-        if DEMUCS_AVAILABLE:
-            self.print_success("Demucs available for high-quality vocal separation")
-        else:
-            self.print_warning("Demucs not available. Install with: pip install demucs")
-            
         # Check if file was sent via Send To
         if self.media_path_arg and not self.is_sendto:
             media_path = Path(self.media_path_arg)
@@ -1281,29 +1336,29 @@ class NotYCaptionGenerator:
                 
                 self.print_success(f"Source: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}")
                 
-                # Ask for vocal separation preference (if Demucs available)
-                if DEMUCS_AVAILABLE:
-                    self.clear_screen()
-                    print_header()
-                    print(f"\n{Colors.CYAN}Enable Vocal Separation?{Colors.RESET}")
-                    print(f"  Demucs can isolate vocals for better transcription accuracy")
-                    print(f"  This may increase processing time but improves quality")
-                    print()
-                    print(f"  1) Yes - Use Demucs vocal separation")
-                    print(f"  2) No - Process original audio")
-                    
-                    vocal_choice = self.get_number_input("\nChoose option (1-2): ", 1, 2)
-                    self.use_vocal_separation = (vocal_choice == 1)
-                    
-                    if self.use_vocal_separation:
-                        # Ask for Demucs model
-                        print(f"\n{Colors.CYAN}Select Demucs Model:{Colors.RESET}")
-                        model_options = [f"{k} - {v}" for k, v in DEMUCS_MODELS.items()]
-                        for i, opt in enumerate(model_options, 1):
-                            print(f"  {i}) {opt}")
-                        model_choice = self.get_number_input(f"\nChoose model (1-{len(model_options)}): ", 1, len(model_options))
-                        self.demucs_model = list(DEMUCS_MODELS.keys())[model_choice - 1]
-                        self.print_info(f"Using Demucs model: {self.demucs_model}")
+                # Ask for vocal separation preference
+                self.clear_screen()
+                print_header()
+                print(f"\n{Colors.CYAN}{Colors.BOLD}VOCAL SEPARATION OPTIONS{Colors.RESET}")
+                print(f"  Demucs can isolate vocals for better transcription accuracy")
+                print(f"  Higher quality = better separation but slower processing")
+                print()
+                print(f"  1) No vocal separation (fastest)")
+                print(f"  2) Low quality (fast)")
+                print(f"  3) Medium quality (balanced)")
+                print(f"  4) High quality (recommended)")
+                print(f"  5) Ultra quality (best but slow)")
+                
+                vocal_choice = self.get_number_input("\nChoose option (1-5): ", 1, 5)
+                
+                if vocal_choice == 1:
+                    self.use_vocal_separation = False
+                    self.print_info("Vocal separation disabled")
+                else:
+                    self.use_vocal_separation = True
+                    quality_map = {2: "Low", 3: "Medium", 4: "High", 5: "Ultra"}
+                    self.vocal_quality = quality_map[vocal_choice]
+                    self.print_info(f"Vocal separation enabled with {self.vocal_quality} quality")
                 
                 # Select model
                 self.clear_screen()
@@ -1394,7 +1449,7 @@ class NotYCaptionGenerator:
                 self.print_box([
                     f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
                     f"File: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}",
-                    f"Vocal Separation: {'Yes (Demucs - ' + self.demucs_model + ')' if self.use_vocal_separation else 'No'}",
+                    f"Vocal Separation: {'Yes (' + self.vocal_quality + ' quality)' if self.use_vocal_separation else 'No'}",
                     f"Model: {self.selected_model.upper()}",
                     f"Mode: {self.selected_mode[0]}",
                     f"Language: {language_name}",
