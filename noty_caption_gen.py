@@ -129,7 +129,6 @@ def cleanup_temp_files():
             for file in temp_dir.glob(pattern):
                 try:
                     file.unlink()
-                    print(f"{Colors.CYAN}[CLEANUP] Removed: {file.name}{Colors.RESET}")
                 except:
                     pass
     except:
@@ -151,6 +150,24 @@ def select_file_dialog():
         return file_path
     except Exception as e:
         print(f"{Colors.RED}[ERROR] Could not open file dialog: {e}{Colors.RESET}")
+        return None
+
+def save_file_dialog(default_name: str) -> str:
+    """Show save dialog for YouTube mode only"""
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        file_path = filedialog.asksaveasfilename(
+            title="Save Subtitle File",
+            defaultextension=".srt",
+            filetypes=[("SubRip Subtitle", "*.srt"), ("All Files", "*.*")],
+            initialfile=default_name
+        )
+        root.destroy()
+        return file_path
+    except Exception as e:
+        print(f"{Colors.RED}[ERROR] Could not open save dialog: {e}{Colors.RESET}")
         return None
 
 def show_message_box(title: str, message: str, icon: str = 'info'):
@@ -200,7 +217,7 @@ class Language(Enum):
     RUSSIAN = ("ru", "Russian", True)
     AUTO = ("auto", "Auto Detect", False)
 
-# Complete transliteration mappings for all languages with precise conversion
+# Complete transliteration mappings - IMPROVED for better accuracy
 TRANSLITERATION_MAPS = {
     # Russian (Cyrillic to Latin) - ISO 9 standard
     "ru": {
@@ -217,13 +234,13 @@ TRANSLITERATION_MAPS = {
     },
     # Spanish (accent removal and special chars)
     "es": {
-        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
-        'ñ': 'ny', 'Ñ': 'Ny', 'ü': 'u', 'Ü': 'U',
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u',
+        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ü': 'U',
+        'ñ': 'n', 'Ñ': 'N',
         '¿': '', '¡': '', 'º': 'o', 'ª': 'a',
         'ç': 'c', 'Ç': 'C'
     },
-    # Chinese Pinyin (complete tone mark removal)
+    # Chinese Pinyin (tone marks to letters)
     "zh": {
         'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
         'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
@@ -232,25 +249,23 @@ TRANSLITERATION_MAPS = {
         'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
         'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v',
     },
-    # Hindi (Devanagari to Latin)
+    # Hindi (Devanagari to Latin) - IMPROVED
     "hi": {
         'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
-        'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
+        'ऋ': 'ri', 'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
         'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
         'च': 'cha', 'छ': 'chha', 'ज': 'ja', 'झ': 'jha', 'ञ': 'nya',
         'ट': 'ta', 'ठ': 'tha', 'ड': 'da', 'ढ': 'dha', 'ण': 'na',
         'त': 'ta', 'थ': 'tha', 'द': 'da', 'ध': 'dha', 'न': 'na',
         'प': 'pa', 'फ': 'pha', 'ब': 'ba', 'भ': 'bha', 'म': 'ma',
-        'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha',
-        'ष': 'sha', 'स': 'sa', 'ह': 'ha', 'क्ष': 'ksha', 'त्र': 'tra',
-        'ज्ञ': 'gya', 'श्र': 'shra',
-        'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
-        'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h',
-        '्': '',
+        'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha', 'ष': 'sha', 'स': 'sa', 'ह': 'ha',
+        'क्ष': 'ksha', 'त्र': 'tra', 'ज्ञ': 'gya', 'श्र': 'shra',
+        'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo', 'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au',
+        'ं': 'n', 'ः': 'h', '्': '',
         '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
         '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
     },
-    # Japanese (Kana to Romaji)
+    # Japanese (Kana to Romaji) - IMPROVED
     "ja": {
         'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
         'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
@@ -262,6 +277,22 @@ TRANSLITERATION_MAPS = {
         'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
         'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
         'わ': 'wa', 'を': 'wo', 'ん': 'n',
+        'が': 'ga', 'ぎ': 'gi', 'ぐ': 'gu', 'げ': 'ge', 'ご': 'go',
+        'ざ': 'za', 'じ': 'ji', 'ず': 'zu', 'ぜ': 'ze', 'ぞ': 'zo',
+        'だ': 'da', 'ぢ': 'ji', 'づ': 'zu', 'で': 'de', 'ど': 'do',
+        'ば': 'ba', 'び': 'bi', 'ぶ': 'bu', 'べ': 'be', 'ぼ': 'bo',
+        'ぱ': 'pa', 'ぴ': 'pi', 'ぷ': 'pu', 'ぺ': 'pe', 'ぽ': 'po',
+        'きゃ': 'kya', 'きゅ': 'kyu', 'きょ': 'kyo',
+        'しゃ': 'sha', 'しゅ': 'shu', 'しょ': 'sho',
+        'ちゃ': 'cha', 'ちゅ': 'chu', 'ちょ': 'cho',
+        'にゃ': 'nya', 'にゅ': 'nyu', 'にょ': 'nyo',
+        'ひゃ': 'hya', 'ひゅ': 'hyu', 'ひょ': 'hyo',
+        'みゃ': 'mya', 'みゅ': 'myu', 'みょ': 'myo',
+        'りゃ': 'rya', 'りゅ': 'ryu', 'りょ': 'ryo',
+        'ぎゃ': 'gya', 'ぎゅ': 'gyu', 'ぎょ': 'gyo',
+        'じゃ': 'ja', 'じゅ': 'ju', 'じょ': 'jo',
+        'びゃ': 'bya', 'びゅ': 'byu', 'びょ': 'byo',
+        'ぴゃ': 'pya', 'ぴゅ': 'pyu', 'ぴょ': 'pyo',
         'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
         'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
         'サ': 'sa', 'シ': 'shi', 'ス': 'su', 'セ': 'se', 'ソ': 'so',
@@ -272,12 +303,25 @@ TRANSLITERATION_MAPS = {
         'ヤ': 'ya', 'ユ': 'yu', 'ヨ': 'yo',
         'ラ': 'ra', 'リ': 'ri', 'ル': 'ru', 'レ': 're', 'ロ': 'ro',
         'ワ': 'wa', 'ヲ': 'wo', 'ン': 'n',
-        'ゃ': 'ya', 'ゅ': 'yu', 'ょ': 'yo',
-        'ャ': 'ya', 'ュ': 'yu', 'ョ': 'yo',
-        'っ': 't', 'ッ': 't',
-        'ぁ': 'a', 'ぃ': 'i', 'ぅ': 'u', 'ぇ': 'e', 'ぉ': 'o',
+        'ガ': 'ga', 'ギ': 'gi', 'グ': 'gu', 'ゲ': 'ge', 'ゴ': 'go',
+        'ザ': 'za', 'ジ': 'ji', 'ズ': 'zu', 'ゼ': 'ze', 'ゾ': 'zo',
+        'ダ': 'da', 'ヂ': 'ji', 'ヅ': 'zu', 'デ': 'de', 'ド': 'do',
+        'バ': 'ba', 'ビ': 'bi', 'ブ': 'bu', 'ベ': 'be', 'ボ': 'bo',
+        'パ': 'pa', 'ピ': 'pi', 'プ': 'pu', 'ペ': 'pe', 'ポ': 'po',
+        'キャ': 'kya', 'キュ': 'kyu', 'キョ': 'kyo',
+        'シャ': 'sha', 'シュ': 'shu', 'ショ': 'sho',
+        'チャ': 'cha', 'チュ': 'chu', 'チョ': 'cho',
+        'ニャ': 'nya', 'ニュ': 'nyu', 'ニョ': 'nyo',
+        'ヒャ': 'hya', 'ヒュ': 'hyu', 'ヒョ': 'hyo',
+        'ミャ': 'mya', 'ミュ': 'myu', 'ミョ': 'myo',
+        'リャ': 'rya', 'リュ': 'ryu', 'リョ': 'ryo',
+        'ギャ': 'gya', 'ギュ': 'gyu', 'ギョ': 'gyo',
+        'ジャ': 'ja', 'ジュ': 'ju', 'ジョ': 'jo',
+        'ビャ': 'bya', 'ビュ': 'byu', 'ビョ': 'byo',
+        'ピャ': 'pya', 'ピュ': 'pyu', 'ピョ': 'pyo',
+        'っ': 't', 'ッ': 't', 'ー': ''
     },
-    # Korean (Hangul to Romanized)
+    # Korean (Hangul to Romanized) - IMPROVED
     "ko": {
         'ㄱ': 'g', 'ㄲ': 'kk', 'ㄴ': 'n', 'ㄷ': 'd', 'ㄸ': 'tt',
         'ㄹ': 'r', 'ㅁ': 'm', 'ㅂ': 'b', 'ㅃ': 'pp', 'ㅅ': 's',
@@ -342,6 +386,7 @@ class NotYCaptionGenerator:
         
         self.init_database()
         
+        # Language mapping for display
         self.languages = [
             (Language.ENGLISH.value[1], Language.ENGLISH.value[0]),
             (Language.HINDI.value[1], Language.HINDI.value[0]),
@@ -566,6 +611,8 @@ class NotYCaptionGenerator:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 video_title = info.get('title', '')
+                # Clean title for filename
+                video_title_clean = re.sub(r'[<>:"/\\|?*]', '', video_title)[:50]
                 self.print_info(f"Video: {video_title}")
                 
                 for f in temp_dir.glob("youtube_audio_*"):
@@ -579,7 +626,7 @@ class NotYCaptionGenerator:
                                 f.unlink()
                                 f = wav_path
                         self.print_success("Download complete!")
-                        return f, video_title
+                        return f, video_title_clean
         except Exception as e:
             self.print_error(f"Download failed: {e}")
         return None, None
@@ -640,8 +687,9 @@ class NotYCaptionGenerator:
         
         # Clean up extra spaces and normalize
         result = re.sub(r'\s+', ' ', result)
-        result = re.sub(r'[^\x00-\x7F]+', '', result)  # Remove any remaining non-ASCII
-        return result.strip()
+        result = result.strip()
+        
+        return result
         
     def load_model(self, model_name: str):
         if not WHISPER_AVAILABLE:
@@ -708,7 +756,6 @@ class NotYCaptionGenerator:
             start_time = segment["start"]
             end_time = segment["end"]
             
-            # Check if this is a natural break
             if text.endswith(('.', '!', '?')):
                 subtitles.append(SubtitleEntry(
                     index=index,
@@ -728,7 +775,6 @@ class NotYCaptionGenerator:
                 index += 1
                 i += 1
             else:
-                # Merge with next segment for better sync
                 merged_text = text
                 merged_end = end_time
                 j = i + 1
@@ -757,7 +803,7 @@ class NotYCaptionGenerator:
         return subtitles
         
     def generate_captions(self, media_path: Path, model_name: str, mode: str, line_type: str, 
-                          number_per_line: int, language_code: str) -> bool:
+                          number_per_line: int, language_code: str, is_youtube: bool = False, video_title: str = None) -> bool:
         try:
             if not WHISPER_AVAILABLE:
                 self.print_error("Whisper not available!")
@@ -791,7 +837,7 @@ class NotYCaptionGenerator:
                     language=language,
                     task=task,
                     verbose=False,
-                    word_timestamps=True  # Critical for sync
+                    word_timestamps=True
                 )
                 
                 self.cache_transcription(file_hash, model_name, language_code, mode, result)
@@ -804,33 +850,31 @@ class NotYCaptionGenerator:
             
             self.print_progress("Processing transcription with proper timing...", 80)
             
-            # Determine output path
-            if mode == "translate":
-                suffix = "translated"
-            elif mode == "transliterate":
-                suffix = f"{language_code}_translit"
-            else:
-                suffix = language_code if language_code != "auto" else "output"
+            # Determine output path based on source
+            lang_map = {
+                "en": "english", "hi": "hindi", "ja": "japanese", "es": "spanish",
+                "ko": "korean", "zh": "chinese", "ru": "russian", "auto": "auto"
+            }
+            lang_name = lang_map.get(language_code, language_code)
             
-            # For local mode, save in same directory as source file
-            # For YouTube mode, ask user where to save
-            if self.is_sendto or (self.media_path_arg and not self.is_sendto):
-                # Local file mode - save in same directory
-                output_path = media_path.parent / f"{media_path.stem}_{suffix}.srt"
-            else:
+            if is_youtube and video_title:
                 # YouTube mode - ask user where to save
-                default_name = f"youtube_captions_{suffix}.srt"
-                save_path = filedialog.asksaveasfilename(
-                    title="Save Subtitle File",
-                    defaultextension=".srt",
-                    filetypes=[("SubRip Subtitle", "*.srt"), ("All Files", "*.*")],
-                    initialfile=default_name
-                )
+                default_name = f"{video_title}_{lang_name}.srt"
+                save_path = save_file_dialog(default_name)
                 if not save_path:
                     self.print_warning("No save location selected. Saving in current directory.")
                     output_path = Path.cwd() / default_name
                 else:
                     output_path = Path(save_path)
+            else:
+                # Local mode - save in same directory as source file
+                if mode == "translate":
+                    suffix = f"{lang_name}_translated"
+                elif mode == "transliterate":
+                    suffix = lang_name
+                else:
+                    suffix = lang_name
+                output_path = media_path.parent / f"{media_path.stem}_{suffix}.srt"
             
             segments = result.get("segments", [])
             
@@ -863,7 +907,6 @@ class NotYCaptionGenerator:
                         for w in words_data:
                             word = w.get("word", "").strip()
                             if word:
-                                # Apply transliteration to individual words if needed
                                 if mode == "transliterate" and language_code in TRANSLITERATION_MAPS:
                                     word = self.transliterate_text(word, language_code)
                                 words.append(word)
@@ -889,7 +932,6 @@ class NotYCaptionGenerator:
                         if line_type == "letters":
                             segment_text = self.limit_letters_per_line(segment_text, number_per_line)
                         
-                        # Apply transliteration to full segment if needed
                         if mode == "transliterate" and language_code in TRANSLITERATION_MAPS:
                             segment_text = self.transliterate_text(segment_text, language_code)
                         
@@ -935,18 +977,16 @@ class NotYCaptionGenerator:
             
         # Check if file was sent via Send To
         if self.media_path_arg and not self.is_sendto:
-            # Manual file argument
             media_path = Path(self.media_path_arg)
             if media_path.exists() and media_path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
                 self.print_success(f"File received: {media_path}")
-                platform_choice = 2  # Local File mode
+                platform_choice = 2
                 passed_file = media_path
             else:
                 self.print_error(f"File not found: {media_path}")
                 self.is_sendto = False
                 passed_file = None
         elif self.media_path_arg and self.is_sendto:
-            # File from Send To menu
             media_path = Path(self.media_path_arg)
             if media_path.exists() and media_path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
                 self.print_success(f"File received from Send To: {media_path}")
@@ -1168,7 +1208,9 @@ class NotYCaptionGenerator:
                     mode,
                     line_type,
                     number_per_line,
-                    language_code
+                    language_code,
+                    is_youtube=(platform_choice == 1),
+                    video_title=video_title
                 )
                 
                 if platform_choice == 1 and media_path and media_path.exists():
@@ -1215,7 +1257,6 @@ class NotYCaptionGenerator:
         cleanup_temp_files()
         self.print_success("Cleanup complete!")
         
-        # Exit the application
         print("\n" + "=" * 60)
         print("Application will now close...")
         print("=" * 60)
