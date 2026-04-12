@@ -220,48 +220,22 @@ class Language(Enum):
 
 # COMPLETE HINDI TRANSLITERATION (Devanagari to Hinglish)
 HINDI_TRANSLIT = {
-    # Vowels (Swar)
     'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
-    'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'ऋ': 'ri',
-    'अं': 'am', 'अः': 'ah',
-    
-    # Consonants (Vyanjan)
-    'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
-    'च': 'cha', 'छ': 'chha', 'ज': 'ja', 'झ': 'jha', 'ञ': 'nya',
-    'ट': 'ta', 'ठ': 'tha', 'ड': 'da', 'ढ': 'dha', 'ण': 'na',
-    'त': 'ta', 'थ': 'tha', 'द': 'da', 'ध': 'dha', 'न': 'na',
-    'प': 'pa', 'फ': 'pha', 'ब': 'ba', 'भ': 'bha', 'म': 'ma',
-    'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha',
-    'ष': 'sha', 'स': 'sa', 'ह': 'ha',
-    
-    # Compound Consonants
-    'क्ष': 'ksha', 'त्र': 'tra', 'ज्ञ': 'gya', 'श्र': 'shra',
-    'द्य': 'dya', 'द्व': 'dva', 'ह्म': 'hma', 'ह्न': 'hna',
-    'ह्य': 'hya', 'ह्व': 'hva', 'ल्ल': 'lla', 'ल्य': 'lya',
-    'ल्व': 'lva', 'म्न': 'mna', 'म्य': 'mya', 'म्ल': 'mla',
-    'न्न': 'nna', 'न्य': 'nya', 'न्व': 'nva', 'प्त': 'pta',
-    'प्ल': 'pla', 'प्र': 'pra', 'प्य': 'pya', 'ब्ज': 'bja',
-    'ब्द': 'bda', 'ब्र': 'bra', 'ब्य': 'bya', 'भ्र': 'bhra',
-    'म्ब': 'mba', 'म्भ': 'mbha', 'न्द': 'nda', 'न्ध': 'ndha',
-    'म्प': 'mpa', 'म्फ': 'mpha', 'न्त': 'nta', 'न्थ': 'ntha',
-    'न्द': 'nda', 'न्ध': 'ndha', 'न्न': 'nna', 'प्स': 'psa',
-    'प्ल': 'pla', 'ष्ण': 'shna', 'ष्प': 'shpa', 'ष्म': 'shma',
-    'स्य': 'sya', 'स्ख': 'skha', 'स्न': 'sna', 'स्प': 'spa',
-    'स्फ': 'spha', 'स्म': 'sma', 'स्य': 'sya', 'स्र': 'sra',
-    'स्व': 'sva', 'ह्ण': 'hna', 'ह्न': 'hna', 'ह्म': 'hma',
-    'ह्य': 'hya', 'ह्र': 'hra', 'ह्व': 'hva',
-    
-    # Vowel signs (Matras)
+    'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'ऋ': 'ri', 'अं': 'am', 'अः': 'ah',
+    'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'ङ': 'ng',
+    'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh', 'ञ': 'ny',
+    'ट': 't', 'ठ': 'th', 'ड': 'd', 'ढ': 'dh', 'ण': 'n',
+    'त': 't', 'थ': 'th', 'द': 'd', 'ध': 'dh', 'न': 'n',
+    'प': 'p', 'फ': 'ph', 'ब': 'b', 'भ': 'bh', 'म': 'm',
+    'य': 'y', 'र': 'r', 'ल': 'l', 'व': 'v', 'श': 'sh', 'ष': 'sh', 'स': 's', 'ह': 'h',
+    'क्ष': 'ksh', 'त्र': 'tr', 'ज्ञ': 'gy', 'श्र': 'shr',
     'ा': 'aa', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
-    'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h',
-    '्': '',
-    
-    # Numbers
+    'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h', '्': '',
     '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
     '५': '5', '६': '6', '७': '7', '८': '8', '९': '9',
 }
 
-# Common Hindi words and their correct Hinglish spellings
+# Common Hindi words mapping
 HINDI_WORD_MAP = {
     'मैं': 'main', 'है': 'hai', 'नहीं': 'nahin', 'और': 'aur', 'को': 'ko',
     'से': 'se', 'में': 'mein', 'का': 'ka', 'की': 'ki', 'के': 'ke',
@@ -275,7 +249,7 @@ HINDI_WORD_MAP = {
     'वाले': 'wale', 'वाली': 'wali', 'ने': 'ne', 'तक': 'tak', 'लिए': 'liye',
 }
 
-# Complete Russian Transliteration
+# Russian Transliteration
 RUSSIAN_TRANSLIT = {
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
     'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
@@ -289,15 +263,14 @@ RUSSIAN_TRANSLIT = {
     'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
 }
 
-# Complete Spanish Transliteration
+# Spanish Transliteration
 SPANISH_TRANSLIT = {
     'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u',
     'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ü': 'U',
-    'ñ': 'n', 'Ñ': 'N', 'ç': 'c', 'Ç': 'C',
-    '¿': '', '¡': ''
+    'ñ': 'n', 'Ñ': 'N', 'ç': 'c', 'Ç': 'C', '¿': '', '¡': ''
 }
 
-# Complete Japanese Transliteration
+# Japanese Transliteration
 JAPANESE_TRANSLIT = {
     'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
     'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
@@ -354,7 +327,7 @@ JAPANESE_TRANSLIT = {
     'ッ': 't', 'ー': ''
 }
 
-# Complete Korean Transliteration
+# Korean Transliteration
 KOREAN_TRANSLIT = {
     'ㄱ': 'g', 'ㄲ': 'kk', 'ㄴ': 'n', 'ㄷ': 'd', 'ㄸ': 'tt',
     'ㄹ': 'r', 'ㅁ': 'm', 'ㅂ': 'b', 'ㅃ': 'pp', 'ㅅ': 's',
@@ -367,7 +340,7 @@ KOREAN_TRANSLIT = {
     'ㅣ': 'i'
 }
 
-# Complete Chinese Pinyin Transliteration
+# Chinese Transliteration
 CHINESE_TRANSLIT = {
     'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
     'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
@@ -377,7 +350,6 @@ CHINESE_TRANSLIT = {
     'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v',
 }
 
-# Master transliteration map
 TRANSLITERATION_MAPS = {
     "hi": HINDI_TRANSLIT,
     "ru": RUSSIAN_TRANSLIT,
@@ -396,24 +368,6 @@ WHISPER_MODELS = {
     "large": {"size": "2.9 GB", "desc": "Best"}
 }
 
-# Demucs models for vocal separation (better than Spleeter)
-DEMUCS_MODELS = {
-    "htdemucs": "Hybrid Transformer Demucs (Best quality, recommended)",
-    "htdemucs_ft": "Fine-tuned Hybrid Transformer Demucs",
-    "mdx": "MDX-Net architecture (Faster)",
-    "mdx_extra": "MDX-Net extra (Better quality, slower)",
-    "demucs": "Original Demucs model",
-    "demucs48": "Demucs 48kHz model",
-}
-
-# Vocal separation quality presets
-VOCAL_QUALITY = {
-    "Low": {"model": "mdx", "shift": False, "overlap": 0.25, "description": "Fast, lower quality"},
-    "Medium": {"model": "htdemucs", "shift": False, "overlap": 0.5, "description": "Balanced speed/quality"},
-    "High": {"model": "htdemucs", "shift": True, "overlap": 0.75, "description": "Slow, best quality"},
-    "Ultra": {"model": "mdx_extra", "shift": True, "overlap": 0.75, "description": "Very slow, maximum quality"},
-}
-
 # Supported file extensions
 SUPPORTED_EXTENSIONS = {
     'video': ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm'],
@@ -430,7 +384,6 @@ class SubtitleEntry:
     
 class NotYCaptionGenerator:
     def __init__(self, media_path: str = None):
-        # Register cleanup on exit (only temp files, NOT cache)
         atexit.register(cleanup_temp_files)
         
         if getattr(sys, 'frozen', False):
@@ -487,10 +440,8 @@ class NotYCaptionGenerator:
             ("Auto", "auto", "Auto-detect sentence breaks by audio gaps")
         ]
         
-        # Vocal separation settings
         self.use_vocal_separation = False
-        self.vocal_quality = "High"  # Low, Medium, High, Ultra
-        self.selected_model_name = "htdemucs"
+        self.vocal_quality = "High"
         
         self.selected_model = None
         self.selected_language = None
@@ -678,7 +629,6 @@ class NotYCaptionGenerator:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 video_title = info.get('title', '')
-                # Clean title for filename
                 video_title_clean = re.sub(r'[<>:"/\\|?*]', '', video_title)[:50]
                 self.print_info(f"Video: {video_title}")
                 
@@ -738,122 +688,88 @@ class NotYCaptionGenerator:
             pass
         return None
         
-    def separate_vocals_demucs(self, audio_path: Path) -> Tuple[Optional[Path], Optional[Path]]:
-        """Separate vocals using Demucs with professional quality settings"""
+    def separate_vocals_demucs(self, audio_path: Path) -> Optional[Path]:
+        """Separate vocals using Demucs with correct command line"""
         self.print_progress(f"Separating vocals with Demucs ({self.vocal_quality} quality)...", 30)
         
         temp_dir = Path(tempfile.gettempdir())
         output_dir = temp_dir / f"demucs_separated_{int(time.time())}"
         
-        quality_settings = VOCAL_QUALITY[self.vocal_quality]
-        model = quality_settings["model"]
-        shifts = "--shifts 1" if quality_settings["shift"] else ""
-        overlap = f"--overlap {quality_settings['overlap']}"
-        
+        # Model selection based on quality
+        if self.vocal_quality == "Low":
+            model = "mdx"
+            shifts = 1
+        elif self.vocal_quality == "Medium":
+            model = "htdemucs"
+            shifts = 2
+        elif self.vocal_quality == "High":
+            model = "htdemucs"
+            shifts = 4
+        else:  # Ultra
+            model = "mdx_extra"
+            shifts = 6
+            
         try:
-            # Run demucs separation with optimized settings
+            # Correct demucs command
             cmd = [
-                sys.executable, "-m", "demucs",
+                sys.executable, "-m", "demucs.separate",
+                "--out", str(output_dir),
                 "--two-stems", "vocals",
                 "-n", model,
-                shifts,
-                overlap,
-                "--clip-mode", "rescale",
-                "--float32",
-                "-o", str(output_dir),
+                "--shifts", str(shifts),
+                "--overlap", "0.25",
+                "--device", "cpu",
                 str(audio_path)
             ]
             
-            # Remove empty strings
-            cmd = [c for c in cmd if c]
+            self.print_info(f"Using Demucs model: {model} with {shifts} shifts")
             
-            self.print_info(f"Using Demucs model: {model}")
-            
-            # Calculate timeout based on audio length and quality
-            audio_size = audio_path.stat().st_size / (1024 * 1024)  # Size in MB
-            timeout = max(600, int(audio_size * 2))  # At least 10 minutes
-            
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
             
             if result.returncode == 0:
-                # Find the separated files
-                vocals_path = None
-                no_vocals_path = None
+                # Find the separated vocal file
+                vocal_file = None
+                for file in output_dir.rglob("vocals.wav"):
+                    vocal_file = file
+                    break
                 
-                # Look for separated stems
-                for file in output_dir.rglob("*.wav"):
-                    if "vocals" in file.name.lower():
-                        vocals_path = file
-                    elif "no_vocals" in file.name.lower() or "accompaniment" in file.name.lower():
-                        no_vocals_path = file
-                
-                # Also check for standard demucs output structure
-                if not vocals_path:
-                    for file in output_dir.rglob("*"):
-                        if file.name == "vocals.wav":
-                            vocals_path = file
-                        elif file.name in ["no_vocals.wav", "accompaniment.wav", "bass.wav", "drums.wav", "other.wav"]:
-                            if not no_vocals_path:
-                                no_vocals_path = file
-                
-                # If we only have vocals, create no_vocals by combining other stems
-                if vocals_path and not no_vocals_path:
-                    # Find all non-vocal stems
-                    other_stems = []
+                if not vocal_file:
                     for file in output_dir.rglob("*.wav"):
-                        if file != vocals_path and "vocals" not in file.name.lower():
-                            other_stems.append(file)
+                        if "vocals" in file.name.lower():
+                            vocal_file = file
+                            break
+                
+                if vocal_file and vocal_file.exists():
+                    # Apply vocal enhancement
+                    enhanced_vocals = temp_dir / f"{audio_path.stem}_vocals.wav"
+                    self.enhance_vocals(vocal_file, enhanced_vocals)
                     
-                    if other_stems:
-                        # Combine other stems into no_vocals using ffmpeg
-                        no_vocals_path = temp_dir / f"{audio_path.stem}_no_vocals.wav"
-                        ffmpeg_cmd = [str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg']
-                        
-                        # Add all input files
-                        for stem in other_stems:
-                            ffmpeg_cmd.extend(['-i', str(stem)])
-                        
-                        # Mix them together
-                        filter_complex = f"amix=inputs={len(other_stems)}:duration=longest"
-                        ffmpeg_cmd.extend(['-filter_complex', filter_complex, '-y', str(no_vocals_path)])
-                        
-                        subprocess.run(ffmpeg_cmd, capture_output=True, timeout=300)
-                
-                self.print_progress("Vocal separation complete", 40)
-                
-                # Copy to temp directory with clean names
-                final_vocals = temp_dir / f"{audio_path.stem}_vocals.wav"
-                final_no_vocals = temp_dir / f"{audio_path.stem}_no_vocals.wav"
-                
-                if vocals_path and vocals_path.exists():
-                    # Apply post-processing to enhance vocals
-                    self.enhance_vocals(vocals_path, final_vocals)
-                if no_vocals_path and no_vocals_path.exists():
-                    shutil.copy2(no_vocals_path, final_no_vocals)
-                
-                # Cleanup demucs output directory
-                shutil.rmtree(output_dir, ignore_errors=True)
-                
-                return final_vocals if final_vocals.exists() else None, final_no_vocals if final_no_vocals.exists() else None
+                    # Cleanup
+                    shutil.rmtree(output_dir, ignore_errors=True)
+                    
+                    self.print_progress("Vocal separation complete", 40)
+                    return enhanced_vocals
+                else:
+                    self.print_warning("Could not find vocal file in output")
+                    return None
             else:
-                self.print_warning(f"Demucs separation failed: {result.stderr[:200]}")
-                return None, None
+                self.print_warning(f"Demucs failed: {result.stderr[:200] if result.stderr else 'Unknown error'}")
+                return None
                 
         except subprocess.TimeoutExpired:
-            self.print_warning(f"Demucs separation timed out after {timeout} seconds")
-            return None, None
+            self.print_warning("Demucs separation timed out")
+            return None
         except Exception as e:
             self.print_warning(f"Demucs error: {e}")
-            return None, None
+            return None
             
     def enhance_vocals(self, input_path: Path, output_path: Path):
-        """Enhance vocals with post-processing for better clarity"""
+        """Enhance vocals with post-processing"""
         ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
         
-        # Apply vocal enhancement filters
         cmd = [
             ffmpeg_cmd, '-i', str(input_path),
-            '-af', 'highpass=f=80, lowpass=f=12000, volume=1.5, aemphasis=0.5, compand=attacks=0.1:decays=0.2:points=-80/-80|-30/-10|-20/-5|0/0',
+            '-af', 'highpass=f=80, lowpass=f=12000, volume=1.5',
             '-y',
             str(output_path)
         ]
@@ -864,18 +780,17 @@ class NotYCaptionGenerator:
             shutil.copy2(input_path, output_path)
             
     def separate_vocals_ffmpeg(self, audio_path: Path) -> Optional[Path]:
-        """Fallback vocal separation using FFmpeg filters"""
-        self.print_progress("Isolating vocals with FFmpeg (fallback)...", 35)
+        """Fallback vocal separation using FFmpeg"""
+        self.print_progress("Isolating vocals with FFmpeg...", 35)
         
         temp_dir = Path(tempfile.gettempdir())
         vocal_path = temp_dir / f"{audio_path.stem}_vocals.wav"
         
         ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
         
-        # Enhanced vocal isolation using multiple filters
         cmd = [
             ffmpeg_cmd, '-i', str(audio_path),
-            '-af', 'highpass=f=100, lowpass=f=8000, volume=1.5, aemphasis=0.5, compand=attacks=0.1:decays=0.2:points=-80/-80|-30/-15|-20/-5|0/0',
+            '-af', 'highpass=f=100, lowpass=f=8000, volume=1.5',
             '-y',
             str(vocal_path)
         ]
@@ -896,8 +811,6 @@ class NotYCaptionGenerator:
             return text
             
         mapping = TRANSLITERATION_MAPS[language_code]
-        
-        # Sort keys by length (longest first) for proper replacement
         sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
         
         result = text
@@ -905,12 +818,10 @@ class NotYCaptionGenerator:
             translit = mapping[original]
             result = result.replace(original, translit)
         
-        # For Hindi, apply common word mapping for better Hinglish
         if language_code == "hi":
             for hindi_word, hinglish_word in HINDI_WORD_MAP.items():
                 result = result.replace(hindi_word, hinglish_word)
         
-        # Clean up extra spaces and normalize
         result = re.sub(r'\s+', ' ', result)
         result = result.strip()
         
@@ -965,7 +876,20 @@ class NotYCaptionGenerator:
             lines.append(current_line)
         return '\n'.join(lines)
         
+    def split_subtitle_smart(self, text: str, max_words: int = 5) -> List[str]:
+        """Smart subtitle splitting for better readability"""
+        words = text.split()
+        if len(words) <= max_words:
+            return [text]
+        
+        lines = []
+        for i in range(0, len(words), max_words):
+            line = " ".join(words[i:i + max_words])
+            lines.append(line)
+        return lines
+        
     def auto_break_sentences(self, segments) -> List[SubtitleEntry]:
+        """Smart sentence breaking with better readability"""
         subtitles = []
         index = 1
         min_gap = 0.3
@@ -981,7 +905,8 @@ class NotYCaptionGenerator:
             start_time = segment["start"]
             end_time = segment["end"]
             
-            if text.endswith(('.', '!', '?')):
+            # Check for natural break points
+            if any(text.endswith(p) for p in ['.', '!', '?', ';', ':']):
                 subtitles.append(SubtitleEntry(
                     index=index,
                     start=timedelta(seconds=start_time),
@@ -1000,31 +925,52 @@ class NotYCaptionGenerator:
                 index += 1
                 i += 1
             else:
+                # Merge with next segment
                 merged_text = text
                 merged_end = end_time
                 j = i + 1
-                while j < len(segments):
+                word_count = len(text.split())
+                
+                while j < len(segments) and word_count < 10:
                     next_text = segments[j]["text"].strip()
                     if not next_text:
                         j += 1
                         continue
                     merged_text += " " + next_text
                     merged_end = segments[j]["end"]
+                    word_count += len(next_text.split())
                     
-                    if next_text.endswith(('.', '!', '?')) or (j < len(segments) - 1 and 
-                       segments[j+1]["start"] - segments[j]["end"] > min_gap):
+                    if any(next_text.endswith(p) for p in ['.', '!', '?']) or word_count >= 10:
                         j += 1
                         break
                     j += 1
                 
-                subtitles.append(SubtitleEntry(
-                    index=index,
-                    start=timedelta(seconds=start_time),
-                    end=timedelta(seconds=merged_end),
-                    text=merged_text
-                ))
-                index += 1
+                # Split long subtitles
+                if word_count > 12:
+                    lines = self.split_subtitle_smart(merged_text, 6)
+                    duration = merged_end - start_time
+                    line_duration = duration / len(lines)
+                    
+                    for idx, line in enumerate(lines):
+                        line_start = start_time + (idx * line_duration)
+                        line_end = line_start + line_duration
+                        subtitles.append(SubtitleEntry(
+                            index=index,
+                            start=timedelta(seconds=line_start),
+                            end=timedelta(seconds=line_end),
+                            text=line
+                        ))
+                        index += 1
+                else:
+                    subtitles.append(SubtitleEntry(
+                        index=index,
+                        start=timedelta(seconds=start_time),
+                        end=timedelta(seconds=merged_end),
+                        text=merged_text
+                    ))
+                    index += 1
                 i = j
+                
         return subtitles
         
     def generate_captions(self, media_path: Path, model_name: str, mode: str, line_type: str, 
@@ -1051,15 +997,12 @@ class NotYCaptionGenerator:
                 # Apply vocal separation if enabled
                 if self.use_vocal_separation:
                     self.print_info("Using Demucs for professional vocal separation...")
-                    vocals_path, no_vocals_path = self.separate_vocals_demucs(audio_path)
+                    vocals_path = self.separate_vocals_demucs(audio_path)
                     if vocals_path and vocals_path.exists():
                         audio_path = vocals_path
-                        self.print_success("Using isolated vocals for better transcription accuracy")
+                        self.print_success("Using isolated vocals for better transcription")
                     else:
-                        self.print_warning("Demucs separation failed, falling back to FFmpeg...")
-                        vocals_path = self.separate_vocals_ffmpeg(audio_path)
-                        if vocals_path and vocals_path.exists():
-                            audio_path = vocals_path
+                        self.print_warning("Demucs failed, using original audio")
                 
                 if self.model is None:
                     if not self.load_model(model_name):
@@ -1088,26 +1031,20 @@ class NotYCaptionGenerator:
             
             self.print_progress("Processing transcription...", 80)
             
-            # Language name mapping for filename
-            lang_names = {
-                "en": "english", "hi": "hindi", "ja": "japanese", "es": "spanish",
-                "ko": "korean", "zh": "chinese", "ru": "russian", "auto": "auto"
-            }
+            # Determine output path
+            lang_names = {"en": "english", "hi": "hindi", "ja": "japanese", "es": "spanish",
+                         "ko": "korean", "zh": "chinese", "ru": "russian", "auto": "auto"}
             lang_name = lang_names.get(language_code, language_code)
             
-            # Determine output path
             if is_youtube and video_title:
-                # YouTube mode - ask user where to save
                 suffix = f"{lang_name}" if mode == "normal" else f"{lang_name}_{mode}"
                 default_name = f"{video_title}_{suffix}.srt"
                 save_path = save_file_dialog(default_name)
                 if not save_path:
-                    self.print_warning("No save location selected. Saving in current directory.")
                     output_path = Path.cwd() / default_name
                 else:
                     output_path = Path(save_path)
             else:
-                # Local mode - save in same directory as source file
                 if mode == "translate":
                     suffix = f"{lang_name}_translated"
                 elif mode == "transliterate":
@@ -1132,14 +1069,12 @@ class NotYCaptionGenerator:
                     segment_start = segment.get("start", 0)
                     segment_end = segment.get("end", segment_start + 1)
                     
-                    # Apply transliteration if mode is transliterate
                     if mode == "transliterate" and language_code in TRANSLITERATION_MAPS:
                         segment_text = self.transliterate_text(segment_text, language_code)
                     
                     words_data = segment.get("words", [])
                     
                     if line_type == "words" and words_data:
-                        # Use word-level timestamps for perfect sync
                         words = []
                         word_starts = []
                         word_ends = []
@@ -1210,12 +1145,12 @@ class NotYCaptionGenerator:
             self.print_warning("FFmpeg not found! Some features may not work.")
         
         if not WHISPER_AVAILABLE:
-            self.print_error("Whisper is not available!")
+            self.print_error("Whisper not available!")
             self.print_info("Please install: pip install openai-whisper torch")
             input("\nPress Enter to exit...")
             return
             
-        # Check if file was sent via Send To
+        # Check for Send To file
         if self.media_path_arg and not self.is_sendto:
             media_path = Path(self.media_path_arg)
             if media_path.exists() and media_path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
@@ -1224,8 +1159,8 @@ class NotYCaptionGenerator:
                 passed_file = media_path
             else:
                 self.print_error(f"File not found: {media_path}")
-                self.is_sendto = False
                 passed_file = None
+                platform_choice = None
         elif self.media_path_arg and self.is_sendto:
             media_path = Path(self.media_path_arg)
             if media_path.exists() and media_path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
@@ -1234,8 +1169,8 @@ class NotYCaptionGenerator:
                 passed_file = media_path
             else:
                 self.print_error(f"Invalid file: {media_path}")
-                self.is_sendto = False
                 passed_file = None
+                platform_choice = None
         else:
             platform_choice = None
             passed_file = None
@@ -1336,12 +1271,11 @@ class NotYCaptionGenerator:
                 
                 self.print_success(f"Source: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}")
                 
-                # Ask for vocal separation preference
+                # Vocal separation option
                 self.clear_screen()
                 print_header()
-                print(f"\n{Colors.CYAN}{Colors.BOLD}VOCAL SEPARATION OPTIONS{Colors.RESET}")
+                print(f"\n{Colors.CYAN}{Colors.BOLD}VOCAL SEPARATION{Colors.RESET}")
                 print(f"  Demucs can isolate vocals for better transcription accuracy")
-                print(f"  Higher quality = better separation but slower processing")
                 print()
                 print(f"  1) No vocal separation (fastest)")
                 print(f"  2) Low quality (fast)")
@@ -1353,12 +1287,11 @@ class NotYCaptionGenerator:
                 
                 if vocal_choice == 1:
                     self.use_vocal_separation = False
-                    self.print_info("Vocal separation disabled")
                 else:
                     self.use_vocal_separation = True
                     quality_map = {2: "Low", 3: "Medium", 4: "High", 5: "Ultra"}
                     self.vocal_quality = quality_map[vocal_choice]
-                    self.print_info(f"Vocal separation enabled with {self.vocal_quality} quality")
+                    self.print_info(f"Vocal separation: {self.vocal_quality} quality")
                 
                 # Select model
                 self.clear_screen()
@@ -1368,11 +1301,6 @@ class NotYCaptionGenerator:
                 model_options = [f"{m[0].upper()} ({m[1]}) - {m[2]}" for m in self.models]
                 model_choice = self.show_menu("SELECT WHISPER MODEL", model_options)
                 if model_choice == -1:
-                    if platform_choice == 1 and media_path and media_path.exists():
-                        try:
-                            media_path.unlink()
-                        except:
-                            pass
                     platform_choice = None
                     continue
                 self.selected_model = self.models[model_choice][0]
@@ -1386,11 +1314,6 @@ class NotYCaptionGenerator:
                 mode_options = [f"{m[0]} - {m[2]}" for m in self.modes]
                 mode_choice = self.show_menu("SELECT MODE", mode_options)
                 if mode_choice == -1:
-                    if platform_choice == 1 and media_path and media_path.exists():
-                        try:
-                            media_path.unlink()
-                        except:
-                            pass
                     platform_choice = None
                     continue
                 self.selected_mode = self.modes[mode_choice]
@@ -1406,11 +1329,6 @@ class NotYCaptionGenerator:
                 lang_options = [f"{lang[0]} ({lang[1]})" for lang in self.languages]
                 lang_choice = self.show_menu("SELECT LANGUAGE", lang_options)
                 if lang_choice == -1:
-                    if platform_choice == 1 and media_path and media_path.exists():
-                        try:
-                            media_path.unlink()
-                        except:
-                            pass
                     platform_choice = None
                     continue
                 self.selected_language = self.languages[lang_choice]
@@ -1428,11 +1346,6 @@ class NotYCaptionGenerator:
                 line_options = [f"{l[0]} - {l[2]}" for l in self.line_types]
                 line_choice = self.show_menu("LINE BREAK TYPE", line_options)
                 if line_choice == -1:
-                    if platform_choice == 1 and media_path and media_path.exists():
-                        try:
-                            media_path.unlink()
-                        except:
-                            pass
                     platform_choice = None
                     continue
                 self.selected_line_type = self.line_types[line_choice]
@@ -1449,7 +1362,7 @@ class NotYCaptionGenerator:
                 self.print_box([
                     f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
                     f"File: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}",
-                    f"Vocal Separation: {'Yes (' + self.vocal_quality + ' quality)' if self.use_vocal_separation else 'No'}",
+                    f"Vocal Separation: {self.vocal_quality if self.use_vocal_separation else 'No'}",
                     f"Model: {self.selected_model.upper()}",
                     f"Mode: {self.selected_mode[0]}",
                     f"Language: {language_name}",
@@ -1458,24 +1371,14 @@ class NotYCaptionGenerator:
                 ])
                 
                 if not self.confirm("Generate captions?"):
-                    if platform_choice == 1 and media_path and media_path.exists():
-                        try:
-                            media_path.unlink()
-                        except:
-                            pass
                     platform_choice = None
                     continue
                 
                 self.print_info("Generating captions... This may take several minutes.")
                 success = self.generate_captions(
-                    media_path,
-                    self.selected_model,
-                    mode,
-                    line_type,
-                    number_per_line,
-                    language_code,
-                    is_youtube=(platform_choice == 1),
-                    video_title=video_title
+                    media_path, self.selected_model, mode, line_type,
+                    number_per_line, language_code,
+                    is_youtube=(platform_choice == 1), video_title=video_title
                 )
                 
                 if platform_choice == 1 and media_path and media_path.exists():
@@ -1518,9 +1421,9 @@ class NotYCaptionGenerator:
         print_header("Thank You!")
         self.print_success(f"Thanks for using {APP_NAME}!")
         print()
-        self.print_info("Cleaning up temporary audio files...")
+        self.print_info("Cleaning up temporary files...")
         cleanup_temp_files()
-        self.print_success("Cleanup complete! Cache files preserved.")
+        self.print_success("Cleanup complete!")
         
         print("\n" + "=" * 60)
         print("Application will now close...")
