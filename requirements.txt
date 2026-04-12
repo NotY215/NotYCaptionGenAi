@@ -8,5 +8,6 @@ tiktoken>=0.5.0
 regex>=2023.12.25
 requests>=2.31.0
 tqdm>=4.65.0
-demucs>=4.0.0
+spleeter>=2.3.0
+tensorflow>=2.10.0
 pyinstaller>=6.0.0

@@ -4,7 +4,7 @@
 """
 NotY Caption Generator AI v6.1
 Using OpenAI Whisper (PyTorch) with YouTube Support & Smart Lyrics Matching
-Professional Vocal Separation with Demucs
+Professional Vocal Separation with Spleeter
 Copyright (c) 2026 NotY215
 """
 
@@ -92,6 +92,13 @@ except ImportError:
     YTDLP_AVAILABLE = False
     yt_dlp = None
 
+# Try to import spleeter for vocal separation
+try:
+    from spleeter.separator import Separator
+    SPLEETER_AVAILABLE = True
+except ImportError:
+    SPLEETER_AVAILABLE = False
+
 # ANSI color codes
 class Colors:
     RESET = '\033[0m'
@@ -125,7 +132,7 @@ def cleanup_temp_files():
     """Clean up temporary audio files only - NOT cache"""
     try:
         temp_dir = Path(tempfile.gettempdir())
-        patterns = ["*_temp_audio.wav", "*_vocals.wav", "*_no_vocals.wav", "youtube_audio_*", "demucs_separated_*"]
+        patterns = ["*_temp_audio.wav", "*_vocals.wav", "*_accompaniment.wav", "youtube_audio_*", "spleeter_*"]
         for pattern in patterns:
             for file in temp_dir.glob(pattern):
                 try:
@@ -235,7 +242,7 @@ HINDI_TRANSLIT = {
     '५': '5', '६': '6', '७': '7', '८': '8', '९': '9',
 }
 
-# Common Hindi words mapping
+# Common Hindi words mapping for better Hinglish
 HINDI_WORD_MAP = {
     'मैं': 'main', 'है': 'hai', 'नहीं': 'nahin', 'और': 'aur', 'को': 'ko',
     'से': 'se', 'में': 'mein', 'का': 'ka', 'की': 'ki', 'के': 'ke',
@@ -368,6 +375,13 @@ WHISPER_MODELS = {
     "large": {"size": "2.9 GB", "desc": "Best"}
 }
 
+# Spleeter models for vocal separation
+SPLEETER_MODELS = {
+    "2stems": "Vocals + Accompaniment (Fastest)",
+    "4stems": "Vocals + Drums + Bass + Other (Better)",
+    "5stems": "Vocals + Drums + Bass + Piano + Other (Best)"
+}
+
 # Supported file extensions
 SUPPORTED_EXTENSIONS = {
     'video': ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm'],
@@ -437,11 +451,12 @@ class NotYCaptionGenerator:
         self.line_types = [
             ("Words", "words", "Break by word count (1-30)"),
             ("Letters", "letters", "Break by character limit (1-30)"),
-            ("Auto", "auto", "Auto-detect sentence breaks by audio gaps")
+            ("Auto", "auto", "Smart sentence detection with natural breaks")
         ]
         
         self.use_vocal_separation = False
-        self.vocal_quality = "High"
+        self.spleeter_model = "2stems"
+        self.separator = None
         
         self.selected_model = None
         self.selected_language = None
@@ -688,96 +703,55 @@ class NotYCaptionGenerator:
             pass
         return None
         
-    def separate_vocals_demucs(self, audio_path: Path) -> Optional[Path]:
-        """Separate vocals using Demucs with correct command line"""
-        self.print_progress(f"Separating vocals with Demucs ({self.vocal_quality} quality)...", 30)
+    def separate_vocals_spleeter(self, audio_path: Path) -> Optional[Path]:
+        """Separate vocals using Spleeter - High quality vocal isolation"""
+        if not SPLEETER_AVAILABLE:
+            self.print_warning("Spleeter not available. Install: pip install spleeter")
+            return None
+            
+        self.print_progress(f"Separating vocals with Spleeter ({self.spleeter_model})...", 30)
         
         temp_dir = Path(tempfile.gettempdir())
-        output_dir = temp_dir / f"demucs_separated_{int(time.time())}"
+        output_dir = temp_dir / f"spleeter_output_{int(time.time())}"
         
-        # Model selection based on quality
-        if self.vocal_quality == "Low":
-            model = "mdx"
-            shifts = 1
-        elif self.vocal_quality == "Medium":
-            model = "htdemucs"
-            shifts = 2
-        elif self.vocal_quality == "High":
-            model = "htdemucs"
-            shifts = 4
-        else:  # Ultra
-            model = "mdx_extra"
-            shifts = 6
-            
         try:
-            # Correct demucs command
-            cmd = [
-                sys.executable, "-m", "demucs.separate",
-                "--out", str(output_dir),
-                "--two-stems", "vocals",
-                "-n", model,
-                "--shifts", str(shifts),
-                "--overlap", "0.25",
-                "--device", "cpu",
-                str(audio_path)
-            ]
+            # Initialize Spleeter separator
+            if self.separator is None:
+                self.print_info(f"Loading Spleeter model: {self.spleeter_model}")
+                self.separator = Separator(f'spleeter:{self.spleeter_model}')
             
-            self.print_info(f"Using Demucs model: {model} with {shifts} shifts")
+            # Perform separation
+            self.print_info("Separating audio tracks...")
+            self.separator.separate_to_file(
+                str(audio_path),
+                str(output_dir),
+                filename_format="{filename}_{instrument}.{codec}",
+                codec='wav'
+            )
             
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            # Find the vocal file
+            vocal_file = None
+            for file in output_dir.rglob("*vocals.wav"):
+                vocal_file = file
+                break
             
-            if result.returncode == 0:
-                # Find the separated vocal file
-                vocal_file = None
-                for file in output_dir.rglob("vocals.wav"):
-                    vocal_file = file
-                    break
+            if vocal_file and vocal_file.exists():
+                # Copy to temp directory
+                final_vocals = temp_dir / f"{audio_path.stem}_vocals.wav"
+                shutil.copy2(vocal_file, final_vocals)
                 
-                if not vocal_file:
-                    for file in output_dir.rglob("*.wav"):
-                        if "vocals" in file.name.lower():
-                            vocal_file = file
-                            break
+                # Cleanup
+                shutil.rmtree(output_dir, ignore_errors=True)
                 
-                if vocal_file and vocal_file.exists():
-                    # Apply vocal enhancement
-                    enhanced_vocals = temp_dir / f"{audio_path.stem}_vocals.wav"
-                    self.enhance_vocals(vocal_file, enhanced_vocals)
-                    
-                    # Cleanup
-                    shutil.rmtree(output_dir, ignore_errors=True)
-                    
-                    self.print_progress("Vocal separation complete", 40)
-                    return enhanced_vocals
-                else:
-                    self.print_warning("Could not find vocal file in output")
-                    return None
+                self.print_progress("Vocal separation complete", 40)
+                return final_vocals
             else:
-                self.print_warning(f"Demucs failed: {result.stderr[:200] if result.stderr else 'Unknown error'}")
+                self.print_warning("Could not find vocal track in output")
                 return None
                 
-        except subprocess.TimeoutExpired:
-            self.print_warning("Demucs separation timed out")
-            return None
         except Exception as e:
-            self.print_warning(f"Demucs error: {e}")
+            self.print_warning(f"Spleeter error: {e}")
             return None
-            
-    def enhance_vocals(self, input_path: Path, output_path: Path):
-        """Enhance vocals with post-processing"""
-        ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
-        
-        cmd = [
-            ffmpeg_cmd, '-i', str(input_path),
-            '-af', 'highpass=f=80, lowpass=f=12000, volume=1.5',
-            '-y',
-            str(output_path)
-        ]
-        
-        try:
-            subprocess.run(cmd, capture_output=True, timeout=120)
-        except:
-            shutil.copy2(input_path, output_path)
             
     def separate_vocals_ffmpeg(self, audio_path: Path) -> Optional[Path]:
         """Fallback vocal separation using FFmpeg"""
@@ -788,9 +762,10 @@ class NotYCaptionGenerator:
         
         ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
         
+        # Use phase cancellation technique for vocal isolation
         cmd = [
             ffmpeg_cmd, '-i', str(audio_path),
-            '-af', 'highpass=f=100, lowpass=f=8000, volume=1.5',
+            '-af', 'highpass=f=80, lowpass=f=12000, volume=2.0, aemphasis=0.5',
             '-y',
             str(vocal_path)
         ]
@@ -876,23 +851,35 @@ class NotYCaptionGenerator:
             lines.append(current_line)
         return '\n'.join(lines)
         
-    def split_subtitle_smart(self, text: str, max_words: int = 5) -> List[str]:
+    def smart_split_subtitle(self, text: str, max_chars: int = 42) -> List[str]:
         """Smart subtitle splitting for better readability"""
         words = text.split()
-        if len(words) <= max_words:
-            return [text]
-        
         lines = []
-        for i in range(0, len(words), max_words):
-            line = " ".join(words[i:i + max_words])
-            lines.append(line)
-        return lines
+        current_line = []
+        current_length = 0
+        
+        for word in words:
+            word_len = len(word)
+            if current_length + word_len + (1 if current_line else 0) <= max_chars:
+                current_line.append(word)
+                current_length += word_len + (1 if current_line else 0)
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+                current_length = word_len
+        
+        if current_line:
+            lines.append(' '.join(current_line))
+        
+        return lines if lines else [text]
         
     def auto_break_sentences(self, segments) -> List[SubtitleEntry]:
-        """Smart sentence breaking with better readability"""
+        """Smart sentence breaking with natural language processing"""
         subtitles = []
         index = 1
         min_gap = 0.3
+        max_duration = 3.0  # Maximum 3 seconds per subtitle for better readability
         
         i = 0
         while i < len(segments):
@@ -904,53 +891,71 @@ class NotYCaptionGenerator:
                 
             start_time = segment["start"]
             end_time = segment["end"]
+            duration = end_time - start_time
             
-            # Check for natural break points
-            if any(text.endswith(p) for p in ['.', '!', '?', ';', ':']):
-                subtitles.append(SubtitleEntry(
-                    index=index,
-                    start=timedelta(seconds=start_time),
-                    end=timedelta(seconds=end_time),
-                    text=text
-                ))
-                index += 1
-                i += 1
-            elif i < len(segments) - 1 and segments[i+1]["start"] - end_time > min_gap:
-                subtitles.append(SubtitleEntry(
-                    index=index,
-                    start=timedelta(seconds=start_time),
-                    end=timedelta(seconds=end_time),
-                    text=text
-                ))
-                index += 1
+            # Check if text has natural break points
+            natural_breaks = ['.', '!', '?', ';', ':', ',']
+            has_natural_break = any(text.rstrip().endswith(p) for p in natural_breaks)
+            
+            # If duration is too long or has natural break, keep as is
+            if has_natural_break or duration <= max_duration:
+                # Check if text is too long for one line
+                if len(text) > 42:
+                    lines = self.smart_split_subtitle(text)
+                    line_duration = duration / len(lines)
+                    for idx, line in enumerate(lines):
+                        line_start = start_time + (idx * line_duration)
+                        line_end = line_start + line_duration
+                        subtitles.append(SubtitleEntry(
+                            index=index,
+                            start=timedelta(seconds=line_start),
+                            end=timedelta(seconds=line_end),
+                            text=line
+                        ))
+                        index += 1
+                else:
+                    subtitles.append(SubtitleEntry(
+                        index=index,
+                        start=timedelta(seconds=start_time),
+                        end=timedelta(seconds=end_time),
+                        text=text
+                    ))
+                    index += 1
                 i += 1
             else:
-                # Merge with next segment
+                # Merge with next segment if duration is too short
                 merged_text = text
                 merged_end = end_time
                 j = i + 1
-                word_count = len(text.split())
                 
-                while j < len(segments) and word_count < 10:
+                while j < len(segments):
                     next_text = segments[j]["text"].strip()
                     if not next_text:
                         j += 1
                         continue
-                    merged_text += " " + next_text
-                    merged_end = segments[j]["end"]
-                    word_count += len(next_text.split())
                     
-                    if any(next_text.endswith(p) for p in ['.', '!', '?']) or word_count >= 10:
+                    next_end = segments[j]["end"]
+                    next_duration = next_end - merged_end
+                    
+                    # Check if merging would exceed max duration
+                    if (next_end - start_time) > max_duration * 1.5:
+                        break
+                    
+                    merged_text += " " + next_text
+                    merged_end = next_end
+                    
+                    # Check for natural break in merged text
+                    if any(merged_text.rstrip().endswith(p) for p in ['.', '!', '?']):
                         j += 1
                         break
+                    
                     j += 1
                 
-                # Split long subtitles
-                if word_count > 12:
-                    lines = self.split_subtitle_smart(merged_text, 6)
-                    duration = merged_end - start_time
-                    line_duration = duration / len(lines)
-                    
+                # Split long merged text
+                if len(merged_text) > 42:
+                    lines = self.smart_split_subtitle(merged_text)
+                    total_duration = merged_end - start_time
+                    line_duration = total_duration / len(lines)
                     for idx, line in enumerate(lines):
                         line_start = start_time + (idx * line_duration)
                         line_end = line_start + line_duration
@@ -969,6 +974,7 @@ class NotYCaptionGenerator:
                         text=merged_text
                     ))
                     index += 1
+                
                 i = j
                 
         return subtitles
@@ -996,13 +1002,16 @@ class NotYCaptionGenerator:
                 
                 # Apply vocal separation if enabled
                 if self.use_vocal_separation:
-                    self.print_info("Using Demucs for professional vocal separation...")
-                    vocals_path = self.separate_vocals_demucs(audio_path)
+                    self.print_info("Using Spleeter for professional vocal separation...")
+                    vocals_path = self.separate_vocals_spleeter(audio_path)
                     if vocals_path and vocals_path.exists():
                         audio_path = vocals_path
                         self.print_success("Using isolated vocals for better transcription")
                     else:
-                        self.print_warning("Demucs failed, using original audio")
+                        self.print_warning("Spleeter failed, trying FFmpeg...")
+                        vocals_path = self.separate_vocals_ffmpeg(audio_path)
+                        if vocals_path and vocals_path.exists():
+                            audio_path = vocals_path
                 
                 if self.model is None:
                     if not self.load_model(model_name):
@@ -1110,13 +1119,29 @@ class NotYCaptionGenerator:
                         if mode == "transliterate" and language_code in TRANSLITERATION_MAPS:
                             segment_text = self.transliterate_text(segment_text, language_code)
                         
-                        subtitles.append(SubtitleEntry(
-                            index=index,
-                            start=timedelta(seconds=segment_start),
-                            end=timedelta(seconds=segment_end),
-                            text=segment_text
-                        ))
-                        index += 1
+                        # Check if text needs splitting for better readability
+                        if len(segment_text) > 42:
+                            lines = self.smart_split_subtitle(segment_text)
+                            duration = segment_end - segment_start
+                            line_duration = duration / len(lines)
+                            for idx, line in enumerate(lines):
+                                line_start = segment_start + (idx * line_duration)
+                                line_end = line_start + line_duration
+                                subtitles.append(SubtitleEntry(
+                                    index=index,
+                                    start=timedelta(seconds=line_start),
+                                    end=timedelta(seconds=line_end),
+                                    text=line
+                                ))
+                                index += 1
+                        else:
+                            subtitles.append(SubtitleEntry(
+                                index=index,
+                                start=timedelta(seconds=segment_start),
+                                end=timedelta(seconds=segment_end),
+                                text=segment_text
+                            ))
+                            index += 1
             
             self.print_progress("Writing subtitle file...", 90)
             with open(output_path, 'w', encoding='utf-8') as f:
@@ -1149,6 +1174,12 @@ class NotYCaptionGenerator:
             self.print_info("Please install: pip install openai-whisper torch")
             input("\nPress Enter to exit...")
             return
+        
+        # Check Spleeter availability
+        if SPLEETER_AVAILABLE:
+            self.print_success("Spleeter available for high-quality vocal separation")
+        else:
+            self.print_warning("Spleeter not available. Install: pip install spleeter")
             
         # Check for Send To file
         if self.media_path_arg and not self.is_sendto:
@@ -1271,29 +1302,29 @@ class NotYCaptionGenerator:
                 
                 self.print_success(f"Source: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}")
                 
-                # Vocal separation option
-                self.clear_screen()
-                print_header()
-                print(f"\n{Colors.CYAN}{Colors.BOLD}VOCAL SEPARATION{Colors.RESET}")
-                print(f"  Demucs can isolate vocals for better transcription accuracy")
-                print()
-                print(f"  1) No vocal separation (fastest)")
-                print(f"  2) Low quality (fast)")
-                print(f"  3) Medium quality (balanced)")
-                print(f"  4) High quality (recommended)")
-                print(f"  5) Ultra quality (best but slow)")
+                # Vocal separation option (only if Spleeter is available)
+                if SPLEETER_AVAILABLE:
+                    self.clear_screen()
+                    print_header()
+                    print(f"\n{Colors.CYAN}{Colors.BOLD}VOCAL SEPARATION{Colors.RESET}")
+                    print(f"  Spleeter can isolate vocals for better transcription accuracy")
+                    print()
+                    print(f"  1) No vocal separation (fastest)")
+                    print(f"  2) Yes - 2 stems (Vocals + Accompaniment) - Fast")
+                    print(f"  3) Yes - 4 stems (Vocals + Drums + Bass + Other) - Better")
+                    print(f"  4) Yes - 5 stems (Vocals + Drums + Bass + Piano + Other) - Best")
+                    
+                    vocal_choice = self.get_number_input("\nChoose option (1-4): ", 1, 4)
+                    
+                    if vocal_choice == 1:
+                        self.use_vocal_separation = False
+                    else:
+                        self.use_vocal_separation = True
+                        model_map = {2: "2stems", 3: "4stems", 4: "5stems"}
+                        self.spleeter_model = model_map[vocal_choice]
+                        self.print_info(f"Vocal separation: {self.spleeter_model}")
                 
-                vocal_choice = self.get_number_input("\nChoose option (1-5): ", 1, 5)
-                
-                if vocal_choice == 1:
-                    self.use_vocal_separation = False
-                else:
-                    self.use_vocal_separation = True
-                    quality_map = {2: "Low", 3: "Medium", 4: "High", 5: "Ultra"}
-                    self.vocal_quality = quality_map[vocal_choice]
-                    self.print_info(f"Vocal separation: {self.vocal_quality} quality")
-                
-                # Select model
+                # Select Whisper model
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}\n")
@@ -1352,22 +1383,22 @@ class NotYCaptionGenerator:
                 line_type = self.selected_line_type[1]
                 
                 number_per_line = 5
-                if line_type != "auto":
-                    number_per_line = self.get_number_input(
-                        f"How many {line_type} per line? (1-30): ", 1, 30
-                    )
+                if line_type == "words":
+                    number_per_line = self.get_number_input("How many words per line? (1-10): ", 1, 10)
+                elif line_type == "letters":
+                    number_per_line = self.get_number_input("How many letters per line? (1-50): ", 1, 50)
                 
                 self.clear_screen()
                 print_header()
                 self.print_box([
                     f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
                     f"File: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}",
-                    f"Vocal Separation: {self.vocal_quality if self.use_vocal_separation else 'No'}",
+                    f"Vocal Separation: {self.spleeter_model if self.use_vocal_separation else 'No'}",
                     f"Model: {self.selected_model.upper()}",
                     f"Mode: {self.selected_mode[0]}",
                     f"Language: {language_name}",
                     f"Line Break: {self.selected_line_type[0]}",
-                    f"Settings: {number_per_line if line_type != 'auto' else 'Auto-detect'}"
+                    f"Settings: {number_per_line if line_type != 'auto' else 'Smart detection'}"
                 ])
                 
                 if not self.confirm("Generate captions?"):
