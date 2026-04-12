@@ -12,3 +12,4 @@ nuitka>=2.0
 ordered-set>=4.1.0
 zstandard>=0.22.0
 pyinstaller>=6.0.0
+demucs==>4.0.1

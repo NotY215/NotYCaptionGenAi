@@ -91,6 +91,13 @@ except ImportError:
     YTDLP_AVAILABLE = False
     yt_dlp = None
 
+# Try to import demucs for vocal separation
+try:
+    from demucs import separate
+    DEMUCS_AVAILABLE = True
+except ImportError:
+    DEMUCS_AVAILABLE = False
+
 # ANSI color codes
 class Colors:
     RESET = '\033[0m'
@@ -124,8 +131,7 @@ def cleanup_temp_files():
     """Clean up temporary audio files only - NOT cache"""
     try:
         temp_dir = Path(tempfile.gettempdir())
-        # Only delete temporary audio files, not cache
-        patterns = ["*_temp_audio.wav", "*_vocals.wav", "youtube_audio_*"]
+        patterns = ["*_temp_audio.wav", "*_vocals.wav", "*_no_vocals.wav", "youtube_audio_*", "demucs_separated_*"]
         for pattern in patterns:
             for file in temp_dir.glob(pattern):
                 try:
@@ -218,36 +224,65 @@ class Language(Enum):
     RUSSIAN = ("ru", "Russian", True)
     AUTO = ("auto", "Auto Detect", False)
 
-# COMPLETE HINDI TRANSLITERATION (Devanagari to Hinglish)
+# COMPLETE HINDI TRANSLITERATION (Devanagari to Hinglish) - FIXED
 HINDI_TRANSLIT = {
-    # Vowels
+    # Vowels (Swar)
     'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
-    'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'ऋ': 'ri', 'ॠ': 'ree',
+    'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'ऋ': 'ri',
     'अं': 'am', 'अः': 'ah',
     
-    # Consonants
-    'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'ङ': 'ng',
-    'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh', 'ञ': 'ny',
-    'ट': 't', 'ठ': 'th', 'ड': 'd', 'ढ': 'dh', 'ण': 'n',
-    'त': 't', 'थ': 'th', 'द': 'd', 'ध': 'dh', 'न': 'n',
-    'प': 'p', 'फ': 'ph', 'ब': 'b', 'भ': 'bh', 'म': 'm',
-    'य': 'y', 'र': 'r', 'ल': 'l', 'व': 'v', 'श': 'sh', 'ष': 'sh', 'स': 's', 'ह': 'h',
-    'क्ष': 'ksh', 'त्र': 'tr', 'ज्ञ': 'gy', 'श्र': 'shr',
+    # Consonants (Vyanjan)
+    'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
+    'च': 'cha', 'छ': 'chha', 'ज': 'ja', 'झ': 'jha', 'ञ': 'nya',
+    'ट': 'ta', 'ठ': 'tha', 'ड': 'da', 'ढ': 'dha', 'ण': 'na',
+    'त': 'ta', 'थ': 'tha', 'द': 'da', 'ध': 'dha', 'न': 'na',
+    'प': 'pa', 'फ': 'pha', 'ब': 'ba', 'भ': 'bha', 'म': 'ma',
+    'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha',
+    'ष': 'sha', 'स': 'sa', 'ह': 'ha',
     
-    # Vowel signs (matras)
-    'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
+    # Compound Consonants (Sanyukt Vyanjan)
+    'क्ष': 'ksha', 'त्र': 'tra', 'ज्ञ': 'gya', 'श्र': 'shra',
+    'द्य': 'dya', 'द्व': 'dva', 'ह्म': 'hma', 'ह्न': 'hna',
+    'ह्य': 'hya', 'ह्व': 'hva', 'ल्ल': 'lla', 'ल्य': 'lya',
+    'ल्व': 'lva', 'म्न': 'mna', 'म्य': 'mya', 'म्ल': 'mla',
+    'न्न': 'nna', 'न्य': 'nya', 'न्व': 'nva', 'प्त': 'pta',
+    'प्ल': 'pla', 'प्र': 'pra', 'प्य': 'pya', 'ब्ज': 'bja',
+    'ब्द': 'bda', 'ब्र': 'bra', 'ब्य': 'bya', 'भ्र': 'bhra',
+    'म्ब': 'mba', 'म्भ': 'mbha', 'न्द': 'nda', 'न्ध': 'ndha',
+    'न्न': 'nna', 'म्प': 'mpa', 'म्फ': 'mpha', 'न्त': 'nta',
+    'न्थ': 'ntha', 'न्द': 'nda', 'न्ध': 'ndha', 'न्न': 'nna',
+    'प्स': 'psa', 'प्ल': 'pla', 'ष्ण': 'shna', 'ष्प': 'shpa',
+    'ष्म': 'shma', 'स्य': 'sya', 'स्ख': 'skha', 'स्न': 'sna',
+    'स्प': 'spa', 'स्फ': 'spha', 'स्म': 'sma', 'स्य': 'sya',
+    'स्र': 'sra', 'स्व': 'sva', 'ह्ण': 'hna', 'ह्न': 'hna',
+    'ह्म': 'hma', 'ह्य': 'hya', 'ह्र': 'hra', 'ह्व': 'hva',
+    
+    # Vowel signs (Matras)
+    'ा': 'aa', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
     'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h',
-    '्': '',  # Halant (removes vowel)
+    '्': '',  # Halant (virama) - removes the inherent 'a'
     
     # Numbers
     '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
     '५': '5', '६': '6', '७': '7', '८': '8', '९': '9',
-    
-    # Common conjuncts
-    'क्‍ष': 'ksh', 'त्‍र': 'tr', 'ज्‍ञ': 'gy', 'श्‍र': 'shr',
-    'द्‍व': 'dv', 'ह्‍म': 'hm', 'द्‍य': 'dy', 'न्‍य': 'ny',
-    'प्‍र': 'pr', 'ब्‍र': 'br', 'क्‍र': 'kr', 'ग्‍र': 'gr',
-    'फ्‍र': 'phr', 'भ्‍र': 'bhr', 'स्‍र': 'sr', 'स्‍व': 'sv',
+}
+
+# Common Hindi words and their correct Hinglish spellings
+HINDI_WORD_MAP = {
+    'मैं': 'main', 'है': 'hai', 'नहीं': 'nahin', 'और': 'aur', 'को': 'ko',
+    'से': 'se', 'में': 'mein', 'का': 'ka', 'की': 'ki', 'के': 'ke',
+    'यह': 'yah', 'वह': 'vah', 'तो': 'to', 'भी': 'bhi', 'एक': 'ek',
+    'पर': 'par', 'हो': 'ho', 'था': 'tha', 'थी': 'thi', 'थे': 'the',
+    'था': 'tha', 'थी': 'thi', 'थे': 'the', 'हूं': 'hun', 'हो': 'ho',
+    'हैं': 'hain', 'था': 'tha', 'थी': 'thi', 'थे': 'the', 'थीं': 'thin',
+    'कर': 'kar', 'किया': 'kiya', 'की': 'ki', 'के': 'ke', 'को': 'ko',
+    'ने': 'ne', 'में': 'mein', 'पर': 'par', 'से': 'se', 'तक': 'tak',
+    'लिए': 'liye', 'वाला': 'wala', 'वाले': 'wale', 'वाली': 'wali',
+    'सकता': 'sakta', 'सकती': 'sakti', 'सकते': 'sakte', 'चाहिए': 'chahiye',
+    'पड़ता': 'padta', 'पड़ती': 'padti', 'पड़ते': 'padte', 'रहा': 'raha',
+    'रही': 'rahi', 'रहे': 'rahe', 'दिया': 'diya', 'दी': 'di', 'दिए': 'diye',
+    'लिया': 'liya', 'ली': 'li', 'लिए': 'liye', 'गया': 'gaya', 'गई': 'gayi',
+    'गए': 'gaye', 'जा': 'ja', 'जाता': 'jata', 'जाती': 'jati', 'जाते': 'jate',
 }
 
 # Complete Russian Transliteration
@@ -264,7 +299,7 @@ RUSSIAN_TRANSLIT = {
     'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
 }
 
-# Complete Spanish Transliteration (accent removal)
+# Complete Spanish Transliteration
 SPANISH_TRANSLIT = {
     'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u',
     'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ü': 'U',
@@ -274,7 +309,6 @@ SPANISH_TRANSLIT = {
 
 # Complete Japanese Transliteration
 JAPANESE_TRANSLIT = {
-    # Hiragana
     'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
     'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
     'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
@@ -290,7 +324,17 @@ JAPANESE_TRANSLIT = {
     'だ': 'da', 'ぢ': 'ji', 'づ': 'zu', 'で': 'de', 'ど': 'do',
     'ば': 'ba', 'び': 'bi', 'ぶ': 'bu', 'べ': 'be', 'ぼ': 'bo',
     'ぱ': 'pa', 'ぴ': 'pi', 'ぷ': 'pu', 'ぺ': 'pe', 'ぽ': 'po',
-    # Katakana
+    'きゃ': 'kya', 'きゅ': 'kyu', 'きょ': 'kyo',
+    'しゃ': 'sha', 'しゅ': 'shu', 'しょ': 'sho',
+    'ちゃ': 'cha', 'ちゅ': 'chu', 'ちょ': 'cho',
+    'にゃ': 'nya', 'にゅ': 'nyu', 'にょ': 'nyo',
+    'ひゃ': 'hya', 'ひゅ': 'hyu', 'ひょ': 'hyo',
+    'みゃ': 'mya', 'みゅ': 'myu', 'みょ': 'myo',
+    'りゃ': 'rya', 'りゅ': 'ryu', 'りょ': 'ryo',
+    'ぎゃ': 'gya', 'ぎゅ': 'gyu', 'ぎょ': 'gyo',
+    'じゃ': 'ja', 'じゅ': 'ju', 'じょ': 'jo',
+    'びゃ': 'bya', 'びゅ': 'byu', 'びょ': 'byo',
+    'ぴゃ': 'pya', 'ぴゅ': 'pyu', 'ぴょ': 'pyo',
     'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
     'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
     'サ': 'sa', 'シ': 'shi', 'ス': 'su', 'セ': 'se', 'ソ': 'so',
@@ -306,7 +350,18 @@ JAPANESE_TRANSLIT = {
     'ダ': 'da', 'ヂ': 'ji', 'ヅ': 'zu', 'デ': 'de', 'ド': 'do',
     'バ': 'ba', 'ビ': 'bi', 'ブ': 'bu', 'ベ': 'be', 'ボ': 'bo',
     'パ': 'pa', 'ピ': 'pi', 'プ': 'pu', 'ペ': 'pe', 'ポ': 'po',
-    'ャ': 'ya', 'ュ': 'yu', 'ョ': 'yo', 'ッ': 't', 'ー': ''
+    'キャ': 'kya', 'キュ': 'kyu', 'キョ': 'kyo',
+    'シャ': 'sha', 'シュ': 'shu', 'ショ': 'sho',
+    'チャ': 'cha', 'チュ': 'chu', 'チョ': 'cho',
+    'ニャ': 'nya', 'ニュ': 'nyu', 'ニョ': 'nyo',
+    'ヒャ': 'hya', 'ヒュ': 'hyu', 'ヒョ': 'hyo',
+    'ミャ': 'mya', 'ミュ': 'myu', 'ミョ': 'myo',
+    'リャ': 'rya', 'リュ': 'ryu', 'リョ': 'ryo',
+    'ギャ': 'gya', 'ギュ': 'gyu', 'ギョ': 'gyo',
+    'ジャ': 'ja', 'ジュ': 'ju', 'ジョ': 'jo',
+    'ビャ': 'bya', 'ビュ': 'byu', 'ビョ': 'byo',
+    'ピャ': 'pya', 'ピュ': 'pyu', 'ピョ': 'pyo',
+    'ッ': 't', 'ー': ''
 }
 
 # Complete Korean Transliteration
@@ -349,6 +404,14 @@ WHISPER_MODELS = {
     "small": {"size": "500 MB", "desc": "Good"},
     "medium": {"size": "1.5 GB", "desc": "Accurate"},
     "large": {"size": "2.9 GB", "desc": "Best"}
+}
+
+# Demucs models for vocal separation
+DEMUCS_MODELS = {
+    "htdemucs": "Hybrid Transformer Demucs (Best quality)",
+    "htdemucs_ft": "Fine-tuned Hybrid Transformer Demucs",
+    "mdx": "MDX-Net architecture",
+    "mdx_extra": "MDX-Net extra (Better quality, slower)",
 }
 
 # Supported file extensions
@@ -423,6 +486,10 @@ class NotYCaptionGenerator:
             ("Letters", "letters", "Break by character limit (1-30)"),
             ("Auto", "auto", "Auto-detect sentence breaks by audio gaps")
         ]
+        
+        # Vocal separation option
+        self.use_vocal_separation = False
+        self.demucs_model = "htdemucs"
         
         self.selected_model = None
         self.selected_language = None
@@ -670,6 +737,98 @@ class NotYCaptionGenerator:
             pass
         return None
         
+    def separate_vocals_demucs(self, audio_path: Path) -> Tuple[Optional[Path], Optional[Path]]:
+        """Separate vocals using Demucs for higher quality"""
+        if not DEMUCS_AVAILABLE:
+            self.print_warning("Demucs not available. Install: pip install demucs")
+            return None, None
+            
+        self.print_progress("Separating vocals with Demucs (high quality)...", 30)
+        
+        temp_dir = Path(tempfile.gettempdir())
+        output_dir = temp_dir / f"demucs_separated_{int(time.time())}"
+        
+        try:
+            # Run demucs separation
+            cmd = [
+                sys.executable, "-m", "demucs",
+                "--two-stems", "vocals",
+                "-n", self.demucs_model,
+                "-o", str(output_dir),
+                str(audio_path)
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            
+            if result.returncode == 0:
+                # Find the separated files
+                for file in output_dir.rglob("*.wav"):
+                    if "vocals" in file.name.lower():
+                        vocals_path = file
+                    elif "no_vocals" in file.name.lower() or "accompaniment" in file.name.lower():
+                        no_vocals_path = file
+                
+                # Also look for standard demucs output structure
+                if not vocals_path:
+                    for file in output_dir.rglob("*"):
+                        if "vocals.wav" in str(file):
+                            vocals_path = file
+                        elif "no_vocals.wav" in str(file) or "drums.wav" in str(file):
+                            no_vocals_path = file
+                
+                self.print_progress("Vocal separation complete", 40)
+                
+                # Copy to temp directory with clean names
+                final_vocals = temp_dir / f"{audio_path.stem}_vocals.wav"
+                final_no_vocals = temp_dir / f"{audio_path.stem}_no_vocals.wav"
+                
+                if vocals_path and vocals_path.exists():
+                    shutil.copy2(vocals_path, final_vocals)
+                if no_vocals_path and no_vocals_path.exists():
+                    shutil.copy2(no_vocals_path, final_no_vocals)
+                
+                # Cleanup demucs output directory
+                shutil.rmtree(output_dir, ignore_errors=True)
+                
+                return final_vocals if final_vocals.exists() else None, final_no_vocals if final_no_vocals.exists() else None
+            else:
+                self.print_warning(f"Demucs separation failed: {result.stderr}")
+                return None, None
+                
+        except subprocess.TimeoutExpired:
+            self.print_warning("Demucs separation timed out")
+            return None, None
+        except Exception as e:
+            self.print_warning(f"Demucs error: {e}")
+            return None, None
+            
+    def separate_vocals_ffmpeg(self, audio_path: Path) -> Optional[Path]:
+        """Fallback vocal separation using FFmpeg filters"""
+        self.print_progress("Isolating vocals with FFmpeg...", 35)
+        
+        temp_dir = Path(tempfile.gettempdir())
+        vocal_path = temp_dir / f"{audio_path.stem}_vocals.wav"
+        
+        ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
+        
+        # Enhanced vocal isolation using multiple filters
+        cmd = [
+            ffmpeg_cmd, '-i', str(audio_path),
+            '-af', 'highpass=f=100, lowpass=f=8000, volume=1.5, aemphasis=0.1',
+            '-y',
+            str(vocal_path)
+        ]
+        
+        try:
+            subprocess.run(cmd, capture_output=True, timeout=180)
+            if vocal_path.exists() and vocal_path.stat().st_size > 0:
+                self.print_progress("Vocal isolation complete", 40)
+                return vocal_path
+        except:
+            pass
+        
+        return None
+        
     def transliterate_text(self, text: str, language_code: str) -> str:
         """Convert text from non-Latin scripts to Latin alphabet"""
         if language_code not in TRANSLITERATION_MAPS:
@@ -685,15 +844,14 @@ class NotYCaptionGenerator:
             translit = mapping[original]
             result = result.replace(original, translit)
         
+        # For Hindi, apply common word mapping for better Hinglish
+        if language_code == "hi":
+            for hindi_word, hinglish_word in HINDI_WORD_MAP.items():
+                result = result.replace(hindi_word, hinglish_word)
+        
         # Clean up extra spaces and normalize
         result = re.sub(r'\s+', ' ', result)
         result = result.strip()
-        
-        # Additional cleanup for Hindi to make it more readable
-        if language_code == "hi":
-            # Fix common patterns
-            result = re.sub(r'(\w+)a(\s|$)', r'\1\2', result)  # Remove trailing 'a' where appropriate
-            result = re.sub(r'([aeiou])([aeiou])', r'\1\2', result)  # Keep vowels as is
         
         return result
         
@@ -828,6 +986,19 @@ class NotYCaptionGenerator:
                     if not audio_path:
                         self.print_error("Could not extract audio")
                         return False
+                
+                # Apply vocal separation if enabled
+                if self.use_vocal_separation:
+                    self.print_info("Using Demucs for high-quality vocal separation...")
+                    vocals_path, no_vocals_path = self.separate_vocals_demucs(audio_path)
+                    if vocals_path and vocals_path.exists():
+                        audio_path = vocals_path
+                        self.print_success("Using isolated vocals for better transcription")
+                    else:
+                        self.print_warning("Demucs separation failed, falling back to FFmpeg...")
+                        vocals_path = self.separate_vocals_ffmpeg(audio_path)
+                        if vocals_path and vocals_path.exists():
+                            audio_path = vocals_path
                 
                 if self.model is None:
                     if not self.load_model(model_name):
@@ -983,6 +1154,12 @@ class NotYCaptionGenerator:
             input("\nPress Enter to exit...")
             return
             
+        # Check if Demucs is available for vocal separation
+        if DEMUCS_AVAILABLE:
+            self.print_success("Demucs available for high-quality vocal separation")
+        else:
+            self.print_warning("Demucs not available. Install with: pip install demucs")
+            
         # Check if file was sent via Send To
         if self.media_path_arg and not self.is_sendto:
             media_path = Path(self.media_path_arg)
@@ -1104,13 +1281,37 @@ class NotYCaptionGenerator:
                 
                 self.print_success(f"Source: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}")
                 
+                # Ask for vocal separation preference (if Demucs available)
+                if DEMUCS_AVAILABLE:
+                    self.clear_screen()
+                    print_header()
+                    print(f"\n{Colors.CYAN}Enable Vocal Separation?{Colors.RESET}")
+                    print(f"  Demucs can isolate vocals for better transcription accuracy")
+                    print(f"  This may increase processing time but improves quality")
+                    print()
+                    print(f"  1) Yes - Use Demucs vocal separation")
+                    print(f"  2) No - Process original audio")
+                    
+                    vocal_choice = self.get_number_input("\nChoose option (1-2): ", 1, 2)
+                    self.use_vocal_separation = (vocal_choice == 1)
+                    
+                    if self.use_vocal_separation:
+                        # Ask for Demucs model
+                        print(f"\n{Colors.CYAN}Select Demucs Model:{Colors.RESET}")
+                        model_options = [f"{k} - {v}" for k, v in DEMUCS_MODELS.items()]
+                        for i, opt in enumerate(model_options, 1):
+                            print(f"  {i}) {opt}")
+                        model_choice = self.get_number_input(f"\nChoose model (1-{len(model_options)}): ", 1, len(model_options))
+                        self.demucs_model = list(DEMUCS_MODELS.keys())[model_choice - 1]
+                        self.print_info(f"Using Demucs model: {self.demucs_model}")
+                
                 # Select model
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}\n")
                 
                 model_options = [f"{m[0].upper()} ({m[1]}) - {m[2]}" for m in self.models]
-                model_choice = self.show_menu("SELECT MODEL", model_options)
+                model_choice = self.show_menu("SELECT WHISPER MODEL", model_options)
                 if model_choice == -1:
                     if platform_choice == 1 and media_path and media_path.exists():
                         try:
@@ -1193,6 +1394,7 @@ class NotYCaptionGenerator:
                 self.print_box([
                     f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
                     f"File: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}",
+                    f"Vocal Separation: {'Yes (Demucs - ' + self.demucs_model + ')' if self.use_vocal_separation else 'No'}",
                     f"Model: {self.selected_model.upper()}",
                     f"Mode: {self.selected_mode[0]}",
                     f"Language: {language_name}",
