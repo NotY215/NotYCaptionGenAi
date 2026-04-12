@@ -121,9 +121,10 @@ if platform.system() == "Windows":
                 setattr(Colors, attr, '')
 
 def cleanup_temp_files():
-    """Clean up temporary files created by the app"""
+    """Clean up temporary audio files only - NOT cache"""
     try:
         temp_dir = Path(tempfile.gettempdir())
+        # Only delete temporary audio files, not cache
         patterns = ["*_temp_audio.wav", "*_vocals.wav", "youtube_audio_*"]
         for pattern in patterns:
             for file in temp_dir.glob(pattern):
@@ -217,122 +218,128 @@ class Language(Enum):
     RUSSIAN = ("ru", "Russian", True)
     AUTO = ("auto", "Auto Detect", False)
 
-# Complete transliteration mappings - IMPROVED for better accuracy
+# COMPLETE HINDI TRANSLITERATION (Devanagari to Hinglish)
+HINDI_TRANSLIT = {
+    # Vowels
+    'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
+    'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'ऋ': 'ri', 'ॠ': 'ree',
+    'अं': 'am', 'अः': 'ah',
+    
+    # Consonants
+    'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'ङ': 'ng',
+    'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh', 'ञ': 'ny',
+    'ट': 't', 'ठ': 'th', 'ड': 'd', 'ढ': 'dh', 'ण': 'n',
+    'त': 't', 'थ': 'th', 'द': 'd', 'ध': 'dh', 'न': 'n',
+    'प': 'p', 'फ': 'ph', 'ब': 'b', 'भ': 'bh', 'म': 'm',
+    'य': 'y', 'र': 'r', 'ल': 'l', 'व': 'v', 'श': 'sh', 'ष': 'sh', 'स': 's', 'ह': 'h',
+    'क्ष': 'ksh', 'त्र': 'tr', 'ज्ञ': 'gy', 'श्र': 'shr',
+    
+    # Vowel signs (matras)
+    'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
+    'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h',
+    '्': '',  # Halant (removes vowel)
+    
+    # Numbers
+    '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
+    '५': '5', '६': '6', '७': '7', '८': '8', '९': '9',
+    
+    # Common conjuncts
+    'क्‍ष': 'ksh', 'त्‍र': 'tr', 'ज्‍ञ': 'gy', 'श्‍र': 'shr',
+    'द्‍व': 'dv', 'ह्‍म': 'hm', 'द्‍य': 'dy', 'न्‍य': 'ny',
+    'प्‍र': 'pr', 'ब्‍र': 'br', 'क्‍र': 'kr', 'ग्‍र': 'gr',
+    'फ्‍र': 'phr', 'भ्‍र': 'bhr', 'स्‍र': 'sr', 'स्‍व': 'sv',
+}
+
+# Complete Russian Transliteration
+RUSSIAN_TRANSLIT = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+    'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
+    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
+    'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
+    'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
+    'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
+    'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
+}
+
+# Complete Spanish Transliteration (accent removal)
+SPANISH_TRANSLIT = {
+    'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u',
+    'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ü': 'U',
+    'ñ': 'n', 'Ñ': 'N', 'ç': 'c', 'Ç': 'C',
+    '¿': '', '¡': ''
+}
+
+# Complete Japanese Transliteration
+JAPANESE_TRANSLIT = {
+    # Hiragana
+    'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
+    'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
+    'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
+    'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
+    'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
+    'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
+    'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
+    'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
+    'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
+    'わ': 'wa', 'を': 'wo', 'ん': 'n',
+    'が': 'ga', 'ぎ': 'gi', 'ぐ': 'gu', 'げ': 'ge', 'ご': 'go',
+    'ざ': 'za', 'じ': 'ji', 'ず': 'zu', 'ぜ': 'ze', 'ぞ': 'zo',
+    'だ': 'da', 'ぢ': 'ji', 'づ': 'zu', 'で': 'de', 'ど': 'do',
+    'ば': 'ba', 'び': 'bi', 'ぶ': 'bu', 'べ': 'be', 'ぼ': 'bo',
+    'ぱ': 'pa', 'ぴ': 'pi', 'ぷ': 'pu', 'ぺ': 'pe', 'ぽ': 'po',
+    # Katakana
+    'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
+    'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
+    'サ': 'sa', 'シ': 'shi', 'ス': 'su', 'セ': 'se', 'ソ': 'so',
+    'タ': 'ta', 'チ': 'chi', 'ツ': 'tsu', 'テ': 'te', 'ト': 'to',
+    'ナ': 'na', 'ニ': 'ni', 'ヌ': 'nu', 'ネ': 'ne', 'ノ': 'no',
+    'ハ': 'ha', 'ヒ': 'hi', 'フ': 'fu', 'ヘ': 'he', 'ホ': 'ho',
+    'マ': 'ma', 'ミ': 'mi', 'ム': 'mu', 'メ': 'me', 'モ': 'mo',
+    'ヤ': 'ya', 'ユ': 'yu', 'ヨ': 'yo',
+    'ラ': 'ra', 'リ': 'ri', 'ル': 'ru', 'レ': 're', 'ロ': 'ro',
+    'ワ': 'wa', 'ヲ': 'wo', 'ン': 'n',
+    'ガ': 'ga', 'ギ': 'gi', 'グ': 'gu', 'ゲ': 'ge', 'ゴ': 'go',
+    'ザ': 'za', 'ジ': 'ji', 'ズ': 'zu', 'ゼ': 'ze', 'ゾ': 'zo',
+    'ダ': 'da', 'ヂ': 'ji', 'ヅ': 'zu', 'デ': 'de', 'ド': 'do',
+    'バ': 'ba', 'ビ': 'bi', 'ブ': 'bu', 'ベ': 'be', 'ボ': 'bo',
+    'パ': 'pa', 'ピ': 'pi', 'プ': 'pu', 'ペ': 'pe', 'ポ': 'po',
+    'ャ': 'ya', 'ュ': 'yu', 'ョ': 'yo', 'ッ': 't', 'ー': ''
+}
+
+# Complete Korean Transliteration
+KOREAN_TRANSLIT = {
+    'ㄱ': 'g', 'ㄲ': 'kk', 'ㄴ': 'n', 'ㄷ': 'd', 'ㄸ': 'tt',
+    'ㄹ': 'r', 'ㅁ': 'm', 'ㅂ': 'b', 'ㅃ': 'pp', 'ㅅ': 's',
+    'ㅆ': 'ss', 'ㅇ': '', 'ㅈ': 'j', 'ㅉ': 'jj', 'ㅊ': 'ch',
+    'ㅋ': 'k', 'ㅌ': 't', 'ㅍ': 'p', 'ㅎ': 'h',
+    'ㅏ': 'a', 'ㅐ': 'ae', 'ㅑ': 'ya', 'ㅒ': 'yae', 'ㅓ': 'eo',
+    'ㅔ': 'e', 'ㅕ': 'yeo', 'ㅖ': 'ye', 'ㅗ': 'o', 'ㅘ': 'wa',
+    'ㅙ': 'wae', 'ㅚ': 'oe', 'ㅛ': 'yo', 'ㅜ': 'u', 'ㅝ': 'wo',
+    'ㅞ': 'we', 'ㅟ': 'wi', 'ㅠ': 'yu', 'ㅡ': 'eu', 'ㅢ': 'ui',
+    'ㅣ': 'i'
+}
+
+# Complete Chinese Pinyin Transliteration
+CHINESE_TRANSLIT = {
+    'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
+    'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
+    'ī': 'i', 'í': 'i', 'ǐ': 'i', 'ì': 'i',
+    'ō': 'o', 'ó': 'o', 'ǒ': 'o', 'ò': 'o',
+    'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
+    'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v',
+}
+
+# Master transliteration map
 TRANSLITERATION_MAPS = {
-    # Russian (Cyrillic to Latin) - ISO 9 standard
-    "ru": {
-        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
-        'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-        'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-        'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
-        'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-        'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
-        'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
-        'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
-        'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
-        'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
-    },
-    # Spanish (accent removal and special chars)
-    "es": {
-        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u',
-        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ü': 'U',
-        'ñ': 'n', 'Ñ': 'N',
-        '¿': '', '¡': '', 'º': 'o', 'ª': 'a',
-        'ç': 'c', 'Ç': 'C'
-    },
-    # Chinese Pinyin (tone marks to letters)
-    "zh": {
-        'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
-        'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
-        'ī': 'i', 'í': 'i', 'ǐ': 'i', 'ì': 'i',
-        'ō': 'o', 'ó': 'o', 'ǒ': 'o', 'ò': 'o',
-        'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
-        'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v',
-    },
-    # Hindi (Devanagari to Latin) - IMPROVED
-    "hi": {
-        'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
-        'ऋ': 'ri', 'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
-        'क': 'ka', 'ख': 'kha', 'ग': 'ga', 'घ': 'gha', 'ङ': 'nga',
-        'च': 'cha', 'छ': 'chha', 'ज': 'ja', 'झ': 'jha', 'ञ': 'nya',
-        'ट': 'ta', 'ठ': 'tha', 'ड': 'da', 'ढ': 'dha', 'ण': 'na',
-        'त': 'ta', 'थ': 'tha', 'द': 'da', 'ध': 'dha', 'न': 'na',
-        'प': 'pa', 'फ': 'pha', 'ब': 'ba', 'भ': 'bha', 'म': 'ma',
-        'य': 'ya', 'र': 'ra', 'ल': 'la', 'व': 'va', 'श': 'sha', 'ष': 'sha', 'स': 'sa', 'ह': 'ha',
-        'क्ष': 'ksha', 'त्र': 'tra', 'ज्ञ': 'gya', 'श्र': 'shra',
-        'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo', 'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au',
-        'ं': 'n', 'ः': 'h', '्': '',
-        '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
-        '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
-    },
-    # Japanese (Kana to Romaji) - IMPROVED
-    "ja": {
-        'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
-        'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
-        'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
-        'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
-        'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
-        'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
-        'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
-        'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
-        'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
-        'わ': 'wa', 'を': 'wo', 'ん': 'n',
-        'が': 'ga', 'ぎ': 'gi', 'ぐ': 'gu', 'げ': 'ge', 'ご': 'go',
-        'ざ': 'za', 'じ': 'ji', 'ず': 'zu', 'ぜ': 'ze', 'ぞ': 'zo',
-        'だ': 'da', 'ぢ': 'ji', 'づ': 'zu', 'で': 'de', 'ど': 'do',
-        'ば': 'ba', 'び': 'bi', 'ぶ': 'bu', 'べ': 'be', 'ぼ': 'bo',
-        'ぱ': 'pa', 'ぴ': 'pi', 'ぷ': 'pu', 'ぺ': 'pe', 'ぽ': 'po',
-        'きゃ': 'kya', 'きゅ': 'kyu', 'きょ': 'kyo',
-        'しゃ': 'sha', 'しゅ': 'shu', 'しょ': 'sho',
-        'ちゃ': 'cha', 'ちゅ': 'chu', 'ちょ': 'cho',
-        'にゃ': 'nya', 'にゅ': 'nyu', 'にょ': 'nyo',
-        'ひゃ': 'hya', 'ひゅ': 'hyu', 'ひょ': 'hyo',
-        'みゃ': 'mya', 'みゅ': 'myu', 'みょ': 'myo',
-        'りゃ': 'rya', 'りゅ': 'ryu', 'りょ': 'ryo',
-        'ぎゃ': 'gya', 'ぎゅ': 'gyu', 'ぎょ': 'gyo',
-        'じゃ': 'ja', 'じゅ': 'ju', 'じょ': 'jo',
-        'びゃ': 'bya', 'びゅ': 'byu', 'びょ': 'byo',
-        'ぴゃ': 'pya', 'ぴゅ': 'pyu', 'ぴょ': 'pyo',
-        'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
-        'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
-        'サ': 'sa', 'シ': 'shi', 'ス': 'su', 'セ': 'se', 'ソ': 'so',
-        'タ': 'ta', 'チ': 'chi', 'ツ': 'tsu', 'テ': 'te', 'ト': 'to',
-        'ナ': 'na', 'ニ': 'ni', 'ヌ': 'nu', 'ネ': 'ne', 'ノ': 'no',
-        'ハ': 'ha', 'ヒ': 'hi', 'フ': 'fu', 'ヘ': 'he', 'ホ': 'ho',
-        'マ': 'ma', 'ミ': 'mi', 'ム': 'mu', 'メ': 'me', 'モ': 'mo',
-        'ヤ': 'ya', 'ユ': 'yu', 'ヨ': 'yo',
-        'ラ': 'ra', 'リ': 'ri', 'ル': 'ru', 'レ': 're', 'ロ': 'ro',
-        'ワ': 'wa', 'ヲ': 'wo', 'ン': 'n',
-        'ガ': 'ga', 'ギ': 'gi', 'グ': 'gu', 'ゲ': 'ge', 'ゴ': 'go',
-        'ザ': 'za', 'ジ': 'ji', 'ズ': 'zu', 'ゼ': 'ze', 'ゾ': 'zo',
-        'ダ': 'da', 'ヂ': 'ji', 'ヅ': 'zu', 'デ': 'de', 'ド': 'do',
-        'バ': 'ba', 'ビ': 'bi', 'ブ': 'bu', 'ベ': 'be', 'ボ': 'bo',
-        'パ': 'pa', 'ピ': 'pi', 'プ': 'pu', 'ペ': 'pe', 'ポ': 'po',
-        'キャ': 'kya', 'キュ': 'kyu', 'キョ': 'kyo',
-        'シャ': 'sha', 'シュ': 'shu', 'ショ': 'sho',
-        'チャ': 'cha', 'チュ': 'chu', 'チョ': 'cho',
-        'ニャ': 'nya', 'ニュ': 'nyu', 'ニョ': 'nyo',
-        'ヒャ': 'hya', 'ヒュ': 'hyu', 'ヒョ': 'hyo',
-        'ミャ': 'mya', 'ミュ': 'myu', 'ミョ': 'myo',
-        'リャ': 'rya', 'リュ': 'ryu', 'リョ': 'ryo',
-        'ギャ': 'gya', 'ギュ': 'gyu', 'ギョ': 'gyo',
-        'ジャ': 'ja', 'ジュ': 'ju', 'ジョ': 'jo',
-        'ビャ': 'bya', 'ビュ': 'byu', 'ビョ': 'byo',
-        'ピャ': 'pya', 'ピュ': 'pyu', 'ピョ': 'pyo',
-        'っ': 't', 'ッ': 't', 'ー': ''
-    },
-    # Korean (Hangul to Romanized) - IMPROVED
-    "ko": {
-        'ㄱ': 'g', 'ㄲ': 'kk', 'ㄴ': 'n', 'ㄷ': 'd', 'ㄸ': 'tt',
-        'ㄹ': 'r', 'ㅁ': 'm', 'ㅂ': 'b', 'ㅃ': 'pp', 'ㅅ': 's',
-        'ㅆ': 'ss', 'ㅇ': '', 'ㅈ': 'j', 'ㅉ': 'jj', 'ㅊ': 'ch',
-        'ㅋ': 'k', 'ㅌ': 't', 'ㅍ': 'p', 'ㅎ': 'h',
-        'ㅏ': 'a', 'ㅐ': 'ae', 'ㅑ': 'ya', 'ㅒ': 'yae', 'ㅓ': 'eo',
-        'ㅔ': 'e', 'ㅕ': 'yeo', 'ㅖ': 'ye', 'ㅗ': 'o', 'ㅘ': 'wa',
-        'ㅙ': 'wae', 'ㅚ': 'oe', 'ㅛ': 'yo', 'ㅜ': 'u', 'ㅝ': 'wo',
-        'ㅞ': 'we', 'ㅟ': 'wi', 'ㅠ': 'yu', 'ㅡ': 'eu', 'ㅢ': 'ui',
-        'ㅣ': 'i'
-    }
+    "hi": HINDI_TRANSLIT,
+    "ru": RUSSIAN_TRANSLIT,
+    "es": SPANISH_TRANSLIT,
+    "ja": JAPANESE_TRANSLIT,
+    "ko": KOREAN_TRANSLIT,
+    "zh": CHINESE_TRANSLIT,
 }
 
 # Whisper models
@@ -360,7 +367,7 @@ class SubtitleEntry:
     
 class NotYCaptionGenerator:
     def __init__(self, media_path: str = None):
-        # Register cleanup on exit
+        # Register cleanup on exit (only temp files, NOT cache)
         atexit.register(cleanup_temp_files)
         
         if getattr(sys, 'frozen', False):
@@ -386,7 +393,6 @@ class NotYCaptionGenerator:
         
         self.init_database()
         
-        # Language mapping for display
         self.languages = [
             (Language.ENGLISH.value[1], Language.ENGLISH.value[0]),
             (Language.HINDI.value[1], Language.HINDI.value[0]),
@@ -407,8 +413,8 @@ class NotYCaptionGenerator:
         ]
         
         self.modes = [
-            ("Normal Mode", "normal", "Standard transcription without transliteration"),
-            ("Transliteration Mode", "transliterate", "Convert non-Latin scripts to Latin alphabet"),
+            ("Normal Mode", "normal", "Standard transcription (no transliteration)"),
+            ("Transliteration Mode", "transliterate", "Convert to Latin alphabet (Hinglish, Romaji, etc.)"),
             ("Translate Mode", "translate", "Translate to English while transcribing")
         ]
         
@@ -569,13 +575,6 @@ class NotYCaptionGenerator:
                 return -1
             return choice - 1
             
-    def get_media_path_sendto(self, file_path: str) -> Path:
-        path = Path(file_path)
-        if path.exists() and path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
-            self.print_success(f"File received from Send To: {path}")
-            return path
-        return None
-        
     def get_youtube_url(self) -> Optional[str]:
         print(f"\n{Colors.CYAN}Paste YouTube URL:{Colors.RESET}")
         print(f"   Example: https://www.youtube.com/watch?v=dQw4w9WgXcQ")
@@ -677,6 +676,7 @@ class NotYCaptionGenerator:
             return text
             
         mapping = TRANSLITERATION_MAPS[language_code]
+        
         # Sort keys by length (longest first) for proper replacement
         sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
         
@@ -688,6 +688,12 @@ class NotYCaptionGenerator:
         # Clean up extra spaces and normalize
         result = re.sub(r'\s+', ' ', result)
         result = result.strip()
+        
+        # Additional cleanup for Hindi to make it more readable
+        if language_code == "hi":
+            # Fix common patterns
+            result = re.sub(r'(\w+)a(\s|$)', r'\1\2', result)  # Remove trailing 'a' where appropriate
+            result = re.sub(r'([aeiou])([aeiou])', r'\1\2', result)  # Keep vowels as is
         
         return result
         
@@ -848,18 +854,20 @@ class NotYCaptionGenerator:
                     except:
                         pass
             
-            self.print_progress("Processing transcription with proper timing...", 80)
+            self.print_progress("Processing transcription...", 80)
             
-            # Determine output path based on source
-            lang_map = {
+            # Language name mapping for filename
+            lang_names = {
                 "en": "english", "hi": "hindi", "ja": "japanese", "es": "spanish",
                 "ko": "korean", "zh": "chinese", "ru": "russian", "auto": "auto"
             }
-            lang_name = lang_map.get(language_code, language_code)
+            lang_name = lang_names.get(language_code, language_code)
             
+            # Determine output path
             if is_youtube and video_title:
                 # YouTube mode - ask user where to save
-                default_name = f"{video_title}_{lang_name}.srt"
+                suffix = f"{lang_name}" if mode == "normal" else f"{lang_name}_{mode}"
+                default_name = f"{video_title}_{suffix}.srt"
                 save_path = save_file_dialog(default_name)
                 if not save_path:
                     self.print_warning("No save location selected. Saving in current directory.")
@@ -1253,9 +1261,9 @@ class NotYCaptionGenerator:
         print_header("Thank You!")
         self.print_success(f"Thanks for using {APP_NAME}!")
         print()
-        self.print_info("Cleaning up temporary files...")
+        self.print_info("Cleaning up temporary audio files...")
         cleanup_temp_files()
-        self.print_success("Cleanup complete!")
+        self.print_success("Cleanup complete! Cache files preserved.")
         
         print("\n" + "=" * 60)
         print("Application will now close...")
