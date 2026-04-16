@@ -118,13 +118,28 @@ def build_all():
         ffmpeg_count = len(list((temp_dir / "ffmpeg").glob("*")))
         print(f"    Added {ffmpeg_count} ffmpeg files")
     
-    # Copy models
+    # Copy Whisper models
     models_dir = base_dir / "models"
     if models_dir.exists() and any(models_dir.iterdir()):
-        print("  Including models...")
+        print("  Including Whisper models...")
         shutil.copytree(models_dir, temp_dir / "models")
         model_count = len(list((temp_dir / "models").glob("*.pt")))
-        print(f"    Added {model_count} models")
+        print(f"    Added {model_count} Whisper models")
+    
+    # Copy Spleeter pretrained_models
+    pretrained_models_dir = base_dir / "pretrained_models"
+    if pretrained_models_dir.exists() and any(pretrained_models_dir.iterdir()):
+        print("  Including Spleeter pretrained models...")
+        shutil.copytree(pretrained_models_dir, temp_dir / "pretrained_models")
+        
+        # Count files in pretrained_models
+        total_files = 0
+        for item in (temp_dir / "pretrained_models").rglob('*'):
+            if item.is_file():
+                total_files += 1
+        print(f"    Added {total_files} Spleeter model files")
+    else:
+        print_warning("  pretrained_models not found! Vocal separation will download models on first use.")
     
     installer_py = str(builder_dir / "installer_console.py")
     
@@ -157,9 +172,13 @@ def build_all():
     if (temp_dir / "ffmpeg").exists():
         cmd.insert(4, f"--add-data={temp_dir / 'ffmpeg'}{os.pathsep}ffmpeg")
     
-    # Add models if exists
+    # Add Whisper models if exists
     if (temp_dir / "models").exists():
         cmd.insert(4, f"--add-data={temp_dir / 'models'}{os.pathsep}models")
+    
+    # Add Spleeter pretrained_models if exists
+    if (temp_dir / "pretrained_models").exists():
+        cmd.insert(4, f"--add-data={temp_dir / 'pretrained_models'}{os.pathsep}pretrained_models")
     
     # Add icon
     icon_path = temp_dir / "resources" / "app.ico"
@@ -201,10 +220,14 @@ def build_all():
     print("  - Install the main executable")
     print("  - Install the uninstaller")
     print("  - Copy ffmpeg, resources, and models")
+    print("  - Copy Spleeter pretrained_models for vocal separation")
     print("  - Create Desktop and Start Menu shortcuts")
     print("  - Add to Send To menu")
     print("  - Register in Windows Add/Remove Programs")
     print("=" * 60)
+
+def print_warning(message):
+    print(f"\033[93m[WARNING] {message}\033[0m")
 
 if __name__ == "__main__":
     build_all()

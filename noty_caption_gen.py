@@ -40,6 +40,24 @@ class _MockCuda:
         self.is_available = lambda: False
         self.device_count = lambda: 0
         self.current_device = lambda: -1
+        self.is_initialized = lambda: False
+        self.is_bf16_supported = lambda: False
+    def __getattr__(self, name):
+        return lambda *args, **kwargs: None
+
+class _MockCudaStream:
+    def __init__(self):
+        pass
+
+class _MockTorchCuda:
+    def __init__(self):
+        self.is_available = lambda: False
+        self.device_count = lambda: 0
+        self.current_device = lambda: -1
+        self.is_initialized = lambda: False
+        self.is_bf16_supported = lambda: False
+        self.Stream = _MockCudaStream
+        self.Event = lambda *args, **kwargs: None
     def __getattr__(self, name):
         return lambda *args, **kwargs: None
 
@@ -47,10 +65,21 @@ class _MockCuda:
 try:
     import torch
     if not hasattr(torch, 'cuda') or torch.cuda.is_available() is None:
-        torch.cuda = _MockCuda()
+        torch.cuda = _MockTorchCuda()
+    elif torch.cuda.is_available():
+        # Set to CPU only for compatibility
+        torch.cuda.is_available = lambda: False
 except ImportError:
     class _MockTorch:
-        cuda = _MockCuda()
+        cuda = _MockTorchCuda()
+        class nn:
+            Module = object
+        class optim:
+            Adam = None
+        class utils:
+            data = None
+        def __getattr__(self, name):
+            return None
     torch = _MockTorch()
     sys.modules['torch'] = torch
 
@@ -63,7 +92,7 @@ import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Any, Union
 from datetime import timedelta
 import re
 import json
@@ -73,8 +102,9 @@ import tempfile
 import shutil
 import hashlib
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from collections import defaultdict
 
 # Try to import whisper
 try:
@@ -93,11 +123,22 @@ except ImportError:
     yt_dlp = None
 
 # Try to import spleeter for vocal separation
+SPLEETER_AVAILABLE = False
 try:
     from spleeter.separator import Separator
+    from spleeter.audio.adapter import AudioAdapter
     SPLEETER_AVAILABLE = True
 except ImportError as e:
-    SPLEETER_AVAILABLE = False
+    pass
+
+# Try to import tensorflow with fallback
+try:
+    import tensorflow as tf
+    tf.get_logger().setLevel('ERROR')
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
 
 # ANSI color codes
 class Colors:
@@ -132,11 +173,13 @@ def cleanup_temp_files():
     """Clean up temporary audio files only - NOT cache"""
     try:
         temp_dir = Path(tempfile.gettempdir())
-        patterns = ["*_temp_audio.wav", "*_vocals.wav", "*_accompaniment.wav", "youtube_audio_*", "spleeter_*"]
+        patterns = ["*_temp_audio.wav", "*_vocals.wav", "*_accompaniment.wav", 
+                   "youtube_audio_*", "spleeter_*", "*_temp_audio.mp3"]
         for pattern in patterns:
             for file in temp_dir.glob(pattern):
                 try:
-                    file.unlink()
+                    if file.is_file():
+                        file.unlink()
                 except:
                     pass
     except:
@@ -201,7 +244,7 @@ def print_header(title: str = None):
     print("|" + title.center(58) + "|")
     print("|" + f"Copyright (c) {APP_YEAR} {APP_AUTHOR}".center(58) + "|")
     print("|" + f"License: {APP_LICENSE}".center(58) + "|")
-    print("|" + "Powered by OpenAI Whisper".center(58) + "|")
+    print("|" + "Powered by OpenAI Whisper + Spleeter".center(58) + "|")
     print("+" + "=" * 58 + "+")
     print(f"{Colors.RESET}")
 
@@ -227,11 +270,11 @@ class Language(Enum):
 
 # Whisper models
 WHISPER_MODELS = {
-    "tiny": {"size": "75 MB", "desc": "Fastest"},
-    "base": {"size": "150 MB", "desc": "Balanced"},
-    "small": {"size": "500 MB", "desc": "Good"},
-    "medium": {"size": "1.5 GB", "desc": "Accurate"},
-    "large": {"size": "2.9 GB", "desc": "Best"}
+    "tiny": {"size": "75 MB", "desc": "Fastest", "speed": 0.5},
+    "base": {"size": "150 MB", "desc": "Balanced", "speed": 1.0},
+    "small": {"size": "500 MB", "desc": "Good", "speed": 2.0},
+    "medium": {"size": "1.5 GB", "desc": "Accurate", "speed": 4.0},
+    "large": {"size": "2.9 GB", "desc": "Best", "speed": 8.0}
 }
 
 # Spleeter models for vocal separation
@@ -244,8 +287,9 @@ SPLEETER_MODELS = {
 # Supported file extensions
 SUPPORTED_EXTENSIONS = {
     'video': ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm'],
-    'audio': ['.mp3', '.wav', '.m4a', '.flac'],
-    'all': ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm', '.mp3', '.wav', '.m4a', '.flac']
+    'audio': ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac'],
+    'all': ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm', 
+            '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac']
 }
 
 @dataclass
@@ -255,6 +299,54 @@ class SubtitleEntry:
     end: timedelta
     text: str
     
+    def to_srt(self) -> str:
+        start_str = f"{self.start.total_seconds():02d}:{int(self.start.total_seconds() % 60):02d}:{int(self.start.total_seconds() * 1000 % 1000):03d}"
+        end_str = f"{self.end.total_seconds():02d}:{int(self.end.total_seconds() % 60):02d}:{int(self.end.total_seconds() * 1000 % 1000):03d}"
+        # Proper SRT time format: HH:MM:SS,mmm
+        start_hours = int(self.start.total_seconds() // 3600)
+        start_minutes = int((self.start.total_seconds() % 3600) // 60)
+        start_seconds = int(self.start.total_seconds() % 60)
+        start_millis = int((self.start.total_seconds() % 1) * 1000)
+        
+        end_hours = int(self.end.total_seconds() // 3600)
+        end_minutes = int((self.end.total_seconds() % 3600) // 60)
+        end_seconds = int(self.end.total_seconds() % 60)
+        end_millis = int((self.end.total_seconds() % 1) * 1000)
+        
+        return f"{self.index}\n{start_hours:02d}:{start_minutes:02d}:{start_seconds:02d},{start_millis:03d} --> {end_hours:02d}:{end_minutes:02d}:{end_seconds:02d},{end_millis:03d}\n{self.text}\n"
+
+@dataclass
+class ProcessingStats:
+    start_time: float = 0
+    end_time: float = 0
+    audio_duration: float = 0
+    transcription_time: float = 0
+    separation_time: float = 0
+    total_segments: int = 0
+    model_used: str = ""
+    vocal_separation_used: bool = False
+    
+    @property
+    def total_time(self) -> float:
+        return self.end_time - self.start_time
+    
+    def display(self):
+        print(f"\n{Colors.CYAN}{'='*50}")
+        print("PROCESSING STATISTICS")
+        print(f"{'='*50}{Colors.RESET}")
+        print(f"  Model: {self.model_used}")
+        print(f"  Vocal Separation: {'Yes' if self.vocal_separation_used else 'No'}")
+        print(f"  Audio Duration: {self.audio_duration:.2f} seconds")
+        print(f"  Transcription Time: {self.transcription_time:.2f} seconds")
+        if self.separation_time > 0:
+            print(f"  Separation Time: {self.separation_time:.2f} seconds")
+        print(f"  Total Segments: {self.total_segments}")
+        print(f"  Total Processing Time: {self.total_time:.2f} seconds")
+        if self.audio_duration > 0 and self.total_time > 0:
+            ratio = self.audio_duration / self.total_time
+            print(f"  Speed: {ratio:.2f}x realtime")
+        print(f"{Colors.CYAN}{'='*50}{Colors.RESET}")
+
 class NotYCaptionGenerator:
     def __init__(self, media_path: str = None):
         atexit.register(cleanup_temp_files)
@@ -267,6 +359,8 @@ class NotYCaptionGenerator:
         self.models_dir = self.base_dir / "models"
         self.ffmpeg_dir = self.base_dir / "ffmpeg"
         self.cache_dir = self.base_dir / "cache"
+        self.pretrained_models_dir = self.base_dir / "pretrained_models"
+        
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
@@ -302,14 +396,21 @@ class NotYCaptionGenerator:
         ]
         
         self.modes = [
-            ("Normal Mode", "normal", "Standard transcription"),
+            ("Normal Mode", "normal", "Standard transcription in selected language"),
             ("Translate Mode", "translate", "Translate to English while transcribing")
         ]
         
         self.line_types = [
-            ("Words", "words", "Break by word count (1-30)"),
-            ("Letters", "letters", "Break by character limit (1-30)"),
+            ("Words", "words", "Break by word count (1-30 words)"),
+            ("Letters", "letters", "Break by character limit (1-50 chars)"),
             ("Auto", "auto", "Smart sentence detection with natural breaks")
+        ]
+        
+        self.vocal_quality_options = [
+            ("No vocal separation", "none", "Fastest - use original audio"),
+            ("2 Stems (Fast)", "2stems", "Vocals + Accompaniment - Good quality"),
+            ("4 Stems (Better)", "4stems", "Vocals + Drums + Bass + Other - Better quality"),
+            ("5 Stems (Best)", "5stems", "Vocals + Drums + Bass + Piano + Other - Best quality")
         ]
         
         self.use_vocal_separation = False
@@ -320,6 +421,7 @@ class NotYCaptionGenerator:
         self.selected_language = None
         self.selected_mode = None
         self.selected_line_type = None
+        self.selected_vocal_quality = None
         self.media_path_arg = media_path
         self.model = None
         self.is_sendto = media_path is not None
@@ -328,6 +430,27 @@ class NotYCaptionGenerator:
         self.menu_stack = []
         self.current_menu = "main"
         self.temp_data = {}
+        
+        # Processing stats
+        self.stats = ProcessingStats()
+        
+        # Check for local Spleeter models
+        self.has_local_spleeter_models = self.check_spleeter_models()
+        
+    def check_spleeter_models(self) -> bool:
+        """Check if Spleeter pretrained models exist locally"""
+        if self.pretrained_models_dir.exists():
+            for model in ['2stems', '4stems', '5stems']:
+                model_dir = self.pretrained_models_dir / model
+                if model_dir.exists() and any(model_dir.iterdir()):
+                    return True
+        return False
+        
+    def get_spleeter_model_path(self) -> Optional[Path]:
+        """Get the path to Spleeter pretrained models"""
+        if self.pretrained_models_dir.exists() and any(self.pretrained_models_dir.iterdir()):
+            return self.pretrained_models_dir
+        return None
         
     def init_database(self):
         self.db_path = self.cache_dir / "cache.db"
@@ -341,6 +464,7 @@ class NotYCaptionGenerator:
                 model_name TEXT,
                 language TEXT,
                 mode TEXT,
+                vocal_separation TEXT,
                 result TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -356,6 +480,14 @@ class NotYCaptionGenerator:
             )
         ''')
         
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         self.conn.commit()
         
     def get_file_hash(self, file_path: Path) -> str:
@@ -365,21 +497,21 @@ class NotYCaptionGenerator:
                 hasher.update(chunk)
         return hasher.hexdigest()
         
-    def cache_transcription(self, file_hash: str, model_name: str, language: str, mode: str, result: dict):
+    def cache_transcription(self, file_hash: str, model_name: str, language: str, mode: str, vocal_separation: str, result: dict):
         try:
             self.cursor.execute(
-                "INSERT OR REPLACE INTO transcriptions (file_hash, model_name, language, mode, result) VALUES (?, ?, ?, ?, ?)",
-                (file_hash, model_name, language, mode, json.dumps(result))
+                "INSERT OR REPLACE INTO transcriptions (file_hash, model_name, language, mode, vocal_separation, result) VALUES (?, ?, ?, ?, ?, ?)",
+                (file_hash, model_name, language, mode, vocal_separation, json.dumps(result))
             )
             self.conn.commit()
-        except:
+        except Exception as e:
             pass
             
-    def get_cached_transcription(self, file_hash: str, model_name: str, language: str, mode: str) -> Optional[dict]:
+    def get_cached_transcription(self, file_hash: str, model_name: str, language: str, mode: str, vocal_separation: str) -> Optional[dict]:
         try:
             self.cursor.execute(
-                "SELECT result FROM transcriptions WHERE file_hash = ? AND model_name = ? AND language = ? AND mode = ?",
-                (file_hash, model_name, language, mode)
+                "SELECT result FROM transcriptions WHERE file_hash = ? AND model_name = ? AND language = ? AND mode = ? AND vocal_separation = ?",
+                (file_hash, model_name, language, mode, vocal_separation)
             )
             row = self.cursor.fetchone()
             if row:
@@ -388,39 +520,89 @@ class NotYCaptionGenerator:
             pass
         return None
         
+    def save_setting(self, key: str, value: str):
+        try:
+            self.cursor.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (key, value)
+            )
+            self.conn.commit()
+        except:
+            pass
+            
+    def get_setting(self, key: str, default: str = None) -> Optional[str]:
+        try:
+            self.cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+            row = self.cursor.fetchone()
+            if row:
+                return row[0]
+        except:
+            pass
+        return default
+        
     def clear_screen(self):
         os.system('cls' if platform.system() == 'Windows' else 'clear')
         
     def print_success(self, message: str):
-        print(f"{Colors.GREEN}[OK] {message}{Colors.RESET}")
+        print(f"{Colors.GREEN}[✓] {message}{Colors.RESET}")
         
     def print_error(self, message: str):
-        print(f"{Colors.RED}[ERROR] {message}{Colors.RESET}")
+        print(f"{Colors.RED}[✗] {message}{Colors.RESET}")
         
     def print_warning(self, message: str):
-        print(f"{Colors.YELLOW}[WARNING] {message}{Colors.RESET}")
+        print(f"{Colors.YELLOW}[!] {message}{Colors.RESET}")
         
     def print_info(self, message: str):
-        print(f"{Colors.CYAN}[INFO] {message}{Colors.RESET}")
+        print(f"{Colors.CYAN}[i] {message}{Colors.RESET}")
         
     def print_progress(self, message: str, percent: int = None):
         if percent is not None:
             bar_length = 40
             filled = int(bar_length * percent / 100)
             bar = '█' * filled + '░' * (bar_length - filled)
-            print(f"\r{Colors.CYAN}[PROGRESS] {bar} {percent}% - {message}{Colors.RESET}", end="", flush=True)
+            print(f"\r{Colors.CYAN}[{bar}] {percent}% - {message}{Colors.RESET}", end="", flush=True)
             if percent == 100:
                 print()
         else:
-            print(f"{Colors.CYAN}[PROGRESS] {message}{Colors.RESET}")
+            print(f"{Colors.CYAN}[→] {message}{Colors.RESET}")
         
     def print_box(self, lines: List[str]):
         width = max(len(line) for line in lines) + 4
         print(f"{Colors.GREEN}")
-        print("+" + "-" * (width - 2) + "+")
+        print("┌" + "─" * (width - 2) + "┐")
         for line in lines:
-            print(f"| {line.ljust(width - 4)} |")
-        print("+" + "-" * (width - 2) + "+")
+            print(f"│ {line.ljust(width - 4)} │")
+        print("└" + "─" * (width - 2) + "┘")
+        print(f"{Colors.RESET}")
+        
+    def print_table(self, headers: List[str], rows: List[List[str]]):
+        if not rows:
+            return
+            
+        col_widths = [len(h) for h in headers]
+        for row in rows:
+            for i, cell in enumerate(row):
+                col_widths[i] = max(col_widths[i], len(str(cell)))
+        
+        total_width = sum(col_widths) + len(headers) * 3 + 1
+        
+        print(f"{Colors.CYAN}")
+        print("┌" + "─" * (total_width - 2) + "┐")
+        
+        header_line = "│ "
+        for i, header in enumerate(headers):
+            header_line += header.ljust(col_widths[i]) + " │ "
+        print(header_line[:-2])
+        
+        print("├" + "─" * (total_width - 2) + "┤")
+        
+        for row in rows:
+            row_line = "│ "
+            for i, cell in enumerate(row):
+                row_line += str(cell).ljust(col_widths[i]) + " │ "
+            print(row_line[:-2])
+        
+        print("└" + "─" * (total_width - 2) + "┘")
         print(f"{Colors.RESET}")
         
     def get_input(self, prompt: str, default: str = None) -> str:
@@ -452,16 +634,15 @@ class NotYCaptionGenerator:
     def confirm(self, prompt: str) -> bool:
         while True:
             response = self.get_input(f"{prompt} (y/n): ").lower()
-            if response in ['y', 'yes']:
+            if response in ['y', 'yes', 'ye', 'yep', 'ok']:
                 return True
-            elif response in ['n', 'no']:
+            elif response in ['n', 'no', 'nope', 'cancel']:
                 return False
             self.print_error("Please enter y or n")
             
     def show_menu(self, title: str, options: List[str], menu_id: str = None) -> int:
         """Show menu and return selected index. Returns -1 for back/exit."""
         if menu_id:
-            # Save current menu to stack before showing new one
             if self.current_menu != menu_id:
                 self.menu_stack.append(self.current_menu)
                 self.current_menu = menu_id
@@ -476,7 +657,6 @@ class NotYCaptionGenerator:
             
             choice = self.get_number_input(f"Choose option (0-{len(options)}): ", 0, len(options))
             if choice == 0:
-                # Go back to previous menu
                 if self.menu_stack:
                     self.current_menu = self.menu_stack.pop()
                 return -1
@@ -484,12 +664,28 @@ class NotYCaptionGenerator:
             
     def get_youtube_url(self) -> Optional[str]:
         print(f"\n{Colors.CYAN}Paste YouTube URL:{Colors.RESET}")
-        print(f"   Example: https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        print(f"   Examples:")
+        print(f"   - https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        print(f"   - https://youtu.be/dQw4w9WgXcQ")
+        print(f"   - https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=120")
         url = self.get_input("\n> ").strip()
         if not url:
             self.print_error("URL cannot be empty!")
             return None
         return url
+        
+    def extract_video_id(self, url: str) -> Optional[str]:
+        patterns = [
+            r'(?:youtube\.com\/watch\?v=)([\w-]+)',
+            r'(?:youtu\.be\/)([\w-]+)',
+            r'(?:youtube\.com\/embed\/)([\w-]+)',
+            r'(?:youtube\.com\/v\/)([\w-]+)'
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        return None
         
     def download_youtube_audio(self, url: str) -> Tuple[Optional[Path], Optional[str]]:
         if not YTDLP_AVAILABLE:
@@ -511,14 +707,23 @@ class NotYCaptionGenerator:
             'outtmpl': output_template,
             'quiet': True,
             'no_warnings': True,
+            'extract_flat': False,
         }
         
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 video_title = info.get('title', '')
+                video_duration = info.get('duration', 0)
+                video_uploader = info.get('uploader', '')
+                
                 video_title_clean = re.sub(r'[<>:"/\\|?*]', '', video_title)[:50]
                 self.print_info(f"Video: {video_title}")
+                self.print_info(f"Channel: {video_uploader}")
+                if video_duration:
+                    minutes = video_duration // 60
+                    seconds = video_duration % 60
+                    self.print_info(f"Duration: {minutes}:{seconds:02d}")
                 
                 for f in temp_dir.glob("youtube_audio_*"):
                     if f.suffix in ['.wav', '.mp3', '.m4a']:
@@ -540,11 +745,28 @@ class NotYCaptionGenerator:
         if self.ffmpeg_exe.exists():
             return True
         try:
-            subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=5)
-            return True
+            result = subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=5)
+            return result.returncode == 0
         except:
             pass
         return False
+        
+    def get_audio_duration(self, audio_path: Path) -> float:
+        if not self.check_ffmpeg():
+            return 0
+            
+        ffprobe_cmd = str(self.ffprobe_exe) if self.ffprobe_exe.exists() else 'ffprobe'
+        cmd = [
+            ffprobe_cmd, '-v', 'error', '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1', str(audio_path)
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                return float(result.stdout.strip())
+        except:
+            pass
+        return 0
             
     def extract_audio(self, video_path: Path) -> Path:
         if not self.check_ffmpeg():
@@ -570,10 +792,14 @@ class NotYCaptionGenerator:
         try:
             subprocess.run(cmd, capture_output=True, timeout=120)
             if audio_path.exists() and audio_path.stat().st_size > 0:
-                self.print_progress("Audio extracted", 20)
+                duration = self.get_audio_duration(audio_path)
+                self.stats.audio_duration = duration
+                self.print_progress(f"Audio extracted ({duration:.1f}s)", 20)
                 return audio_path
-        except:
-            pass
+        except subprocess.TimeoutExpired:
+            self.print_error("Audio extraction timed out")
+        except Exception as e:
+            self.print_error(f"Audio extraction failed: {e}")
         return None
         
     def separate_vocals_spleeter(self, audio_path: Path) -> Optional[Path]:
@@ -582,19 +808,28 @@ class NotYCaptionGenerator:
             self.print_warning("Spleeter not available. Install: pip install spleeter")
             return None
             
+        sep_start = time.time()
         self.print_progress(f"Separating vocals with Spleeter ({self.spleeter_model})...", 30)
         
         temp_dir = Path(tempfile.gettempdir())
         output_dir = temp_dir / f"spleeter_output_{int(time.time())}"
         
         try:
+            # Set Spleeter model path environment variable if local models exist
+            model_path = self.get_spleeter_model_path()
+            if model_path:
+                os.environ['SPLEETER_PRETRAINED_PATH'] = str(model_path)
+                self.print_info(f"Using local Spleeter models from: {model_path}")
+            else:
+                self.print_info("Downloading Spleeter model (first time only)...")
+            
             # Initialize Spleeter separator
             if self.separator is None:
                 self.print_info(f"Loading Spleeter model: {self.spleeter_model}")
                 self.separator = Separator(f'spleeter:{self.spleeter_model}')
             
             # Perform separation
-            self.print_info("Separating audio tracks...")
+            self.print_info("Separating audio tracks (this may take a while)...")
             self.separator.separate_to_file(
                 str(audio_path),
                 str(output_dir),
@@ -616,6 +851,7 @@ class NotYCaptionGenerator:
                 # Cleanup
                 shutil.rmtree(output_dir, ignore_errors=True)
                 
+                self.stats.separation_time = time.time() - sep_start
                 self.print_progress("Vocal separation complete", 40)
                 return final_vocals
             else:
@@ -635,6 +871,7 @@ class NotYCaptionGenerator:
         
         ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
         
+        # Use highpass and lowpass filters to isolate vocal range (80Hz - 12kHz)
         cmd = [
             ffmpeg_cmd, '-i', str(audio_path),
             '-af', 'highpass=f=80, lowpass=f=12000, volume=2.0',
@@ -647,8 +884,8 @@ class NotYCaptionGenerator:
             if vocal_path.exists() and vocal_path.stat().st_size > 0:
                 self.print_progress("Vocal isolation complete", 40)
                 return vocal_path
-        except:
-            pass
+        except Exception as e:
+            self.print_warning(f"FFmpeg vocal isolation failed: {e}")
         
         return None
         
@@ -659,8 +896,10 @@ class NotYCaptionGenerator:
             
         try:
             self.print_progress(f"Loading {model_name} model...", 60)
+            load_start = time.time()
             self.model = whisper.load_model(model_name, download_root=str(self.models_dir))
-            self.print_success("Model loaded")
+            load_time = time.time() - load_start
+            self.print_success(f"Model loaded in {load_time:.1f}s")
             return True
         except Exception as e:
             self.print_error(f"Failed to load model: {e}")
@@ -743,7 +982,7 @@ class NotYCaptionGenerator:
             end_time = segment["end"]
             duration = end_time - start_time
             
-            natural_breaks = ['.', '!', '?', ';', ':', ',']
+            natural_breaks = ['.', '!', '?', ';', ':', ',', '。', '！', '？', '；', '：', '，']
             has_natural_break = any(text.rstrip().endswith(p) for p in natural_breaks)
             
             if has_natural_break or duration <= max_duration:
@@ -788,7 +1027,7 @@ class NotYCaptionGenerator:
                     merged_text += " " + next_text
                     merged_end = next_end
                     
-                    if any(merged_text.rstrip().endswith(p) for p in ['.', '!', '?']):
+                    if any(merged_text.rstrip().endswith(p) for p in ['.', '!', '?', '。', '！', '？']):
                         j += 1
                         break
                     
@@ -822,14 +1061,20 @@ class NotYCaptionGenerator:
         return subtitles
         
     def generate_captions(self, media_path: Path, model_name: str, mode: str, line_type: str, 
-                          number_per_line: int, language_code: str, is_youtube: bool = False, video_title: str = None) -> bool:
+                          number_per_line: int, language_code: str, vocal_separation: str = "none",
+                          is_youtube: bool = False, video_title: str = None) -> bool:
         try:
+            self.stats = ProcessingStats()
+            self.stats.start_time = time.time()
+            self.stats.model_used = model_name
+            self.stats.vocal_separation_used = (vocal_separation != "none")
+            
             if not WHISPER_AVAILABLE:
                 self.print_error("Whisper not available!")
                 return False
                 
             file_hash = self.get_file_hash(media_path)
-            cached_result = self.get_cached_transcription(file_hash, model_name, language_code, mode)
+            cached_result = self.get_cached_transcription(file_hash, model_name, language_code, mode, vocal_separation)
             
             if cached_result:
                 self.print_success("Using cached transcription")
@@ -842,19 +1087,22 @@ class NotYCaptionGenerator:
                         self.print_error("Could not extract audio")
                         return False
                 
-                if self.use_vocal_separation:
-                    self.print_info("Using Spleeter for professional vocal separation...")
-                    vocals_path = self.separate_vocals_spleeter(audio_path)
+                if vocal_separation != "none":
+                    self.print_info(f"Using {vocal_separation} vocal separation...")
+                    
+                    if SPLEETER_AVAILABLE and vocal_separation in ['2stems', '4stems', '5stems']:
+                        self.spleeter_model = vocal_separation
+                        vocals_path = self.separate_vocals_spleeter(audio_path)
+                    else:
+                        vocals_path = self.separate_vocals_ffmpeg(audio_path)
+                    
                     if vocals_path and vocals_path.exists():
                         audio_path = vocals_path
                         self.print_success("Using isolated vocals for better transcription")
                     else:
-                        self.print_warning("Spleeter failed, trying FFmpeg...")
-                        vocals_path = self.separate_vocals_ffmpeg(audio_path)
-                        if vocals_path and vocals_path.exists():
-                            audio_path = vocals_path
+                        self.print_warning("Vocal separation failed, using original audio")
                 
-                if self.model is None:
+                if self.model is None or self.stats.model_used != model_name:
                     if not self.load_model(model_name):
                         return False
                         
@@ -863,15 +1111,18 @@ class NotYCaptionGenerator:
                 language = language_code if language_code != "auto" else None
                 task = "translate" if mode == "translate" else "transcribe"
                 
+                transcribe_start = time.time()
                 result = self.model.transcribe(
                     str(audio_path),
                     language=language,
                     task=task,
                     verbose=False,
-                    word_timestamps=True
+                    word_timestamps=True,
+                    fp16=False
                 )
+                self.stats.transcription_time = time.time() - transcribe_start
                 
-                self.cache_transcription(file_hash, model_name, language_code, mode, result)
+                self.cache_transcription(file_hash, model_name, language_code, mode, vocal_separation, result)
                 
                 if audio_path != media_path and audio_path and audio_path.exists():
                     try:
@@ -888,6 +1139,8 @@ class NotYCaptionGenerator:
             
             if is_youtube and video_title:
                 suffix = f"{lang_name}" if mode == "normal" else f"{lang_name}_{mode}"
+                if vocal_separation != "none":
+                    suffix += f"_vocals"
                 default_name = f"{video_title}_{suffix}.srt"
                 save_path = save_file_dialog(default_name)
                 if not save_path:
@@ -899,9 +1152,12 @@ class NotYCaptionGenerator:
                     suffix = f"{lang_name}_translated"
                 else:
                     suffix = lang_name
+                if vocal_separation != "none":
+                    suffix += f"_vocals"
                 output_path = media_path.parent / f"{media_path.stem}_{suffix}.srt"
             
             segments = result.get("segments", [])
+            self.stats.total_segments = len(segments)
             
             if line_type == "auto":
                 subtitles = self.auto_break_sentences(segments)
@@ -976,9 +1232,9 @@ class NotYCaptionGenerator:
             self.print_progress("Writing subtitle file...", 90)
             with open(output_path, 'w', encoding='utf-8') as f:
                 for sub in subtitles:
-                    start_str = self.format_time(sub.start.total_seconds())
-                    end_str = self.format_time(sub.end.total_seconds())
-                    f.write(f"{sub.index}\n{start_str} --> {end_str}\n{sub.text}\n\n")
+                    f.write(sub.to_srt())
+            
+            self.stats.end_time = time.time()
             
             show_message_box("Success", f"Captions saved to:\n{output_path}", "info")
             
@@ -986,6 +1242,7 @@ class NotYCaptionGenerator:
             print()
             self.print_success(f"Saved to: {output_path}")
             self.print_info(f"Generated {len(subtitles)} subtitle entries")
+            self.stats.display()
             return True
             
         except Exception as e:
@@ -995,6 +1252,26 @@ class NotYCaptionGenerator:
             show_message_box("Error", f"Failed to generate captions:\n{str(e)}", "error")
             return False
             
+    def show_about(self):
+        self.clear_screen()
+        print_header()
+        self.print_box([
+            f"{APP_NAME} v{APP_VERSION}",
+            f"Author: {APP_AUTHOR}",
+            f"License: {APP_LICENSE}",
+            "",
+            "Powered by:",
+            "  • OpenAI Whisper - Speech Recognition",
+            "  • Spleeter - Vocal Separation",
+            "  • yt-dlp - YouTube Downloading",
+            "  • FFmpeg - Audio Processing",
+            "",
+            "Support:",
+            f"  Telegram: {APP_TELEGRAM}",
+            f"  YouTube: {APP_YOUTUBE}"
+        ])
+        input("\nPress Enter to continue...")
+        
     def run(self):
         if not self.check_ffmpeg():
             self.print_warning("FFmpeg not found! Some features may not work.")
@@ -1007,8 +1284,12 @@ class NotYCaptionGenerator:
         
         if SPLEETER_AVAILABLE:
             self.print_success("Spleeter available for high-quality vocal separation")
+            if self.has_local_spleeter_models:
+                self.print_success("Local Spleeter models found (no download needed)")
+            else:
+                self.print_info("Spleeter models will be downloaded on first use")
         else:
-            self.print_warning("Spleeter not available. Install: pip install spleeter")
+            self.print_warning("Spleeter not available. Install: pip install spleeter tensorflow")
             
         # Check for Send To file
         if self.media_path_arg and not self.is_sendto:
@@ -1042,19 +1323,23 @@ class NotYCaptionGenerator:
                 if platform_choice is None:
                     self.clear_screen()
                     print_header()
-                    print(f"\n{Colors.CYAN}{Colors.BOLD}SELECT PLATFORM{Colors.RESET}")
+                    print(f"\n{Colors.CYAN}{Colors.BOLD}MAIN MENU{Colors.RESET}")
                     print(f"{Colors.CYAN}┌{'─' * 50}┐{Colors.RESET}")
                     print(f"{Colors.CYAN}│{Colors.RESET}  1) YouTube - Download and generate captions{Colors.CYAN}│{Colors.RESET}")
                     print(f"{Colors.CYAN}│{Colors.RESET}  2) Local File - Use local video/audio file{Colors.CYAN}│{Colors.RESET}")
+                    print(f"{Colors.CYAN}│{Colors.RESET}  3) About - Information about the app{Colors.CYAN}│{Colors.RESET}")
                     print(f"{Colors.CYAN}│{Colors.RESET}  0) Exit{Colors.CYAN}│{Colors.RESET}")
                     print(f"{Colors.CYAN}└{'─' * 50}┘{Colors.RESET}")
                     
-                    platform_choice = self.get_number_input("Choose option (0-2): ", 0, 2)
+                    platform_choice = self.get_number_input("Choose option (0-3): ", 0, 3)
                     
                     if platform_choice == 0:
                         break
+                    elif platform_choice == 3:
+                        self.show_about()
+                        platform_choice = None
+                        continue
                     
-                    # Reset menu stack for new session
                     self.menu_stack = []
                     self.current_menu = "main"
                     
@@ -1074,7 +1359,6 @@ class NotYCaptionGenerator:
                 video_title = None
                 
                 if platform_choice == 1:
-                    # YouTube mode
                     while True:
                         self.clear_screen()
                         print_header()
@@ -1110,7 +1394,6 @@ class NotYCaptionGenerator:
                         continue
                         
                 else:
-                    # Local file mode
                     if passed_file:
                         media_path = passed_file
                         passed_file = None
@@ -1118,8 +1401,11 @@ class NotYCaptionGenerator:
                         self.clear_screen()
                         print_header()
                         print(f"\n{Colors.CYAN}Supported Formats:{Colors.RESET}")
-                        print(f"  Video: {', '.join(SUPPORTED_EXTENSIONS['video'])}")
-                        print(f"  Audio: {', '.join(SUPPORTED_EXTENSIONS['audio'])}")
+                        self.print_table(
+                            ["Type", "Formats"],
+                            [["Video", ", ".join(SUPPORTED_EXTENSIONS['video'])],
+                             ["Audio", ", ".join(SUPPORTED_EXTENSIONS['audio'])]]
+                        )
                         print()
                         
                         media_path_str = select_file_dialog()
@@ -1135,32 +1421,36 @@ class NotYCaptionGenerator:
                 
                 self.print_success(f"Source: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}")
                 
-                # Vocal separation option
-                if SPLEETER_AVAILABLE:
-                    self.clear_screen()
-                    print_header()
-                    print(f"\n{Colors.CYAN}{Colors.BOLD}VOCAL SEPARATION{Colors.RESET}")
-                    print(f"  Spleeter can isolate vocals for better transcription accuracy")
-                    print()
-                    print(f"  1) No vocal separation (fastest)")
-                    print(f"  2) Yes - 2 stems (Vocals + Accompaniment) - Fast")
-                    print(f"  3) Yes - 4 stems (Vocals + Drums + Bass + Other) - Better")
-                    print(f"  4) Yes - 5 stems (Vocals + Drums + Bass + Piano + Other) - Best")
+                # Select vocal separation
+                self.clear_screen()
+                print_header()
+                print(f"\n{Colors.CYAN}{Colors.BOLD}VOCAL SEPARATION{Colors.RESET}")
+                print(f"  Spleeter can isolate vocals for better transcription accuracy")
+                if self.has_local_spleeter_models:
+                    print(f"  {Colors.GREEN}✓ Local models available (no download needed){Colors.RESET}")
+                print()
+                
+                vocal_options = [f"{v[0]} - {v[2]}" for v in self.vocal_quality_options]
+                vocal_choice = self.show_menu("SELECT VOCAL SEPARATION", vocal_options, "vocal")
+                if vocal_choice == -1:
+                    platform_choice = None
+                    continue
                     
-                    vocal_choice = self.get_number_input("\nChoose option (1-4): ", 1, 4)
-                    
-                    if vocal_choice == 1:
-                        self.use_vocal_separation = False
-                    else:
-                        self.use_vocal_separation = True
-                        model_map = {2: "2stems", 3: "4stems", 4: "5stems"}
-                        self.spleeter_model = model_map[vocal_choice]
-                        self.print_info(f"Vocal separation: {self.spleeter_model}")
+                self.selected_vocal_quality = self.vocal_quality_options[vocal_choice]
+                vocal_separation = self.selected_vocal_quality[1]
+                self.use_vocal_separation = (vocal_separation != "none")
+                self.spleeter_model = vocal_separation if self.use_vocal_separation else "2stems"
+                
+                if self.use_vocal_separation:
+                    self.print_info(f"Vocal separation: {self.selected_vocal_quality[0]}")
                 
                 # Select Whisper model
                 self.clear_screen()
                 print_header()
-                print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}\n")
+                print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
+                if self.use_vocal_separation:
+                    print(f"{Colors.GREEN}Vocal: {self.selected_vocal_quality[0]}{Colors.RESET}")
+                print()
                 
                 model_options = [f"{m[0].upper()} ({m[1]}) - {m[2]}" for m in self.models]
                 model_choice = self.show_menu("SELECT WHISPER MODEL", model_options, "model")
@@ -1173,13 +1463,15 @@ class NotYCaptionGenerator:
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
-                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}\n")
+                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
+                if self.use_vocal_separation:
+                    print(f"{Colors.GREEN}Vocal: {self.selected_vocal_quality[0]}{Colors.RESET}")
+                print()
                 
                 mode_options = [f"{m[0]} - {m[2]}" for m in self.modes]
                 mode_choice = self.show_menu("SELECT MODE", mode_options, "mode")
                 if mode_choice == -1:
-                    # Go back to model selection
-                    self.menu_stack.pop()  # Remove current menu
+                    self.menu_stack.pop()
                     self.current_menu = "model"
                     continue
                 self.selected_mode = self.modes[mode_choice]
@@ -1190,12 +1482,14 @@ class NotYCaptionGenerator:
                 print_header()
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
-                print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}\n")
+                print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}")
+                if self.use_vocal_separation:
+                    print(f"{Colors.GREEN}Vocal: {self.selected_vocal_quality[0]}{Colors.RESET}")
+                print()
                 
                 lang_options = [f"{lang[0]} ({lang[1]})" for lang in self.languages]
                 lang_choice = self.show_menu("SELECT LANGUAGE", lang_options, "language")
                 if lang_choice == -1:
-                    # Go back to mode selection
                     self.menu_stack.pop()
                     self.current_menu = "mode"
                     continue
@@ -1209,12 +1503,14 @@ class NotYCaptionGenerator:
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
                 print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}")
-                print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
+                print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}")
+                if self.use_vocal_separation:
+                    print(f"{Colors.GREEN}Vocal: {self.selected_vocal_quality[0]}{Colors.RESET}")
+                print()
                 
                 line_options = [f"{l[0]} - {l[2]}" for l in self.line_types]
                 line_choice = self.show_menu("LINE BREAK TYPE", line_options, "line_type")
                 if line_choice == -1:
-                    # Go back to language selection
                     self.menu_stack.pop()
                     self.current_menu = "language"
                     continue
@@ -1223,7 +1519,7 @@ class NotYCaptionGenerator:
                 
                 number_per_line = 5
                 if line_type == "words":
-                    number_per_line = self.get_number_input("How many words per line? (1-10): ", 1, 10)
+                    number_per_line = self.get_number_input("How many words per line? (1-30): ", 1, 30)
                 elif line_type == "letters":
                     number_per_line = self.get_number_input("How many letters per line? (1-50): ", 1, 50)
                 
@@ -1232,7 +1528,7 @@ class NotYCaptionGenerator:
                 self.print_box([
                     f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
                     f"File: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}",
-                    f"Vocal Separation: {self.spleeter_model if self.use_vocal_separation else 'No'}",
+                    f"Vocal Separation: {self.selected_vocal_quality[0] if self.use_vocal_separation else 'No'}",
                     f"Model: {self.selected_model.upper()}",
                     f"Mode: {self.selected_mode[0]}",
                     f"Language: {language_name}",
@@ -1247,7 +1543,7 @@ class NotYCaptionGenerator:
                 self.print_info("Generating captions... This may take several minutes.")
                 success = self.generate_captions(
                     media_path, self.selected_model, mode, line_type,
-                    number_per_line, language_code,
+                    number_per_line, language_code, vocal_separation,
                     is_youtube=(platform_choice == 1), video_title=video_title
                 )
                 
@@ -1274,6 +1570,7 @@ class NotYCaptionGenerator:
                         self.is_sendto = False
                         self.menu_stack = []
                         self.current_menu = "main"
+                        self.model = None  # Reset model to save memory
                 else:
                     self.print_error("Failed to generate captions")
                     if not self.confirm("Try again?"):

@@ -187,11 +187,12 @@ def check_requirements(install_path):
         free_space_gb = free_space / (1024 ** 3)
         print_info(f"Free disk space: {free_space_gb:.2f} GB")
         
-        if free_space_gb < 4:
-            print_error(f"Insufficient disk space! Need 4 GB, only {free_space_gb:.2f} GB available.")
+        # Need at least 5 GB for models + pretrained_models
+        if free_space_gb < 5:
+            print_error(f"Insufficient disk space! Need 5 GB, only {free_space_gb:.2f} GB available.")
             all_requirements_met = False
         else:
-            print_success(f"Disk space OK (4 GB required)")
+            print_success(f"Disk space OK (5 GB required)")
     except Exception as e:
         print_warning(f"Could not check disk space: {e}")
     
@@ -332,7 +333,7 @@ def install():
     print_header()
     if not check_requirements(install_path):
         print_error("\nSystem requirements not met!")
-        print_info("Requirements: 4 GB free disk space")
+        print_info("Requirements: 5 GB free disk space for models and Spleeter")
         response = input(f"{Colors.CYAN}Continue anyway? (y/n): {Colors.RESET}").lower()
         if response not in ['y', 'yes']:
             return False
@@ -396,7 +397,7 @@ def install():
             copy_directory(ffmpeg_dir, dest_ffmpeg)
             print_success("ffmpeg copied")
         
-        # Copy models
+        # Copy Whisper models
         models_dir = installer_dir / "models"
         if not models_dir.exists():
             temp_dir = Path(tempfile.gettempdir())
@@ -407,12 +408,39 @@ def install():
                         break
         
         if models_dir and models_dir.exists():
-            print_info("Copying models...")
+            print_info("Copying Whisper models...")
             dest_models = install_path / "models"
             if dest_models.exists():
                 shutil.rmtree(dest_models)
             copy_directory(models_dir, dest_models)
-            print_success("Models copied")
+            model_count = len(list(dest_models.glob("*.pt")))
+            print_success(f"Copied {model_count} Whisper models")
+        
+        # Copy Spleeter pretrained_models
+        pretrained_models_dir = installer_dir / "pretrained_models"
+        if not pretrained_models_dir.exists():
+            temp_dir = Path(tempfile.gettempdir())
+            for temp_subdir in temp_dir.iterdir():
+                if temp_subdir.is_dir() and "MEI" in temp_subdir.name:
+                    pretrained_models_dir = temp_subdir / "pretrained_models"
+                    if pretrained_models_dir.exists():
+                        break
+        
+        if pretrained_models_dir and pretrained_models_dir.exists():
+            print_info("Copying Spleeter pretrained models...")
+            dest_pretrained_models = install_path / "pretrained_models"
+            if dest_pretrained_models.exists():
+                shutil.rmtree(dest_pretrained_models)
+            copy_directory(pretrained_models_dir, dest_pretrained_models)
+            
+            # Count files in pretrained_models
+            total_files = 0
+            for item in dest_pretrained_models.rglob('*'):
+                if item.is_file():
+                    total_files += 1
+            print_success(f"Copied {total_files} Spleeter model files")
+        else:
+            print_warning("Spleeter pretrained_models not found. Vocal separation may download models on first use.")
         
         # Create shortcuts
         print_info("Creating shortcuts...")
@@ -434,6 +462,10 @@ def install():
         print_info("You can now run NotYCaptionGenAI.exe from the installation directory")
         print_info("Or right-click any video/audio file and select 'Send To' > 'NotYCaptionGenAi'")
         print_info("To uninstall, use Windows Add/Remove Programs")
+        print()
+        print_info("Note: Spleeter models are included for vocal separation")
+        print_info("  - 2stems: Vocals + Accompaniment")
+        print_info("  - 5stems: Vocals + Drums + Bass + Piano + Other")
         
         return True
         

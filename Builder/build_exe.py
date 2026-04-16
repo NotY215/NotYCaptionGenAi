@@ -122,6 +122,15 @@ def build_exe():
             shutil.copytree(models_dir, dest_models)
             print("  Copied models folder")
         
+        # Copy pretrained_models directory if exists (Spleeter models)
+        pretrained_models_dir = base_dir / "pretrained_models"
+        dest_pretrained_models = dist_dir / "pretrained_models"
+        if pretrained_models_dir.exists():
+            if dest_pretrained_models.exists():
+                shutil.rmtree(dest_pretrained_models)
+            shutil.copytree(pretrained_models_dir, dest_pretrained_models)
+            print("  Copied pretrained_models folder (Spleeter)")
+        
         # Create run script
         run_script = dist_dir / "Run_App.bat"
         with open(run_script, 'w') as f:
