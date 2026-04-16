@@ -14,7 +14,7 @@ import sys
 import atexit
 import glob
 
-# Fix for PyInstaller/Nuitka packaged app
+# Fix for PyInstaller packaged app
 if getattr(sys, 'frozen', False):
     application_path = os.path.dirname(sys.executable)
     os.environ['PATH'] = application_path + os.pathsep + os.environ.get('PATH', '')
@@ -96,7 +96,7 @@ except ImportError:
 try:
     from spleeter.separator import Separator
     SPLEETER_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     SPLEETER_AVAILABLE = False
 
 # ANSI color codes
@@ -214,157 +214,16 @@ APP_LICENSE = "LGPL-3.0"
 APP_TELEGRAM = "https://t.me/Noty_215"
 APP_YOUTUBE = "https://www.youtube.com/@NotY215"
 
-# Language codes with full transliteration support
+# Language codes
 class Language(Enum):
-    ENGLISH = ("en", "English", False)
-    HINDI = ("hi", "Hindi", True)
-    JAPANESE = ("ja", "Japanese", True)
-    SPANISH = ("es", "Spanish", True)
-    KOREAN = ("ko", "Korean", True)
-    CHINESE = ("zh", "Chinese (Mandarin)", True)
-    RUSSIAN = ("ru", "Russian", True)
-    AUTO = ("auto", "Auto Detect", False)
-
-# COMPLETE HINDI TRANSLITERATION (Devanagari to Hinglish)
-HINDI_TRANSLIT = {
-    'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
-    'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'ऋ': 'ri', 'अं': 'am', 'अः': 'ah',
-    'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'ङ': 'ng',
-    'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh', 'ञ': 'ny',
-    'ट': 't', 'ठ': 'th', 'ड': 'd', 'ढ': 'dh', 'ण': 'n',
-    'त': 't', 'थ': 'th', 'द': 'd', 'ध': 'dh', 'न': 'n',
-    'प': 'p', 'फ': 'ph', 'ब': 'b', 'भ': 'bh', 'म': 'm',
-    'य': 'y', 'र': 'r', 'ल': 'l', 'व': 'v', 'श': 'sh', 'ष': 'sh', 'स': 's', 'ह': 'h',
-    'क्ष': 'ksh', 'त्र': 'tr', 'ज्ञ': 'gy', 'श्र': 'shr',
-    'ा': 'aa', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
-    'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ं': 'n', 'ः': 'h', '्': '',
-    '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
-    '५': '5', '६': '6', '७': '7', '८': '8', '९': '9',
-}
-
-# Common Hindi words mapping for better Hinglish
-HINDI_WORD_MAP = {
-    'मैं': 'main', 'है': 'hai', 'नहीं': 'nahin', 'और': 'aur', 'को': 'ko',
-    'से': 'se', 'में': 'mein', 'का': 'ka', 'की': 'ki', 'के': 'ke',
-    'यह': 'yah', 'वह': 'vah', 'तो': 'to', 'भी': 'bhi', 'एक': 'ek',
-    'पर': 'par', 'हो': 'ho', 'था': 'tha', 'थी': 'thi', 'थे': 'the',
-    'हूं': 'hun', 'हैं': 'hain', 'कर': 'kar', 'किया': 'kiya', 'दिया': 'diya',
-    'लिया': 'liya', 'गया': 'gaya', 'जा': 'ja', 'जाता': 'jata', 'जाती': 'jati',
-    'जाते': 'jate', 'रहा': 'raha', 'रही': 'rahi', 'रहे': 'rahe',
-    'सकता': 'sakta', 'सकती': 'sakti', 'सकते': 'sakte', 'चाहिए': 'chahiye',
-    'पड़ता': 'padta', 'पड़ती': 'padti', 'पड़ते': 'padte', 'वाला': 'wala',
-    'वाले': 'wale', 'वाली': 'wali', 'ने': 'ne', 'तक': 'tak', 'लिए': 'liye',
-}
-
-# Russian Transliteration
-RUSSIAN_TRANSLIT = {
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
-    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-    'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
-    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
-    'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
-    'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
-    'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
-    'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
-}
-
-# Spanish Transliteration
-SPANISH_TRANSLIT = {
-    'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u',
-    'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ü': 'U',
-    'ñ': 'n', 'Ñ': 'N', 'ç': 'c', 'Ç': 'C', '¿': '', '¡': ''
-}
-
-# Japanese Transliteration
-JAPANESE_TRANSLIT = {
-    'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
-    'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
-    'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
-    'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
-    'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
-    'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
-    'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
-    'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
-    'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
-    'わ': 'wa', 'を': 'wo', 'ん': 'n',
-    'が': 'ga', 'ぎ': 'gi', 'ぐ': 'gu', 'げ': 'ge', 'ご': 'go',
-    'ざ': 'za', 'じ': 'ji', 'ず': 'zu', 'ぜ': 'ze', 'ぞ': 'zo',
-    'だ': 'da', 'ぢ': 'ji', 'づ': 'zu', 'で': 'de', 'ど': 'do',
-    'ば': 'ba', 'び': 'bi', 'ぶ': 'bu', 'べ': 'be', 'ぼ': 'bo',
-    'ぱ': 'pa', 'ぴ': 'pi', 'ぷ': 'pu', 'ぺ': 'pe', 'ぽ': 'po',
-    'きゃ': 'kya', 'きゅ': 'kyu', 'きょ': 'kyo',
-    'しゃ': 'sha', 'しゅ': 'shu', 'しょ': 'sho',
-    'ちゃ': 'cha', 'ちゅ': 'chu', 'ちょ': 'cho',
-    'にゃ': 'nya', 'にゅ': 'nyu', 'にょ': 'nyo',
-    'ひゃ': 'hya', 'ひゅ': 'hyu', 'ひょ': 'hyo',
-    'みゃ': 'mya', 'みゅ': 'myu', 'みょ': 'myo',
-    'りゃ': 'rya', 'りゅ': 'ryu', 'りょ': 'ryo',
-    'ぎゃ': 'gya', 'ぎゅ': 'gyu', 'ぎょ': 'gyo',
-    'じゃ': 'ja', 'じゅ': 'ju', 'じょ': 'jo',
-    'びゃ': 'bya', 'びゅ': 'byu', 'びょ': 'byo',
-    'ぴゃ': 'pya', 'ぴゅ': 'pyu', 'ぴょ': 'pyo',
-    'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
-    'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
-    'サ': 'sa', 'シ': 'shi', 'ス': 'su', 'セ': 'se', 'ソ': 'so',
-    'タ': 'ta', 'チ': 'chi', 'ツ': 'tsu', 'テ': 'te', 'ト': 'to',
-    'ナ': 'na', 'ニ': 'ni', 'ヌ': 'nu', 'ネ': 'ne', 'ノ': 'no',
-    'ハ': 'ha', 'ヒ': 'hi', 'フ': 'fu', 'ヘ': 'he', 'ホ': 'ho',
-    'マ': 'ma', 'ミ': 'mi', 'ム': 'mu', 'メ': 'me', 'モ': 'mo',
-    'ヤ': 'ya', 'ユ': 'yu', 'ヨ': 'yo',
-    'ラ': 'ra', 'リ': 'ri', 'ル': 'ru', 'レ': 're', 'ロ': 'ro',
-    'ワ': 'wa', 'ヲ': 'wo', 'ン': 'n',
-    'ガ': 'ga', 'ギ': 'gi', 'グ': 'gu', 'ゲ': 'ge', 'ゴ': 'go',
-    'ザ': 'za', 'ジ': 'ji', 'ズ': 'zu', 'ゼ': 'ze', 'ゾ': 'zo',
-    'ダ': 'da', 'ヂ': 'ji', 'ヅ': 'zu', 'デ': 'de', 'ド': 'do',
-    'バ': 'ba', 'ビ': 'bi', 'ブ': 'bu', 'ベ': 'be', 'ボ': 'bo',
-    'パ': 'pa', 'ピ': 'pi', 'プ': 'pu', 'ペ': 'pe', 'ポ': 'po',
-    'キャ': 'kya', 'キュ': 'kyu', 'キョ': 'kyo',
-    'シャ': 'sha', 'シュ': 'shu', 'ショ': 'sho',
-    'チャ': 'cha', 'チュ': 'chu', 'チョ': 'cho',
-    'ニャ': 'nya', 'ニュ': 'nyu', 'ニョ': 'nyo',
-    'ヒャ': 'hya', 'ヒュ': 'hyu', 'ヒョ': 'hyo',
-    'ミャ': 'mya', 'ミュ': 'myu', 'ミョ': 'myo',
-    'リャ': 'rya', 'リュ': 'ryu', 'リョ': 'ryo',
-    'ギャ': 'gya', 'ギュ': 'gyu', 'ギョ': 'gyo',
-    'ジャ': 'ja', 'ジュ': 'ju', 'ジョ': 'jo',
-    'ビャ': 'bya', 'ビュ': 'byu', 'ビョ': 'byo',
-    'ピャ': 'pya', 'ピュ': 'pyu', 'ピョ': 'pyo',
-    'ッ': 't', 'ー': ''
-}
-
-# Korean Transliteration
-KOREAN_TRANSLIT = {
-    'ㄱ': 'g', 'ㄲ': 'kk', 'ㄴ': 'n', 'ㄷ': 'd', 'ㄸ': 'tt',
-    'ㄹ': 'r', 'ㅁ': 'm', 'ㅂ': 'b', 'ㅃ': 'pp', 'ㅅ': 's',
-    'ㅆ': 'ss', 'ㅇ': '', 'ㅈ': 'j', 'ㅉ': 'jj', 'ㅊ': 'ch',
-    'ㅋ': 'k', 'ㅌ': 't', 'ㅍ': 'p', 'ㅎ': 'h',
-    'ㅏ': 'a', 'ㅐ': 'ae', 'ㅑ': 'ya', 'ㅒ': 'yae', 'ㅓ': 'eo',
-    'ㅔ': 'e', 'ㅕ': 'yeo', 'ㅖ': 'ye', 'ㅗ': 'o', 'ㅘ': 'wa',
-    'ㅙ': 'wae', 'ㅚ': 'oe', 'ㅛ': 'yo', 'ㅜ': 'u', 'ㅝ': 'wo',
-    'ㅞ': 'we', 'ㅟ': 'wi', 'ㅠ': 'yu', 'ㅡ': 'eu', 'ㅢ': 'ui',
-    'ㅣ': 'i'
-}
-
-# Chinese Transliteration
-CHINESE_TRANSLIT = {
-    'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
-    'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
-    'ī': 'i', 'í': 'i', 'ǐ': 'i', 'ì': 'i',
-    'ō': 'o', 'ó': 'o', 'ǒ': 'o', 'ò': 'o',
-    'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
-    'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v',
-}
-
-TRANSLITERATION_MAPS = {
-    "hi": HINDI_TRANSLIT,
-    "ru": RUSSIAN_TRANSLIT,
-    "es": SPANISH_TRANSLIT,
-    "ja": JAPANESE_TRANSLIT,
-    "ko": KOREAN_TRANSLIT,
-    "zh": CHINESE_TRANSLIT,
-}
+    ENGLISH = ("en", "English")
+    HINDI = ("hi", "Hindi")
+    JAPANESE = ("ja", "Japanese")
+    SPANISH = ("es", "Spanish")
+    KOREAN = ("ko", "Korean")
+    CHINESE = ("zh", "Chinese (Mandarin)")
+    RUSSIAN = ("ru", "Russian")
+    AUTO = ("auto", "Auto Detect")
 
 # Whisper models
 WHISPER_MODELS = {
@@ -443,8 +302,7 @@ class NotYCaptionGenerator:
         ]
         
         self.modes = [
-            ("Normal Mode", "normal", "Standard transcription (no transliteration)"),
-            ("Transliteration Mode", "transliterate", "Convert to Latin alphabet (Hinglish, Romaji, etc.)"),
+            ("Normal Mode", "normal", "Standard transcription"),
             ("Translate Mode", "translate", "Translate to English while transcribing")
         ]
         
@@ -465,6 +323,11 @@ class NotYCaptionGenerator:
         self.media_path_arg = media_path
         self.model = None
         self.is_sendto = media_path is not None
+        
+        # Menu state for back button
+        self.menu_stack = []
+        self.current_menu = "main"
+        self.temp_data = {}
         
     def init_database(self):
         self.db_path = self.cache_dir / "cache.db"
@@ -595,7 +458,14 @@ class NotYCaptionGenerator:
                 return False
             self.print_error("Please enter y or n")
             
-    def show_menu(self, title: str, options: List[str]) -> int:
+    def show_menu(self, title: str, options: List[str], menu_id: str = None) -> int:
+        """Show menu and return selected index. Returns -1 for back/exit."""
+        if menu_id:
+            # Save current menu to stack before showing new one
+            if self.current_menu != menu_id:
+                self.menu_stack.append(self.current_menu)
+                self.current_menu = menu_id
+        
         while True:
             print(f"\n{Colors.CYAN}{Colors.BOLD}{title}{Colors.RESET}")
             print(f"{Colors.CYAN}┌{'─' * 50}┐{Colors.RESET}")
@@ -606,6 +476,9 @@ class NotYCaptionGenerator:
             
             choice = self.get_number_input(f"Choose option (0-{len(options)}): ", 0, len(options))
             if choice == 0:
+                # Go back to previous menu
+                if self.menu_stack:
+                    self.current_menu = self.menu_stack.pop()
                 return -1
             return choice - 1
             
@@ -762,10 +635,9 @@ class NotYCaptionGenerator:
         
         ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
         
-        # Use phase cancellation technique for vocal isolation
         cmd = [
             ffmpeg_cmd, '-i', str(audio_path),
-            '-af', 'highpass=f=80, lowpass=f=12000, volume=2.0, aemphasis=0.5',
+            '-af', 'highpass=f=80, lowpass=f=12000, volume=2.0',
             '-y',
             str(vocal_path)
         ]
@@ -779,28 +651,6 @@ class NotYCaptionGenerator:
             pass
         
         return None
-        
-    def transliterate_text(self, text: str, language_code: str) -> str:
-        """Convert text from non-Latin scripts to Latin alphabet"""
-        if language_code not in TRANSLITERATION_MAPS:
-            return text
-            
-        mapping = TRANSLITERATION_MAPS[language_code]
-        sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
-        
-        result = text
-        for original in sorted_keys:
-            translit = mapping[original]
-            result = result.replace(original, translit)
-        
-        if language_code == "hi":
-            for hindi_word, hinglish_word in HINDI_WORD_MAP.items():
-                result = result.replace(hindi_word, hinglish_word)
-        
-        result = re.sub(r'\s+', ' ', result)
-        result = result.strip()
-        
-        return result
         
     def load_model(self, model_name: str):
         if not WHISPER_AVAILABLE:
@@ -879,7 +729,7 @@ class NotYCaptionGenerator:
         subtitles = []
         index = 1
         min_gap = 0.3
-        max_duration = 3.0  # Maximum 3 seconds per subtitle for better readability
+        max_duration = 3.0
         
         i = 0
         while i < len(segments):
@@ -893,13 +743,10 @@ class NotYCaptionGenerator:
             end_time = segment["end"]
             duration = end_time - start_time
             
-            # Check if text has natural break points
             natural_breaks = ['.', '!', '?', ';', ':', ',']
             has_natural_break = any(text.rstrip().endswith(p) for p in natural_breaks)
             
-            # If duration is too long or has natural break, keep as is
             if has_natural_break or duration <= max_duration:
-                # Check if text is too long for one line
                 if len(text) > 42:
                     lines = self.smart_split_subtitle(text)
                     line_duration = duration / len(lines)
@@ -923,7 +770,6 @@ class NotYCaptionGenerator:
                     index += 1
                 i += 1
             else:
-                # Merge with next segment if duration is too short
                 merged_text = text
                 merged_end = end_time
                 j = i + 1
@@ -935,23 +781,19 @@ class NotYCaptionGenerator:
                         continue
                     
                     next_end = segments[j]["end"]
-                    next_duration = next_end - merged_end
                     
-                    # Check if merging would exceed max duration
                     if (next_end - start_time) > max_duration * 1.5:
                         break
                     
                     merged_text += " " + next_text
                     merged_end = next_end
                     
-                    # Check for natural break in merged text
                     if any(merged_text.rstrip().endswith(p) for p in ['.', '!', '?']):
                         j += 1
                         break
                     
                     j += 1
                 
-                # Split long merged text
                 if len(merged_text) > 42:
                     lines = self.smart_split_subtitle(merged_text)
                     total_duration = merged_end - start_time
@@ -1000,7 +842,6 @@ class NotYCaptionGenerator:
                         self.print_error("Could not extract audio")
                         return False
                 
-                # Apply vocal separation if enabled
                 if self.use_vocal_separation:
                     self.print_info("Using Spleeter for professional vocal separation...")
                     vocals_path = self.separate_vocals_spleeter(audio_path)
@@ -1056,8 +897,6 @@ class NotYCaptionGenerator:
             else:
                 if mode == "translate":
                     suffix = f"{lang_name}_translated"
-                elif mode == "transliterate":
-                    suffix = lang_name
                 else:
                     suffix = lang_name
                 output_path = media_path.parent / f"{media_path.stem}_{suffix}.srt"
@@ -1078,9 +917,6 @@ class NotYCaptionGenerator:
                     segment_start = segment.get("start", 0)
                     segment_end = segment.get("end", segment_start + 1)
                     
-                    if mode == "transliterate" and language_code in TRANSLITERATION_MAPS:
-                        segment_text = self.transliterate_text(segment_text, language_code)
-                    
                     words_data = segment.get("words", [])
                     
                     if line_type == "words" and words_data:
@@ -1091,8 +927,6 @@ class NotYCaptionGenerator:
                         for w in words_data:
                             word = w.get("word", "").strip()
                             if word:
-                                if mode == "transliterate" and language_code in TRANSLITERATION_MAPS:
-                                    word = self.transliterate_text(word, language_code)
                                 words.append(word)
                                 word_starts.append(w.get("start", segment_start))
                                 word_ends.append(w.get("end", segment_end))
@@ -1116,10 +950,6 @@ class NotYCaptionGenerator:
                         if line_type == "letters":
                             segment_text = self.limit_letters_per_line(segment_text, number_per_line)
                         
-                        if mode == "transliterate" and language_code in TRANSLITERATION_MAPS:
-                            segment_text = self.transliterate_text(segment_text, language_code)
-                        
-                        # Check if text needs splitting for better readability
                         if len(segment_text) > 42:
                             lines = self.smart_split_subtitle(segment_text)
                             duration = segment_end - segment_start
@@ -1175,7 +1005,6 @@ class NotYCaptionGenerator:
             input("\nPress Enter to exit...")
             return
         
-        # Check Spleeter availability
         if SPLEETER_AVAILABLE:
             self.print_success("Spleeter available for high-quality vocal separation")
         else:
@@ -1224,6 +1053,10 @@ class NotYCaptionGenerator:
                     
                     if platform_choice == 0:
                         break
+                    
+                    # Reset menu stack for new session
+                    self.menu_stack = []
+                    self.current_menu = "main"
                     
                     platform_name = "YouTube" if platform_choice == 1 else "Local File"
                     self.clear_screen()
@@ -1302,7 +1135,7 @@ class NotYCaptionGenerator:
                 
                 self.print_success(f"Source: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}")
                 
-                # Vocal separation option (only if Spleeter is available)
+                # Vocal separation option
                 if SPLEETER_AVAILABLE:
                     self.clear_screen()
                     print_header()
@@ -1330,7 +1163,7 @@ class NotYCaptionGenerator:
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}\n")
                 
                 model_options = [f"{m[0].upper()} ({m[1]}) - {m[2]}" for m in self.models]
-                model_choice = self.show_menu("SELECT WHISPER MODEL", model_options)
+                model_choice = self.show_menu("SELECT WHISPER MODEL", model_options, "model")
                 if model_choice == -1:
                     platform_choice = None
                     continue
@@ -1343,9 +1176,11 @@ class NotYCaptionGenerator:
                 print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}\n")
                 
                 mode_options = [f"{m[0]} - {m[2]}" for m in self.modes]
-                mode_choice = self.show_menu("SELECT MODE", mode_options)
+                mode_choice = self.show_menu("SELECT MODE", mode_options, "mode")
                 if mode_choice == -1:
-                    platform_choice = None
+                    # Go back to model selection
+                    self.menu_stack.pop()  # Remove current menu
+                    self.current_menu = "model"
                     continue
                 self.selected_mode = self.modes[mode_choice]
                 mode = self.selected_mode[1]
@@ -1358,9 +1193,11 @@ class NotYCaptionGenerator:
                 print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}\n")
                 
                 lang_options = [f"{lang[0]} ({lang[1]})" for lang in self.languages]
-                lang_choice = self.show_menu("SELECT LANGUAGE", lang_options)
+                lang_choice = self.show_menu("SELECT LANGUAGE", lang_options, "language")
                 if lang_choice == -1:
-                    platform_choice = None
+                    # Go back to mode selection
+                    self.menu_stack.pop()
+                    self.current_menu = "mode"
                     continue
                 self.selected_language = self.languages[lang_choice]
                 language_code = self.selected_language[1]
@@ -1375,9 +1212,11 @@ class NotYCaptionGenerator:
                 print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}\n")
                 
                 line_options = [f"{l[0]} - {l[2]}" for l in self.line_types]
-                line_choice = self.show_menu("LINE BREAK TYPE", line_options)
+                line_choice = self.show_menu("LINE BREAK TYPE", line_options, "line_type")
                 if line_choice == -1:
-                    platform_choice = None
+                    # Go back to language selection
+                    self.menu_stack.pop()
+                    self.current_menu = "language"
                     continue
                 self.selected_line_type = self.line_types[line_choice]
                 line_type = self.selected_line_type[1]
@@ -1433,6 +1272,8 @@ class NotYCaptionGenerator:
                         platform_choice = None
                         passed_file = None
                         self.is_sendto = False
+                        self.menu_stack = []
+                        self.current_menu = "main"
                 else:
                     self.print_error("Failed to generate captions")
                     if not self.confirm("Try again?"):
