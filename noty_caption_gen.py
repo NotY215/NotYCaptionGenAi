@@ -34,6 +34,11 @@ if sys.platform == "win32":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8', errors='replace')
 
+# Optimize TensorFlow for CPU
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['OMP_NUM_THREADS'] = '4'
+os.environ['MKL_NUM_THREADS'] = '4'
+
 # Mock torch.cuda before importing torch
 class _MockCuda:
     def __init__(self):
@@ -122,22 +127,26 @@ except ImportError:
     YTDLP_AVAILABLE = False
     yt_dlp = None
 
-# Try to import spleeter for vocal separation
+# Try to import spleeter for vocal separation with optimized settings
 SPLEETER_AVAILABLE = False
 try:
+    # Configure TensorFlow for better performance
+    import tensorflow as tf
+    tf.get_logger().setLevel('ERROR')
+    # Limit GPU memory growth if GPU available
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError:
+            pass
+    
     from spleeter.separator import Separator
     from spleeter.audio.adapter import AudioAdapter
     SPLEETER_AVAILABLE = True
-except ImportError as e:
-    pass
-
-# Try to import tensorflow with fallback
-try:
-    import tensorflow as tf
-    tf.get_logger().setLevel('ERROR')
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     TENSORFLOW_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     TENSORFLOW_AVAILABLE = False
 
 # ANSI color codes
@@ -257,24 +266,24 @@ APP_LICENSE = "LGPL-3.0"
 APP_TELEGRAM = "https://t.me/Noty_215"
 APP_YOUTUBE = "https://www.youtube.com/@NotY215"
 
-# Language codes
+# Language codes with ISO 639-1 codes for filenames
 class Language(Enum):
-    ENGLISH = ("en", "English")
-    HINDI = ("hi", "Hindi")
-    JAPANESE = ("ja", "Japanese")
-    SPANISH = ("es", "Spanish")
-    KOREAN = ("ko", "Korean")
-    CHINESE = ("zh", "Chinese (Mandarin)")
-    RUSSIAN = ("ru", "Russian")
-    AUTO = ("auto", "Auto Detect")
+    ENGLISH = ("en", "English", "en")
+    HINDI = ("hi", "Hindi", "hn")
+    JAPANESE = ("ja", "Japanese", "ja")
+    SPANISH = ("es", "Spanish", "es")
+    KOREAN = ("ko", "Korean", "ko")
+    CHINESE = ("zh", "Chinese (Mandarin)", "zh")
+    RUSSIAN = ("ru", "Russian", "ru")
+    AUTO = ("auto", "Auto Detect", "auto")
 
-# Whisper models
+# Whisper models with min words per subtitle based on capability
 WHISPER_MODELS = {
-    "tiny": {"size": "75 MB", "desc": "Fastest", "speed": 0.5},
-    "base": {"size": "150 MB", "desc": "Balanced", "speed": 1.0},
-    "small": {"size": "500 MB", "desc": "Good", "speed": 2.0},
-    "medium": {"size": "1.5 GB", "desc": "Accurate", "speed": 4.0},
-    "large": {"size": "2.9 GB", "desc": "Best", "speed": 8.0}
+    "tiny": {"size": "75 MB", "desc": "Fastest", "speed": 0.5, "min_words": 2, "max_words": 8},
+    "base": {"size": "150 MB", "desc": "Balanced", "speed": 1.0, "min_words": 3, "max_words": 10},
+    "small": {"size": "500 MB", "desc": "Good", "speed": 2.0, "min_words": 4, "max_words": 12},
+    "medium": {"size": "1.5 GB", "desc": "Accurate", "speed": 4.0, "min_words": 5, "max_words": 15},
+    "large": {"size": "2.9 GB", "desc": "Best", "speed": 8.0, "min_words": 6, "max_words": 18}
 }
 
 # Spleeter models for vocal separation
@@ -300,20 +309,23 @@ class SubtitleEntry:
     text: str
     
     def to_srt(self) -> str:
-        start_str = f"{self.start.total_seconds():02d}:{int(self.start.total_seconds() % 60):02d}:{int(self.start.total_seconds() * 1000 % 1000):03d}"
-        end_str = f"{self.end.total_seconds():02d}:{int(self.end.total_seconds() % 60):02d}:{int(self.end.total_seconds() * 1000 % 1000):03d}"
-        # Proper SRT time format: HH:MM:SS,mmm
-        start_hours = int(self.start.total_seconds() // 3600)
-        start_minutes = int((self.start.total_seconds() % 3600) // 60)
-        start_seconds = int(self.start.total_seconds() % 60)
-        start_millis = int((self.start.total_seconds() % 1) * 1000)
+        """Convert subtitle entry to SRT format string"""
+        # Calculate time components for start time
+        start_seconds = self.start.total_seconds()
+        start_hours = int(start_seconds // 3600)
+        start_minutes = int((start_seconds % 3600) // 60)
+        start_secs = int(start_seconds % 60)
+        start_millis = int((start_seconds % 1) * 1000)
         
-        end_hours = int(self.end.total_seconds() // 3600)
-        end_minutes = int((self.end.total_seconds() % 3600) // 60)
-        end_seconds = int(self.end.total_seconds() % 60)
-        end_millis = int((self.end.total_seconds() % 1) * 1000)
+        # Calculate time components for end time
+        end_seconds = self.end.total_seconds()
+        end_hours = int(end_seconds // 3600)
+        end_minutes = int((end_seconds % 3600) // 60)
+        end_secs = int(end_seconds % 60)
+        end_millis = int((end_seconds % 1) * 1000)
         
-        return f"{self.index}\n{start_hours:02d}:{start_minutes:02d}:{start_seconds:02d},{start_millis:03d} --> {end_hours:02d}:{end_minutes:02d}:{end_seconds:02d},{end_millis:03d}\n{self.text}\n"
+        # Format: index\nHH:MM:SS,mmm --> HH:MM:SS,mmm\ntext\n
+        return f"{self.index}\n{start_hours:02d}:{start_minutes:02d}:{start_secs:02d},{start_millis:03d} --> {end_hours:02d}:{end_minutes:02d}:{end_secs:02d},{end_millis:03d}\n{self.text}\n\n"
 
 @dataclass
 class ProcessingStats:
@@ -377,22 +389,22 @@ class NotYCaptionGenerator:
         self.init_database()
         
         self.languages = [
-            (Language.ENGLISH.value[1], Language.ENGLISH.value[0]),
-            (Language.HINDI.value[1], Language.HINDI.value[0]),
-            (Language.JAPANESE.value[1], Language.JAPANESE.value[0]),
-            (Language.SPANISH.value[1], Language.SPANISH.value[0]),
-            (Language.KOREAN.value[1], Language.KOREAN.value[0]),
-            (Language.CHINESE.value[1], Language.CHINESE.value[0]),
-            (Language.RUSSIAN.value[1], Language.RUSSIAN.value[0]),
-            (Language.AUTO.value[1], Language.AUTO.value[0])
+            (Language.ENGLISH.value[1], Language.ENGLISH.value[0], Language.ENGLISH.value[2]),
+            (Language.HINDI.value[1], Language.HINDI.value[0], Language.HINDI.value[2]),
+            (Language.JAPANESE.value[1], Language.JAPANESE.value[0], Language.JAPANESE.value[2]),
+            (Language.SPANISH.value[1], Language.SPANISH.value[0], Language.SPANISH.value[2]),
+            (Language.KOREAN.value[1], Language.KOREAN.value[0], Language.KOREAN.value[2]),
+            (Language.CHINESE.value[1], Language.CHINESE.value[0], Language.CHINESE.value[2]),
+            (Language.RUSSIAN.value[1], Language.RUSSIAN.value[0], Language.RUSSIAN.value[2]),
+            (Language.AUTO.value[1], Language.AUTO.value[0], Language.AUTO.value[2])
         ]
         
         self.models = [
-            ("tiny", WHISPER_MODELS["tiny"]["size"], WHISPER_MODELS["tiny"]["desc"]),
-            ("base", WHISPER_MODELS["base"]["size"], WHISPER_MODELS["base"]["desc"]),
-            ("small", WHISPER_MODELS["small"]["size"], WHISPER_MODELS["small"]["desc"]),
-            ("medium", WHISPER_MODELS["medium"]["size"], WHISPER_MODELS["medium"]["desc"]),
-            ("large", WHISPER_MODELS["large"]["size"], WHISPER_MODELS["large"]["desc"])
+            ("tiny", WHISPER_MODELS["tiny"]["size"], WHISPER_MODELS["tiny"]["desc"], WHISPER_MODELS["tiny"]["min_words"], WHISPER_MODELS["tiny"]["max_words"]),
+            ("base", WHISPER_MODELS["base"]["size"], WHISPER_MODELS["base"]["desc"], WHISPER_MODELS["base"]["min_words"], WHISPER_MODELS["base"]["max_words"]),
+            ("small", WHISPER_MODELS["small"]["size"], WHISPER_MODELS["small"]["desc"], WHISPER_MODELS["small"]["min_words"], WHISPER_MODELS["small"]["max_words"]),
+            ("medium", WHISPER_MODELS["medium"]["size"], WHISPER_MODELS["medium"]["desc"], WHISPER_MODELS["medium"]["min_words"], WHISPER_MODELS["medium"]["max_words"]),
+            ("large", WHISPER_MODELS["large"]["size"], WHISPER_MODELS["large"]["desc"], WHISPER_MODELS["large"]["min_words"], WHISPER_MODELS["large"]["max_words"])
         ]
         
         self.modes = [
@@ -433,6 +445,10 @@ class NotYCaptionGenerator:
         
         # Processing stats
         self.stats = ProcessingStats()
+        
+        # Current model min/max words
+        self.current_min_words = 3
+        self.current_max_words = 10
         
         # Check for local Spleeter models
         self.has_local_spleeter_models = self.check_spleeter_models()
@@ -803,7 +819,7 @@ class NotYCaptionGenerator:
         return None
         
     def separate_vocals_spleeter(self, audio_path: Path) -> Optional[Path]:
-        """Separate vocals using Spleeter - High quality vocal isolation"""
+        """Separate vocals using Spleeter with optimized TensorFlow settings"""
         if not SPLEETER_AVAILABLE:
             self.print_warning("Spleeter not available. Install: pip install spleeter")
             return None
@@ -823,18 +839,24 @@ class NotYCaptionGenerator:
             else:
                 self.print_info("Downloading Spleeter model (first time only)...")
             
-            # Initialize Spleeter separator
+            # Initialize Spleeter separator with optimized settings
             if self.separator is None:
                 self.print_info(f"Loading Spleeter model: {self.spleeter_model}")
-                self.separator = Separator(f'spleeter:{self.spleeter_model}')
+                # Use multiprocessing for faster separation
+                self.separator = Separator(
+                    f'spleeter:{self.spleeter_model}',
+                    multiprocess=True,
+                    multiprocess_count=2  # Use 2 CPU cores
+                )
             
-            # Perform separation
+            # Perform separation with better quality settings
             self.print_info("Separating audio tracks (this may take a while)...")
             self.separator.separate_to_file(
                 str(audio_path),
                 str(output_dir),
                 filename_format="{filename}_{instrument}.{codec}",
-                codec='wav'
+                codec='wav',
+                bitrate='320k'  # Higher bitrate for better quality
             )
             
             # Find the vocal file
@@ -847,6 +869,20 @@ class NotYCaptionGenerator:
                 # Copy to temp directory
                 final_vocals = temp_dir / f"{audio_path.stem}_vocals.wav"
                 shutil.copy2(vocal_file, final_vocals)
+                
+                # Apply additional audio processing for better vocal clarity
+                if self.check_ffmpeg():
+                    ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
+                    enhanced_vocals = temp_dir / f"{audio_path.stem}_vocals_enhanced.wav"
+                    cmd = [
+                        ffmpeg_cmd, '-i', str(final_vocals),
+                        '-af', 'highpass=f=100, lowpass=f=10000, volume=1.5, acompressor=threshold=0.1:ratio=2:attack=5:release=50',
+                        '-y', str(enhanced_vocals)
+                    ]
+                    subprocess.run(cmd, capture_output=True, timeout=60)
+                    if enhanced_vocals.exists():
+                        final_vocals.unlink()
+                        final_vocals = enhanced_vocals
                 
                 # Cleanup
                 shutil.rmtree(output_dir, ignore_errors=True)
@@ -863,7 +899,7 @@ class NotYCaptionGenerator:
             return None
             
     def separate_vocals_ffmpeg(self, audio_path: Path) -> Optional[Path]:
-        """Fallback vocal separation using FFmpeg"""
+        """Fallback vocal separation using FFmpeg with better quality"""
         self.print_progress("Isolating vocals with FFmpeg...", 35)
         
         temp_dir = Path(tempfile.gettempdir())
@@ -871,10 +907,10 @@ class NotYCaptionGenerator:
         
         ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe.exists() else 'ffmpeg'
         
-        # Use highpass and lowpass filters to isolate vocal range (80Hz - 12kHz)
+        # Better vocal isolation using bandpass filter and compression
         cmd = [
             ffmpeg_cmd, '-i', str(audio_path),
-            '-af', 'highpass=f=80, lowpass=f=12000, volume=2.0',
+            '-af', 'highpass=f=100, lowpass=f=10000, volume=2.0, acompressor=threshold=0.1:ratio=2:attack=5:release=50',
             '-y',
             str(vocal_path)
         ]
@@ -894,12 +930,17 @@ class NotYCaptionGenerator:
             self.print_error("Whisper not available!")
             return False
             
+        # Set min/max words based on model
+        self.current_min_words = WHISPER_MODELS[model_name]["min_words"]
+        self.current_max_words = WHISPER_MODELS[model_name]["max_words"]
+            
         try:
             self.print_progress(f"Loading {model_name} model...", 60)
             load_start = time.time()
             self.model = whisper.load_model(model_name, download_root=str(self.models_dir))
             load_time = time.time() - load_start
             self.print_success(f"Model loaded in {load_time:.1f}s")
+            self.print_info(f"Model capability: {self.current_min_words}-{self.current_max_words} words per subtitle")
             return True
         except Exception as e:
             self.print_error(f"Failed to load model: {e}")
@@ -963,11 +1004,54 @@ class NotYCaptionGenerator:
         
         return lines if lines else [text]
         
+    def merge_small_segments(self, segments: List[dict]) -> List[dict]:
+        """Merge very small word segments into meaningful phrases"""
+        if not segments:
+            return segments
+            
+        merged = []
+        i = 0
+        while i < len(segments):
+            current = segments[i].copy()
+            text = current["text"].strip()
+            word_count = len(text.split())
+            
+            # If segment has too few words, try to merge with next
+            if word_count < self.current_min_words and i + 1 < len(segments):
+                next_seg = segments[i + 1]
+                merged_text = text + " " + next_seg["text"].strip()
+                merged_word_count = len(merged_text.split())
+                
+                # Merge if still within max words or if next segment is also small
+                if merged_word_count <= self.current_max_words or word_count < self.current_min_words:
+                    current["text"] = merged_text
+                    current["end"] = next_seg["end"]
+                    i += 1  # Skip the next segment
+                    
+                    # Try to merge more if still under min words
+                    while merged_word_count < self.current_min_words and i + 1 < len(segments):
+                        next_next = segments[i + 1]
+                        test_merge = current["text"] + " " + next_next["text"].strip()
+                        if len(test_merge.split()) <= self.current_max_words:
+                            current["text"] = test_merge
+                            current["end"] = next_next["end"]
+                            i += 1
+                            merged_word_count = len(current["text"].split())
+                        else:
+                            break
+            
+            merged.append(current)
+            i += 1
+        
+        return merged
+        
     def auto_break_sentences(self, segments) -> List[SubtitleEntry]:
-        """Smart sentence breaking with natural language processing"""
+        """Smart sentence breaking with natural language processing and word limits"""
+        # First merge small segments
+        segments = self.merge_small_segments(segments)
+        
         subtitles = []
         index = 1
-        min_gap = 0.3
         max_duration = 3.0
         
         i = 0
@@ -981,11 +1065,14 @@ class NotYCaptionGenerator:
             start_time = segment["start"]
             end_time = segment["end"]
             duration = end_time - start_time
+            word_count = len(text.split())
             
-            natural_breaks = ['.', '!', '?', ';', ':', ',', '。', '！', '？', '；', '：', '，']
+            # Check if this is a natural break point
+            natural_breaks = ['.', '!', '?', ';', ':', '。', '！', '？', '；', '：']
             has_natural_break = any(text.rstrip().endswith(p) for p in natural_breaks)
             
-            if has_natural_break or duration <= max_duration:
+            # If word count is within model's capability and has natural break, keep as is
+            if self.current_min_words <= word_count <= self.current_max_words and has_natural_break:
                 if len(text) > 42:
                     lines = self.smart_split_subtitle(text)
                     line_duration = duration / len(lines)
@@ -1008,31 +1095,76 @@ class NotYCaptionGenerator:
                     ))
                     index += 1
                 i += 1
-            else:
-                merged_text = text
-                merged_end = end_time
-                j = i + 1
-                
-                while j < len(segments):
-                    next_text = segments[j]["text"].strip()
-                    if not next_text:
-                        j += 1
-                        continue
-                    
-                    next_end = segments[j]["end"]
-                    
-                    if (next_end - start_time) > max_duration * 1.5:
-                        break
-                    
-                    merged_text += " " + next_text
-                    merged_end = next_end
-                    
-                    if any(merged_text.rstrip().endswith(p) for p in ['.', '!', '?', '。', '！', '？']):
-                        j += 1
-                        break
-                    
+                continue
+            
+            # Need to merge with next segments
+            merged_text = text
+            merged_end = end_time
+            j = i + 1
+            
+            while j < len(segments):
+                next_seg = segments[j]
+                next_text = next_seg["text"].strip()
+                if not next_text:
                     j += 1
+                    continue
                 
+                next_end = next_seg["end"]
+                test_merged = merged_text + " " + next_text
+                test_word_count = len(test_merged.split())
+                
+                # Stop if exceeding max words or too long duration
+                if test_word_count > self.current_max_words * 1.5:
+                    break
+                if (next_end - start_time) > max_duration * 2:
+                    break
+                
+                merged_text = test_merged
+                merged_end = next_end
+                j += 1
+                
+                # Check if we have enough words now
+                if test_word_count >= self.current_min_words:
+                    # Check if this is a good break point
+                    if any(merged_text.rstrip().endswith(p) for p in natural_breaks):
+                        break
+            
+            # Process the merged segment
+            word_count = len(merged_text.split())
+            if word_count > self.current_max_words:
+                # Split into multiple lines
+                words = merged_text.split()
+                lines = []
+                for k in range(0, word_count, self.current_max_words):
+                    line_words = words[k:k + self.current_max_words]
+                    lines.append(' '.join(line_words))
+                
+                total_duration = merged_end - start_time
+                line_duration = total_duration / len(lines)
+                for idx, line in enumerate(lines):
+                    line_start = start_time + (idx * line_duration)
+                    line_end = line_start + line_duration
+                    if len(line) > 42:
+                        sub_lines = self.smart_split_subtitle(line)
+                        for sub_idx, sub_line in enumerate(sub_lines):
+                            sub_start = line_start + (sub_idx * line_duration / len(sub_lines))
+                            sub_end = sub_start + (line_duration / len(sub_lines))
+                            subtitles.append(SubtitleEntry(
+                                index=index,
+                                start=timedelta(seconds=sub_start),
+                                end=timedelta(seconds=sub_end),
+                                text=sub_line
+                            ))
+                            index += 1
+                    else:
+                        subtitles.append(SubtitleEntry(
+                            index=index,
+                            start=timedelta(seconds=line_start),
+                            end=timedelta(seconds=line_end),
+                            text=line
+                        ))
+                        index += 1
+            else:
                 if len(merged_text) > 42:
                     lines = self.smart_split_subtitle(merged_text)
                     total_duration = merged_end - start_time
@@ -1055,8 +1187,8 @@ class NotYCaptionGenerator:
                         text=merged_text
                     ))
                     index += 1
-                
-                i = j
+            
+            i = j
                 
         return subtitles
         
@@ -1132,13 +1264,16 @@ class NotYCaptionGenerator:
             
             self.print_progress("Processing transcription...", 80)
             
-            # Determine output path
-            lang_names = {"en": "english", "hi": "hindi", "ja": "japanese", "es": "spanish",
-                         "ko": "korean", "zh": "chinese", "ru": "russian", "auto": "auto"}
-            lang_name = lang_names.get(language_code, language_code)
+            # Get language ISO code for filename
+            lang_iso = language_code
+            for lang in self.languages:
+                if lang[1] == language_code:
+                    lang_iso = lang[2]
+                    break
             
+            # Determine output path
             if is_youtube and video_title:
-                suffix = f"{lang_name}" if mode == "normal" else f"{lang_name}_{mode}"
+                suffix = f"{lang_iso}" if mode == "normal" else f"{lang_iso}_translated"
                 if vocal_separation != "none":
                     suffix += f"_vocals"
                 default_name = f"{video_title}_{suffix}.srt"
@@ -1149,19 +1284,21 @@ class NotYCaptionGenerator:
                     output_path = Path(save_path)
             else:
                 if mode == "translate":
-                    suffix = f"{lang_name}_translated"
+                    suffix = f"{lang_iso}_translated"
                 else:
-                    suffix = lang_name
+                    suffix = lang_iso
                 if vocal_separation != "none":
                     suffix += f"_vocals"
                 output_path = media_path.parent / f"{media_path.stem}_{suffix}.srt"
             
             segments = result.get("segments", [])
-            self.stats.total_segments = len(segments)
             
+            # Process segments based on line type
             if line_type == "auto":
                 subtitles = self.auto_break_sentences(segments)
             else:
+                # First merge small segments for word/letter modes too
+                segments = self.merge_small_segments(segments)
                 subtitles = []
                 index = 1
                 
@@ -1187,13 +1324,15 @@ class NotYCaptionGenerator:
                                 word_starts.append(w.get("start", segment_start))
                                 word_ends.append(w.get("end", segment_end))
                         
-                        for i in range(0, len(words), number_per_line):
-                            chunk_words = words[i:i + number_per_line]
+                        # Ensure minimum words per subtitle
+                        actual_per_line = max(number_per_line, self.current_min_words)
+                        for i in range(0, len(words), actual_per_line):
+                            chunk_words = words[i:i + actual_per_line]
                             line_text = " ".join(chunk_words).strip()
                             if not line_text:
                                 continue
                             chunk_start = word_starts[i]
-                            chunk_end = word_ends[min(i + number_per_line - 1, len(word_ends) - 1)]
+                            chunk_end = word_ends[min(i + actual_per_line - 1, len(word_ends) - 1)]
                             
                             subtitles.append(SubtitleEntry(
                                 index=index,
@@ -1228,6 +1367,8 @@ class NotYCaptionGenerator:
                                 text=segment_text
                             ))
                             index += 1
+            
+            self.stats.total_segments = len(subtitles)
             
             self.print_progress("Writing subtitle file...", 90)
             with open(output_path, 'w', encoding='utf-8') as f:
@@ -1452,18 +1593,20 @@ class NotYCaptionGenerator:
                     print(f"{Colors.GREEN}Vocal: {self.selected_vocal_quality[0]}{Colors.RESET}")
                 print()
                 
-                model_options = [f"{m[0].upper()} ({m[1]}) - {m[2]}" for m in self.models]
+                model_options = [f"{m[0].upper()} ({m[1]}) - {m[2]} (Min: {m[3]}, Max: {m[4]} words)" for m in self.models]
                 model_choice = self.show_menu("SELECT WHISPER MODEL", model_options, "model")
                 if model_choice == -1:
                     platform_choice = None
                     continue
                 self.selected_model = self.models[model_choice][0]
+                self.current_min_words = self.models[model_choice][3]
+                self.current_max_words = self.models[model_choice][4]
                 
                 # Select mode
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
-                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
+                print(f"{Colors.GREEN}Model: {self.selected_model.upper()} ({self.current_min_words}-{self.current_max_words} words/sub){Colors.RESET}")
                 if self.use_vocal_separation:
                     print(f"{Colors.GREEN}Vocal: {self.selected_vocal_quality[0]}{Colors.RESET}")
                 print()
@@ -1481,7 +1624,7 @@ class NotYCaptionGenerator:
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
-                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
+                print(f"{Colors.GREEN}Model: {self.selected_model.upper()} ({self.current_min_words}-{self.current_max_words} words/sub){Colors.RESET}")
                 print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}")
                 if self.use_vocal_separation:
                     print(f"{Colors.GREEN}Vocal: {self.selected_vocal_quality[0]}{Colors.RESET}")
@@ -1496,14 +1639,15 @@ class NotYCaptionGenerator:
                 self.selected_language = self.languages[lang_choice]
                 language_code = self.selected_language[1]
                 language_name = self.selected_language[0]
+                lang_iso = self.selected_language[2]
                 
                 # Select line type
                 self.clear_screen()
                 print_header()
                 print(f"\n{Colors.BOLD}Source: {media_path.name if platform_choice == 2 else 'YouTube Audio'}{Colors.RESET}")
-                print(f"{Colors.GREEN}Model: {self.selected_model.upper()}{Colors.RESET}")
+                print(f"{Colors.GREEN}Model: {self.selected_model.upper()} ({self.current_min_words}-{self.current_max_words} words/sub){Colors.RESET}")
                 print(f"{Colors.GREEN}Mode: {self.selected_mode[0]}{Colors.RESET}")
-                print(f"{Colors.GREEN}Language: {language_name}{Colors.RESET}")
+                print(f"{Colors.GREEN}Language: {language_name} ({lang_iso}){Colors.RESET}")
                 if self.use_vocal_separation:
                     print(f"{Colors.GREEN}Vocal: {self.selected_vocal_quality[0]}{Colors.RESET}")
                 print()
@@ -1517,9 +1661,10 @@ class NotYCaptionGenerator:
                 self.selected_line_type = self.line_types[line_choice]
                 line_type = self.selected_line_type[1]
                 
-                number_per_line = 5
+                number_per_line = self.current_min_words
                 if line_type == "words":
-                    number_per_line = self.get_number_input("How many words per line? (1-30): ", 1, 30)
+                    default_words = max(self.current_min_words, 5)
+                    number_per_line = self.get_number_input(f"How many words per line? (Min: {self.current_min_words}, Max: {self.current_max_words}): ", self.current_min_words, self.current_max_words)
                 elif line_type == "letters":
                     number_per_line = self.get_number_input("How many letters per line? (1-50): ", 1, 50)
                 
@@ -1529,11 +1674,11 @@ class NotYCaptionGenerator:
                     f"Source: {'YouTube' if platform_choice == 1 else 'Local File'}",
                     f"File: {media_path.name if platform_choice == 2 else video_title or 'YouTube Audio'}",
                     f"Vocal Separation: {self.selected_vocal_quality[0] if self.use_vocal_separation else 'No'}",
-                    f"Model: {self.selected_model.upper()}",
+                    f"Model: {self.selected_model.upper()} ({self.current_min_words}-{self.current_max_words} words/sub)",
                     f"Mode: {self.selected_mode[0]}",
-                    f"Language: {language_name}",
+                    f"Language: {language_name} ({lang_iso})",
                     f"Line Break: {self.selected_line_type[0]}",
-                    f"Settings: {number_per_line if line_type != 'auto' else 'Smart detection'}"
+                    f"Settings: {number_per_line if line_type != 'auto' else 'Smart detection + Model limits'}"
                 ])
                 
                 if not self.confirm("Generate captions?"):
