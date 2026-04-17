@@ -178,6 +178,9 @@ if platform.system() == "Windows":
             if not attr.startswith('__'):
                 setattr(Colors, attr, '')
 
+# Global reference to app instance for cleanup
+_app_instance = None
+
 def cleanup_temp_files():
     """Clean up temporary audio files only - NOT cache"""
     try:
@@ -193,6 +196,19 @@ def cleanup_temp_files():
                     pass
     except:
         pass
+
+def cleanup_cache_folder():
+    """Clean up cache folder in app root directory"""
+    global _app_instance
+    try:
+        if _app_instance and hasattr(_app_instance, 'cache_dir'):
+            cache_path = _app_instance.cache_dir
+            if cache_path and cache_path.exists():
+                print(f"{Colors.CYAN}[i] Cleaning cache folder: {cache_path}{Colors.RESET}")
+                shutil.rmtree(cache_path, ignore_errors=True)
+                print(f"{Colors.GREEN}[✓] Cache folder removed{Colors.RESET}")
+    except Exception as e:
+        print(f"{Colors.YELLOW}[!] Could not remove cache folder: {e}{Colors.RESET}")
 
 def select_file_dialog():
     try:
@@ -361,7 +377,11 @@ class ProcessingStats:
 
 class NotYCaptionGenerator:
     def __init__(self, media_path: str = None):
+        global _app_instance
+        _app_instance = self
+        
         atexit.register(cleanup_temp_files)
+        atexit.register(cleanup_cache_folder)
         
         if getattr(sys, 'frozen', False):
             self.base_dir = Path(sys.executable).parent
@@ -374,7 +394,8 @@ class NotYCaptionGenerator:
         self.pretrained_models_dir = self.base_dir / "pretrained_models"
         
         self.models_dir.mkdir(parents=True, exist_ok=True)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # Don't create cache dir at startup - create only when needed
+        # self.cache_dir.mkdir(parents=True, exist_ok=True)
         
         if platform.system() == "Windows":
             self.ffmpeg_exe = self.ffmpeg_dir / "ffmpeg.exe"
@@ -453,6 +474,10 @@ class NotYCaptionGenerator:
         # Check for local Spleeter models
         self.has_local_spleeter_models = self.check_spleeter_models()
         
+        # Database connection flag
+        self.conn = None
+        self.cursor = None
+        
     def check_spleeter_models(self) -> bool:
         """Check if Spleeter pretrained models exist locally"""
         if self.pretrained_models_dir.exists():
@@ -469,42 +494,50 @@ class NotYCaptionGenerator:
         return None
         
     def init_database(self):
-        self.db_path = self.cache_dir / "cache.db"
-        self.conn = sqlite3.connect(str(self.db_path))
-        self.cursor = self.conn.cursor()
-        
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS transcriptions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_hash TEXT UNIQUE,
-                model_name TEXT,
-                language TEXT,
-                mode TEXT,
-                vocal_separation TEXT,
-                result TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS lyrics_cache (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                song_name TEXT UNIQUE,
-                lyrics TEXT,
-                source TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        self.conn.commit()
+        """Initialize database - create cache dir only when needed"""
+        try:
+            # Create cache dir only when we actually need to use the database
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            self.db_path = self.cache_dir / "cache.db"
+            self.conn = sqlite3.connect(str(self.db_path))
+            self.cursor = self.conn.cursor()
+            
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS transcriptions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_hash TEXT UNIQUE,
+                    model_name TEXT,
+                    language TEXT,
+                    mode TEXT,
+                    vocal_separation TEXT,
+                    result TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS lyrics_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    song_name TEXT UNIQUE,
+                    lyrics TEXT,
+                    source TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            self.conn.commit()
+        except Exception as e:
+            print(f"{Colors.YELLOW}[!] Could not initialize database: {e}{Colors.RESET}")
+            self.conn = None
+            self.cursor = None
         
     def get_file_hash(self, file_path: Path) -> str:
         hasher = hashlib.md5()
@@ -514,6 +547,8 @@ class NotYCaptionGenerator:
         return hasher.hexdigest()
         
     def cache_transcription(self, file_hash: str, model_name: str, language: str, mode: str, vocal_separation: str, result: dict):
+        if not self.conn or not self.cursor:
+            return
         try:
             self.cursor.execute(
                 "INSERT OR REPLACE INTO transcriptions (file_hash, model_name, language, mode, vocal_separation, result) VALUES (?, ?, ?, ?, ?, ?)",
@@ -524,6 +559,8 @@ class NotYCaptionGenerator:
             pass
             
     def get_cached_transcription(self, file_hash: str, model_name: str, language: str, mode: str, vocal_separation: str) -> Optional[dict]:
+        if not self.conn or not self.cursor:
+            return None
         try:
             self.cursor.execute(
                 "SELECT result FROM transcriptions WHERE file_hash = ? AND model_name = ? AND language = ? AND mode = ? AND vocal_separation = ?",
@@ -537,6 +574,8 @@ class NotYCaptionGenerator:
         return None
         
     def save_setting(self, key: str, value: str):
+        if not self.conn or not self.cursor:
+            return
         try:
             self.cursor.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
@@ -547,6 +586,8 @@ class NotYCaptionGenerator:
             pass
             
     def get_setting(self, key: str, default: str = None) -> Optional[str]:
+        if not self.conn or not self.cursor:
+            return default
         try:
             self.cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
             row = self.cursor.fetchone()
@@ -555,6 +596,16 @@ class NotYCaptionGenerator:
         except:
             pass
         return default
+        
+    def close_database(self):
+        """Close database connection"""
+        if self.conn:
+            try:
+                self.conn.close()
+            except:
+                pass
+            self.conn = None
+            self.cursor = None
         
     def clear_screen(self):
         os.system('cls' if platform.system() == 'Windows' else 'clear')
@@ -1271,11 +1322,10 @@ class NotYCaptionGenerator:
                     lang_iso = lang[2]
                     break
             
-            # Determine output path
+            # Determine output path - NEVER add _vocals to filename
             if is_youtube and video_title:
                 suffix = f"{lang_iso}" if mode == "normal" else f"{lang_iso}_translated"
-                if vocal_separation != "none":
-                    suffix += f"_vocals"
+                # No _vocals suffix - removed as requested
                 default_name = f"{video_title}_{suffix}.srt"
                 save_path = save_file_dialog(default_name)
                 if not save_path:
@@ -1287,8 +1337,7 @@ class NotYCaptionGenerator:
                     suffix = f"{lang_iso}_translated"
                 else:
                     suffix = lang_iso
-                if vocal_separation != "none":
-                    suffix += f"_vocals"
+                # No _vocals suffix - removed as requested
                 output_path = media_path.parent / f"{media_path.stem}_{suffix}.srt"
             
             segments = result.get("segments", [])
