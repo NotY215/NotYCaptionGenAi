@@ -18,7 +18,6 @@ UNINSTALLER_NAME = "Uninstaller.exe"
 PACKAGES_FOLDER = "_pythonPackages_"
 
 def clean_build_artifacts(builder_dir):
-    """Clean build artifacts"""
     for item in builder_dir.glob("build"):
         if item.is_dir():
             shutil.rmtree(item)
@@ -29,7 +28,6 @@ def clean_build_artifacts(builder_dir):
         spec.unlink()
 
 def get_site_packages():
-    """Get site-packages path"""
     result = subprocess.run(
         [sys.executable, "-c", "import site; print(site.getsitepackages()[0])"],
         capture_output=True, text=True
@@ -41,7 +39,6 @@ def get_site_packages():
     return Path(sys.prefix) / "Lib" / "site-packages"
 
 def copy_package(src, dst, name):
-    """Copy a package"""
     if not src.exists():
         return False
     try:
@@ -65,13 +62,11 @@ def build_installer():
     temp_dir = base_dir / "temp_installer"
     resources_dir = base_dir / "resources"
 
-    # Check if main executable exists
     exe_file = dist_dir / f"{APP_NAME}.exe"
     if not exe_file.exists():
         print("[ERROR] Main executable not found! Run build_exe.py first.")
         return None
 
-    # Clean temp directory
     if temp_dir.exists():
         shutil.rmtree(temp_dir)
     temp_dir.mkdir(parents=True, exist_ok=True)
@@ -80,7 +75,6 @@ def build_installer():
     shutil.copy2(exe_file, temp_dir / f"{APP_NAME}.exe")
     print("  Copied main executable")
 
-    # Build uninstaller
     print("\n[2/7] Building uninstaller...")
     uninstaller_py = builder_dir / "uninstaller.py"
     logo_ico = resources_dir / "logo.ico"
@@ -109,15 +103,13 @@ def build_installer():
         print(f"[ERROR] Uninstaller build failed: {e}")
         return None
 
-    # Copy packages from site-packages to _pythonPackages_
-    print("\n[3/7] Copying Python packages to _pythonPackages_...")
+    print("\n[3/7] Copying Python packages...")
     site_packages = get_site_packages()
     print(f"  Source: {site_packages}")
     
     packages_dir = temp_dir / PACKAGES_FOLDER
     packages_dir.mkdir(exist_ok=True)
     
-    # Required packages to copy
     packages_to_copy = [
         "whisper", "torch", "torchaudio", "numpy", "yt_dlp",
         "colorama", "tqdm", "regex", "tiktoken", "requests",
@@ -143,7 +135,6 @@ def build_installer():
                     copied += 1
                     print(f"  Copied: {alt_name}")
     
-    # Copy .pyd files
     for pyd in site_packages.glob("*.pyd"):
         try:
             shutil.copy2(pyd, packages_dir / pyd.name)
@@ -153,7 +144,6 @@ def build_installer():
     
     print(f"  Total packages copied: {copied}")
 
-    # Copy resources
     print("\n[4/7] Copying resources...")
     if resources_dir.exists():
         dest_resources = temp_dir / "resources"
@@ -162,7 +152,6 @@ def build_installer():
         shutil.copytree(resources_dir, dest_resources)
         print("  Copied resources")
 
-    # Copy ffmpeg
     print("\n[5/7] Copying ffmpeg...")
     ffmpeg_dir = base_dir / "ffmpeg"
     if ffmpeg_dir.exists():
@@ -172,7 +161,6 @@ def build_installer():
         shutil.copytree(ffmpeg_dir, dest_ffmpeg)
         print("  Copied ffmpeg")
 
-    # Copy models (will be installed to AppData by installer)
     print("\n[6/7] Copying models...")
     models_dir = base_dir / "models"
     if models_dir.exists():
@@ -190,7 +178,6 @@ def build_installer():
         shutil.copytree(pretrained_dir, dest_pretrained)
         print("  Copied Spleeter models")
 
-    # Build installer
     print("\n[7/7] Building installer executable...")
     installer_script = builder_dir / "installer_console.py"
 

@@ -4,7 +4,7 @@
 """
 NotY Caption Generator AI v7.1
 All-in-one file - No external src folder dependencies
-Professional Vocal Separation with Spleeter
+Professional Vocal Separation with Spleeter & TensorFlow
 Copyright (c) 2026 NotY215
 """
 
@@ -23,11 +23,16 @@ import json
 import hashlib
 import sqlite3
 import logging
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Tuple, Dict, Any, List
+from typing import Optional, Tuple, Dict, Any, List, Callable
 from dataclasses import dataclass
 from enum import Enum
+import warnings
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
 
 # ============================================================================
 # CRITICAL: Path handling for packaged app
@@ -35,16 +40,15 @@ from enum import Enum
 if getattr(sys, 'frozen', False):
     application_path = os.path.dirname(sys.executable)
     
-    # Add _pythonPackages_ folder to Python path
     packages_path = os.path.join(application_path, '_pythonPackages_')
     if os.path.exists(packages_path) and packages_path not in sys.path:
         sys.path.insert(0, packages_path)
     
-    # Set environment variables
     os.environ['PATH'] = application_path + os.pathsep + os.environ.get('PATH', '')
     os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
     os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
     os.environ['OMP_NUM_THREADS'] = '4'
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 if sys.platform == "win32":
     import io
@@ -64,24 +68,36 @@ APP_TELEGRAM = "https://t.me/Noty_215"
 APP_YOUTUBE = "https://www.youtube.com/@NotY215"
 APP_DATA_FOLDER = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'NotYCaptionGenAI')
 APP_LOGS_FOLDER = os.path.join(APP_DATA_FOLDER, 'logs')
+APP_MODELS_FOLDER = os.path.join(APP_DATA_FOLDER, 'models')
 
 # Create AppData folders
 os.makedirs(APP_DATA_FOLDER, exist_ok=True)
 os.makedirs(APP_LOGS_FOLDER, exist_ok=True)
+os.makedirs(APP_MODELS_FOLDER, exist_ok=True)
 
 # ============================================================================
 # Logging Setup
 # ============================================================================
 log_filename = os.path.join(APP_LOGS_FOLDER, f'app_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(log_filename, encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
+
+class CustomFormatter(logging.Formatter):
+    def format(self, record):
+        if record.levelno == logging.INFO:
+            self._style._fmt = '%(asctime)s [i] %(message)s'
+        elif record.levelno == logging.WARNING:
+            self._style._fmt = '%(asctime)s [!] %(message)s'
+        elif record.levelno == logging.ERROR:
+            self._style._fmt = '%(asctime)s [✗] %(message)s'
+        else:
+            self._style._fmt = '%(asctime)s [•] %(message)s'
+        return super().format(record)
+
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+file_handler = logging.FileHandler(log_filename, encoding='utf-8')
+file_handler.setFormatter(CustomFormatter())
+logger.addHandler(file_handler)
 
 # ============================================================================
 # Colors for Console Output
@@ -104,6 +120,36 @@ if platform.system() == "Windows":
         colorama.init()
     except:
         pass
+
+# ============================================================================
+# Progress Bar
+# ============================================================================
+class ProgressBar:
+    def __init__(self, total: int, description: str = "Processing", width: int = 50):
+        self.total = total
+        self.description = description
+        self.width = width
+        self.current = 0
+        self.lock = threading.Lock()
+        
+    def update(self, increment: int = 1, message: str = ""):
+        with self.lock:
+            self.current = min(self.current + increment, self.total)
+            percent = self.current / self.total
+            filled = int(self.width * percent)
+            bar = '█' * filled + '░' * (self.width - filled)
+            if message:
+                print(f"\r{Colors.CYAN}[{bar}] {percent*100:.0f}% - {self.description} - {message}{Colors.RESET}", end="", flush=True)
+            else:
+                print(f"\r{Colors.CYAN}[{bar}] {percent*100:.0f}% - {self.description}{Colors.RESET}", end="", flush=True)
+            if self.current >= self.total:
+                print()
+                
+    def set_total(self, total: int):
+        self.total = total
+        
+    def reset(self):
+        self.current = 0
 
 # ============================================================================
 # Language Tiers with Accuracy Information
@@ -155,11 +201,11 @@ LANGUAGE_TIERS = {
 # Whisper Models
 # ============================================================================
 WHISPER_MODELS = [
-    ("tiny", "75 MB", "Fastest, lowest accuracy, good for testing", "0.5x"),
-    ("base", "150 MB", "Fast, moderate accuracy, good for short files", "1.0x"),
-    ("small", "500 MB", "Balanced speed/accuracy, recommended", "2.0x"),
-    ("medium", "1.5 GB", "High accuracy, slower, good for important content", "4.0x"),
-    ("large", "2.9 GB", "Best accuracy, slowest, for professional use", "8.0x")
+    ("tiny", "75 MB", "Fastest, lowest accuracy, good for testing", "0.5x realtime"),
+    ("base", "150 MB", "Fast, moderate accuracy, good for short files", "1.0x realtime"),
+    ("small", "500 MB", "Balanced speed/accuracy, recommended", "2.0x realtime"),
+    ("medium", "1.5 GB", "High accuracy, slower, good for important content", "4.0x realtime"),
+    ("large", "2.9 GB", "Best accuracy, slowest, for professional use", "8.0x realtime")
 ]
 
 # ============================================================================
@@ -183,7 +229,7 @@ LINE_TYPES = [
 # Vocal Separation Options
 # ============================================================================
 VOCAL_OPTIONS = [
-    ("No vocal separation", "none", "Fastest, use original audio", "0x slower"),
+    ("No vocal separation", "none", "Fastest, use original audio", "0-1x speed"),
     ("2 Stems (Fast)", "2stems", "Vocals + Accompaniment, good quality", "1-2x slower"),
     ("4 Stems (Better)", "4stems", "Vocals + Drums + Bass + Other, better separation", "2-3x slower"),
     ("5 Stems (Best)", "5stems", "Vocals + Drums + Bass + Piano + Other, best quality", "3-4x slower")
@@ -236,12 +282,16 @@ class UserSelection:
     limit: int = 5
     file_path: str = ""
     video_title: str = ""
+    checkpoint: str = ""
 
 # ============================================================================
 # Whisper Import with Error Handling
 # ============================================================================
 WHISPER_AVAILABLE = False
+SPLEETER_AVAILABLE = False
+TENSORFLOW_AVAILABLE = False
 whisper = None
+Separator = None
 
 try:
     import whisper
@@ -251,16 +301,22 @@ try:
 except ImportError as e:
     logger.error(f"Whisper import failed: {e}")
     print(f"{Colors.YELLOW}[!] Whisper not found: {e}{Colors.RESET}")
-    try:
-        if getattr(sys, 'frozen', False):
-            sys.path.insert(0, os.path.join(os.path.dirname(sys.executable), '_pythonPackages_'))
-        import whisper
-        WHISPER_AVAILABLE = True
-        logger.info("Whisper loaded from _pythonPackages_")
-        print(f"{Colors.GREEN}[✓] Whisper loaded from _pythonPackages_{Colors.RESET}")
-    except Exception as e2:
-        logger.error(f"Whisper fallback import failed: {e2}")
-        print(f"{Colors.RED}[✗] Could not load whisper. Please ensure packages are installed.{Colors.RESET}")
+
+try:
+    import tensorflow as tf
+    tf.get_logger().setLevel('ERROR')
+    tf.autograph.set_verbosity(0)
+    TENSORFLOW_AVAILABLE = True
+    logger.info("TensorFlow loaded successfully")
+    print(f"{Colors.GREEN}[✓] TensorFlow loaded successfully{Colors.RESET}")
+    
+    from spleeter.separator import Separator
+    SPLEETER_AVAILABLE = True
+    logger.info("Spleeter loaded successfully")
+    print(f"{Colors.GREEN}[✓] Spleeter loaded successfully{Colors.RESET}")
+except ImportError as e:
+    logger.warning(f"Spleeter/TensorFlow not available: {e}")
+    print(f"{Colors.YELLOW}[!] Spleeter/TensorFlow not available. Vocal separation will use FFmpeg.{Colors.RESET}")
 
 # ============================================================================
 # Cache Manager
@@ -361,24 +417,134 @@ class AudioProcessor:
             pass
         return 0.0
         
-    def extract_audio(self, video_path: Path) -> Optional[Path]:
+    def extract_audio(self, video_path: Path, progress_callback: Optional[Callable] = None) -> Optional[Path]:
         if not self.check_ffmpeg():
             logger.error("FFmpeg not found")
-            print(f"{Colors.RED}[✗] FFmpeg not found{Colors.RESET}")
             return None
         temp_dir = Path(tempfile.gettempdir())
         audio_path = temp_dir / f"{video_path.stem}_temp_audio.wav"
         ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe and self.ffmpeg_exe.exists() else 'ffmpeg'
         cmd = [ffmpeg_cmd, '-i', str(video_path), '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', '-y', str(audio_path)]
         try:
+            if progress_callback:
+                progress_callback(10, "Extracting audio...")
             subprocess.run(cmd, capture_output=True, timeout=120)
             if audio_path.exists() and audio_path.stat().st_size > 0:
                 logger.info(f"Audio extracted: {audio_path}")
+                if progress_callback:
+                    progress_callback(20, "Audio extracted")
                 return audio_path
         except Exception as e:
             logger.error(f"Audio extraction failed: {e}")
-            print(f"{Colors.RED}[✗] Audio extraction failed: {e}{Colors.RESET}")
         return None
+
+# ============================================================================
+# Vocal Separator with Spleeter and TensorFlow
+# ============================================================================
+class VocalSeparator:
+    def __init__(self, ffmpeg_exe: Optional[Path] = None, pretrained_models_dir: Optional[Path] = None):
+        self.ffmpeg_exe = ffmpeg_exe
+        self.pretrained_models_dir = pretrained_models_dir
+        self.separator = None
+        self.current_model = "2stems"
+        
+    def is_available(self) -> bool:
+        return SPLEETER_AVAILABLE or (self.ffmpeg_exe is not None and self.ffmpeg_exe.exists())
+    
+    def separate_vocals_spleeter(self, audio_path: Path, model: str = "2stems", progress_callback: Optional[Callable] = None) -> Optional[Path]:
+        if not SPLEETER_AVAILABLE:
+            return None
+            
+        if progress_callback:
+            progress_callback(25, f"Separating vocals with Spleeter ({model})...")
+        logger.info(f"Separating vocals with Spleeter ({model})...")
+        print(f"{Colors.CYAN}[→] Separating vocals with Spleeter ({model})...{Colors.RESET}")
+        
+        temp_dir = Path(tempfile.gettempdir())
+        output_dir = temp_dir / f"spleeter_output_{int(time.time())}"
+        
+        try:
+            if self.pretrained_models_dir and self.pretrained_models_dir.exists():
+                os.environ['SPLEETER_PRETRAINED_PATH'] = str(self.pretrained_models_dir)
+                logger.info(f"Using local models from: {self.pretrained_models_dir}")
+            
+            if self.separator is None or self.current_model != model:
+                logger.info(f"Loading Spleeter model...")
+                print(f"{Colors.CYAN}[i] Loading Spleeter model...{Colors.RESET}")
+                model_map = {
+                    "2stems": "spleeter:2stems",
+                    "4stems": "spleeter:4stems", 
+                    "5stems": "spleeter:5stems"
+                }
+                self.separator = Separator(model_map.get(model, "spleeter:2stems"))
+                self.current_model = model
+            
+            self.separator.separate_to_file(
+                str(audio_path), str(output_dir),
+                filename_format="{filename}_{instrument}.{codec}"
+            )
+            
+            vocal_file = None
+            for file in output_dir.rglob("*vocals.wav"):
+                vocal_file = file
+                break
+            
+            if vocal_file and vocal_file.exists():
+                final_vocals = temp_dir / f"{audio_path.stem}_vocals.wav"
+                shutil.copy2(vocal_file, final_vocals)
+                shutil.rmtree(output_dir, ignore_errors=True)
+                logger.info("Spleeter vocal separation complete")
+                if progress_callback:
+                    progress_callback(40, "Vocal separation complete")
+                print(f"{Colors.GREEN}[✓] Spleeter vocal separation complete{Colors.RESET}")
+                return final_vocals
+            else:
+                logger.warning("Could not find vocal track")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Spleeter error: {e}")
+            print(f"{Colors.YELLOW}[!] Spleeter error: {e}{Colors.RESET}")
+            return None
+            
+    def separate_vocals_ffmpeg(self, audio_path: Path, progress_callback: Optional[Callable] = None) -> Optional[Path]:
+        if not self.ffmpeg_exe or not self.ffmpeg_exe.exists():
+            return None
+            
+        if progress_callback:
+            progress_callback(25, "Isolating vocals with FFmpeg...")
+        logger.info("Isolating vocals with FFmpeg...")
+        print(f"{Colors.CYAN}[→] Isolating vocals with FFmpeg...{Colors.RESET}")
+        
+        temp_dir = Path(tempfile.gettempdir())
+        vocal_path = temp_dir / f"{audio_path.stem}_vocals.wav"
+        ffmpeg_cmd = str(self.ffmpeg_exe)
+        
+        cmd = [
+            ffmpeg_cmd, '-i', str(audio_path),
+            '-af', 'highpass=f=100, lowpass=f=10000, volume=2.0, acompressor=threshold=0.1:ratio=2:attack=5:release=50',
+            '-y', str(vocal_path)
+        ]
+        
+        try:
+            subprocess.run(cmd, capture_output=True, timeout=180)
+            if vocal_path.exists() and vocal_path.stat().st_size > 0:
+                logger.info("FFmpeg vocal isolation complete")
+                if progress_callback:
+                    progress_callback(40, "Vocal isolation complete")
+                print(f"{Colors.GREEN}[✓] FFmpeg vocal isolation complete{Colors.RESET}")
+                return vocal_path
+        except Exception as e:
+            logger.error(f"FFmpeg error: {e}")
+            print(f"{Colors.YELLOW}[!] FFmpeg error: {e}{Colors.RESET}")
+        return None
+        
+    def separate(self, audio_path: Path, model: str = "2stems", progress_callback: Optional[Callable] = None) -> Optional[Path]:
+        if SPLEETER_AVAILABLE and model != "none":
+            result = self.separate_vocals_spleeter(audio_path, model, progress_callback)
+            if result:
+                return result
+        return self.separate_vocals_ffmpeg(audio_path, progress_callback)
 
 # ============================================================================
 # Transcriber
@@ -393,11 +559,13 @@ class Transcriber:
     def is_available(self) -> bool:
         return WHISPER_AVAILABLE and whisper is not None
         
-    def load_model(self, model_name: str) -> bool:
+    def load_model(self, model_name: str, progress_callback: Optional[Callable] = None) -> bool:
         if not self.is_available():
             logger.error("Whisper not available")
             return False
         try:
+            if progress_callback:
+                progress_callback(50, f"Loading {model_name} model...")
             logger.info(f"Loading {model_name} model...")
             print(f"{Colors.CYAN}[→] Loading {model_name} model...{Colors.RESET}")
             load_start = time.time()
@@ -405,6 +573,8 @@ class Transcriber:
             self.current_model_name = model_name
             load_time = time.time() - load_start
             logger.info(f"Model loaded in {load_time:.1f}s")
+            if progress_callback:
+                progress_callback(60, f"Model loaded in {load_time:.1f}s")
             print(f"{Colors.GREEN}[✓] Model loaded in {load_time:.1f}s{Colors.RESET}")
             return True
         except Exception as e:
@@ -434,13 +604,18 @@ class Transcriber:
             text = re.sub(p, '', text)
         return re.sub(r'\s+', ' ', text).strip()
         
-    def transcribe(self, audio_path: Path, language: str, mode: str) -> Dict:
+    def transcribe(self, audio_path: Path, language: str, mode: str, progress_callback: Optional[Callable] = None) -> Dict:
         if not self.model:
             logger.error("No model loaded")
             return {"segments": []}
         
         task = "translate" if mode == "translate" else "transcribe"
         lang = None if language == "auto" else language
+        
+        if progress_callback:
+            progress_callback(70, f"Transcribing with {task} mode...")
+        logger.info(f"Transcribing with {task} mode...")
+        print(f"{Colors.CYAN}[i] Transcribing with {task} mode...{Colors.RESET}")
         
         try:
             result = self.model.transcribe(
@@ -455,6 +630,8 @@ class Transcriber:
                         seg["text"] = self.clean_text(seg["text"])
             
             logger.info(f"Transcription completed")
+            if progress_callback:
+                progress_callback(85, "Transcription complete")
             return result
         except Exception as e:
             logger.error(f"Transcription failed: {e}")
@@ -506,9 +683,12 @@ class SubtitleGenerator:
                     return lines
         return self.split_by_words(text, max(1, max_chars // 10))
     
-    def generate_subtitles(self, segments: List[Dict], line_type: str, limit: int) -> List[SubtitleEntry]:
+    def generate_subtitles(self, segments: List[Dict], line_type: str, limit: int, progress_callback: Optional[Callable] = None) -> List[SubtitleEntry]:
         subtitles = []
         idx = 1
+        
+        if progress_callback:
+            progress_callback(90, "Generating subtitles...")
         
         for seg in segments:
             text = seg.get("text", "").strip()
@@ -537,6 +717,9 @@ class SubtitleGenerator:
                     subtitles.append(SubtitleEntry(idx, line_start, line_end, line))
                     idx += 1
         
+        if progress_callback:
+            progress_callback(95, f"Generated {len(subtitles)} subtitles")
+        
         return subtitles
     
     def save_srt(self, output_path: Path, subtitles: List[SubtitleEntry]):
@@ -545,51 +728,7 @@ class SubtitleGenerator:
                 f.write(sub.to_srt())
 
 # ============================================================================
-# Vocal Separator
-# ============================================================================
-class VocalSeparator:
-    def __init__(self, ffmpeg_exe: Optional[Path] = None, pretrained_models_dir: Optional[Path] = None):
-        self.ffmpeg_exe = ffmpeg_exe
-        self.pretrained_models_dir = pretrained_models_dir
-        self.separator = None
-        self.current_model = "2stems"
-        
-    def is_available(self) -> bool:
-        return self.ffmpeg_exe is not None and self.ffmpeg_exe.exists()
-        
-    def separate_vocals_ffmpeg(self, audio_path: Path) -> Optional[Path]:
-        if not self.ffmpeg_exe or not self.ffmpeg_exe.exists():
-            return None
-            
-        logger.info("Isolating vocals with FFmpeg...")
-        print(f"{Colors.CYAN}[→] Isolating vocals with FFmpeg...{Colors.RESET}")
-        
-        temp_dir = Path(tempfile.gettempdir())
-        vocal_path = temp_dir / f"{audio_path.stem}_vocals.wav"
-        ffmpeg_cmd = str(self.ffmpeg_exe)
-        
-        cmd = [
-            ffmpeg_cmd, '-i', str(audio_path),
-            '-af', 'highpass=f=100, lowpass=f=10000, volume=2.0, acompressor=threshold=0.1:ratio=2:attack=5:release=50',
-            '-y', str(vocal_path)
-        ]
-        
-        try:
-            subprocess.run(cmd, capture_output=True, timeout=180)
-            if vocal_path.exists() and vocal_path.stat().st_size > 0:
-                logger.info("FFmpeg vocal isolation complete")
-                print(f"{Colors.GREEN}[✓] FFmpeg vocal isolation complete{Colors.RESET}")
-                return vocal_path
-        except Exception as e:
-            logger.error(f"FFmpeg error: {e}")
-            print(f"{Colors.YELLOW}[!] FFmpeg error: {e}{Colors.RESET}")
-        return None
-        
-    def separate(self, audio_path: Path, model: str = "2stems") -> Optional[Path]:
-        return self.separate_vocals_ffmpeg(audio_path)
-
-# ============================================================================
-# Menu System with Back Button Logic
+# Menu System with Checkpoint-Based Back Navigation
 # ============================================================================
 class MenuItem:
     def __init__(self, key: str, title: str, description: str = "", action=None, submenu=None):
@@ -600,10 +739,11 @@ class MenuItem:
         self.submenu = submenu
 
 class Menu:
-    def __init__(self, name: str = "main", parent=None):
+    def __init__(self, name: str = "main", parent=None, checkpoint_id: str = None):
         self.name = name
         self.parent = parent
         self.items: List[MenuItem] = []
+        self.checkpoint_id = checkpoint_id or name
         
     def add(self, key: str, title: str, description: str = "", action=None, submenu=None):
         self.items.append(MenuItem(key, title, description, action, submenu))
@@ -692,9 +832,9 @@ class NotYCaptionGenerator:
         self.cache_dir = self.base_dir / "cache"
         self.pretrained_models_dir = self.base_dir / "pretrained_models"
         
-        # Check AppData models
-        appdata_models = Path(APP_DATA_FOLDER) / "models"
-        if appdata_models.exists():
+        # Check AppData models (priority)
+        appdata_models = Path(APP_MODELS_FOLDER)
+        if appdata_models.exists() and any(appdata_models.iterdir()):
             self.models_dir = appdata_models
             logger.info(f"Using models from AppData: {appdata_models}")
         
@@ -721,19 +861,16 @@ class NotYCaptionGenerator:
         
         self.media_path_arg = media_path
         self.selection = UserSelection()
+        self.checkpoint_stack = []
         
         atexit.register(self.cleanup)
         logger.info("Application initialized successfully")
-    
-    def clear_screen(self):
-        """Clear console screen"""
-        os.system('cls' if platform.system() == 'Windows' else 'clear')
     
     def cleanup(self):
         """Clean up temporary files"""
         try:
             temp_dir = Path(tempfile.gettempdir())
-            patterns = ["*_temp_audio.wav", "*_vocals.wav", "youtube_audio_*", "spleeter_*", "chunk_*"]
+            patterns = ["*_temp_audio.wav", "*_vocals.wav", "youtube_audio_*", "spleeter_*", "chunk_*", "spleeter_output_*"]
             for pattern in patterns:
                 for file in temp_dir.glob(pattern):
                     try:
@@ -745,6 +882,15 @@ class NotYCaptionGenerator:
         except Exception as e:
             logger.error(f"Cleanup error: {e}")
     
+    def update_progress(self, percent: int, message: str):
+        """Update progress display"""
+        bar_length = 40
+        filled = int(bar_length * percent / 100)
+        bar = '█' * filled + '░' * (bar_length - filled)
+        print(f"\r{Colors.CYAN}[{bar}] {percent}% - {message}{Colors.RESET}", end="", flush=True)
+        if percent >= 100:
+            print()
+    
     def print_selection_summary(self):
         """Print a summary of all user selections"""
         print(f"\n{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.RESET}")
@@ -752,23 +898,40 @@ class NotYCaptionGenerator:
         print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.RESET}")
         print(f"  {Colors.GREEN}Platform:{Colors.RESET} {self.selection.platform}")
         print(f"  {Colors.GREEN}Source:{Colors.RESET} {self.selection.source}")
-        print(f"  {Colors.GREEN}Vocal Separation:{Colors.RESET} {self.selection.vocal_separation_name} ({self.selection.vocal_separation})")
-        print(f"  {Colors.GREEN}Whisper Model:{Colors.RESET} {self.selection.model_name.upper()} ({self.selection.model})")
+        print(f"  {Colors.GREEN}Vocal Separation:{Colors.RESET} {self.selection.vocal_separation_name}")
+        print(f"  {Colors.GREEN}Whisper Model:{Colors.RESET} {self.selection.model_name.upper()}")
         print(f"  {Colors.GREEN}Mode:{Colors.RESET} {self.selection.mode_name}")
-        print(f"  {Colors.GREEN}Language:{Colors.RESET} {self.selection.language_name} ({self.selection.language_code})")
+        print(f"  {Colors.GREEN}Language:{Colors.RESET} {self.selection.language_name}")
         print(f"  {Colors.GREEN}Line Break:{Colors.RESET} {self.selection.line_type_name}")
         if self.selection.line_type != "auto":
             print(f"  {Colors.GREEN}Limit:{Colors.RESET} {self.selection.limit}")
         print(f"  {Colors.GREEN}File:{Colors.RESET} {self.selection.file_path}")
         if self.selection.video_title:
-            print(f"  {Colors.GREEN}Video Title:{Colors.RESET} {self.selection.video_title}")
+            print(f"  {Colors.GREEN}Video Title:{Colors.RESET} {self.selection.video_title[:60]}")
         print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.RESET}\n")
+    
+    def save_checkpoint(self, checkpoint_name: str):
+        """Save current checkpoint for back navigation"""
+        self.selection.checkpoint = checkpoint_name
+        self.checkpoint_stack.append(checkpoint_name)
+        logger.debug(f"Checkpoint saved: {checkpoint_name}")
+    
+    def go_back_to_checkpoint(self, target_checkpoint: str) -> bool:
+        """Navigate back to a specific checkpoint"""
+        while self.checkpoint_stack and self.checkpoint_stack[-1] != target_checkpoint:
+            self.checkpoint_stack.pop()
+        if self.checkpoint_stack:
+            self.selection.checkpoint = self.checkpoint_stack[-1]
+            return True
+        return False
     
     def select_vocal_separation(self) -> bool:
         """Vocal separation selection menu"""
+        self.save_checkpoint("vocal_separation")
         while True:
-            self.clear_screen()
+            self.menu.clear_screen()
             print(f"{Colors.CYAN}{Colors.BOLD}VOCAL SEPARATION{Colors.RESET}\n")
+            print(f"{Colors.YELLOW}Note: Spleeter with TensorFlow provides better quality{Colors.RESET}\n")
             for i, (name, key, desc, speed) in enumerate(VOCAL_OPTIONS, 1):
                 print(f"  {Colors.GREEN}{i}{Colors.RESET}) {Colors.WHITE}{name}{Colors.RESET}")
                 print(f"     {Colors.CYAN}└─ {desc}{Colors.RESET}")
@@ -786,22 +949,24 @@ class NotYCaptionGenerator:
                     logger.info(f"Selected vocal separation: {self.selection.vocal_separation_name}")
                     return True
                 else:
-                    print(f"{Colors.RED}[✗] Invalid option (1-{len(VOCAL_OPTIONS)}){Colors.RESET}")
+                    print(f"{Colors.RED}[✗] Invalid option{Colors.RESET}")
                     input("Press Enter...")
             except ValueError:
-                print(f"{Colors.RED}[✗] Invalid input. Please enter a number.{Colors.RESET}")
+                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
                 input("Press Enter...")
     
     def select_model(self) -> bool:
         """Whisper model selection menu"""
+        self.save_checkpoint("model")
         while True:
-            self.clear_screen()
+            self.menu.clear_screen()
             print(f"{Colors.CYAN}{Colors.BOLD}WHISPER MODEL{Colors.RESET}\n")
+            print(f"{Colors.YELLOW}Note: Larger models = better accuracy but slower{Colors.RESET}\n")
             for i, (name, size, desc, speed) in enumerate(WHISPER_MODELS, 1):
                 print(f"  {Colors.GREEN}{i}{Colors.RESET}) {Colors.WHITE}{name.upper()}{Colors.RESET}")
                 print(f"     {Colors.CYAN}└─ Size: {size}{Colors.RESET}")
                 print(f"     {Colors.CYAN}   {desc}{Colors.RESET}")
-                print(f"     {Colors.CYAN}   Speed: {speed} realtime{Colors.RESET}")
+                print(f"     {Colors.CYAN}   Speed: {speed}{Colors.RESET}")
             print(f"\n  {Colors.YELLOW}0{Colors.RESET}) {Colors.YELLOW}Back{Colors.RESET}")
             
             choice = input(f"\n{Colors.CYAN}Choose option (0-{len(WHISPER_MODELS)}): {Colors.RESET}").strip()
@@ -815,16 +980,17 @@ class NotYCaptionGenerator:
                     logger.info(f"Selected model: {self.selection.model}")
                     return True
                 else:
-                    print(f"{Colors.RED}[✗] Invalid option (1-{len(WHISPER_MODELS)}){Colors.RESET}")
+                    print(f"{Colors.RED}[✗] Invalid option{Colors.RESET}")
                     input("Press Enter...")
             except ValueError:
-                print(f"{Colors.RED}[✗] Invalid input. Please enter a number.{Colors.RESET}")
+                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
                 input("Press Enter...")
     
     def select_mode(self) -> bool:
         """Mode selection menu"""
+        self.save_checkpoint("mode")
         while True:
-            self.clear_screen()
+            self.menu.clear_screen()
             print(f"{Colors.CYAN}{Colors.BOLD}MODE SELECTION{Colors.RESET}\n")
             for i, (name, key, desc) in enumerate(MODES, 1):
                 print(f"  {Colors.GREEN}{i}{Colors.RESET}) {Colors.WHITE}{name}{Colors.RESET}")
@@ -842,16 +1008,17 @@ class NotYCaptionGenerator:
                     logger.info(f"Selected mode: {self.selection.mode_name}")
                     return True
                 else:
-                    print(f"{Colors.RED}[✗] Invalid option (1-{len(MODES)}){Colors.RESET}")
+                    print(f"{Colors.RED}[✗] Invalid option{Colors.RESET}")
                     input("Press Enter...")
             except ValueError:
-                print(f"{Colors.RED}[✗] Invalid input. Please enter a number.{Colors.RESET}")
+                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
                 input("Press Enter...")
     
     def select_language(self) -> bool:
         """Language selection with tiers"""
+        self.save_checkpoint("language")
         while True:
-            self.clear_screen()
+            self.menu.clear_screen()
             print(f"{Colors.CYAN}{Colors.BOLD}LANGUAGE SELECTION{Colors.RESET}\n")
             print(f"  {Colors.GREEN}1{Colors.RESET}) {Colors.WHITE}High Accuracy (90-95%){Colors.RESET}")
             print(f"     {Colors.CYAN}└─ Best for clean audio, professional content{Colors.RESET}")
@@ -871,13 +1038,13 @@ class NotYCaptionGenerator:
             elif tier_choice == "3":
                 tier = "low"
             else:
-                print(f"{Colors.RED}[✗] Invalid choice (0-3){Colors.RESET}")
+                print(f"{Colors.RED}[✗] Invalid choice{Colors.RESET}")
                 input("Press Enter...")
                 continue
             
             languages = LANGUAGE_TIERS[tier]["languages"]
             while True:
-                self.clear_screen()
+                self.menu.clear_screen()
                 print(f"{Colors.CYAN}{Colors.BOLD}SELECT LANGUAGE{Colors.RESET}")
                 print(f"{Colors.GREEN}Tier: {LANGUAGE_TIERS[tier]['name']}{Colors.RESET}")
                 print(f"{Colors.CYAN}Description: {LANGUAGE_TIERS[tier]['description']}{Colors.RESET}\n")
@@ -898,16 +1065,17 @@ class NotYCaptionGenerator:
                         logger.info(f"Selected language: {self.selection.language_name}")
                         return True
                     else:
-                        print(f"{Colors.RED}[✗] Invalid option (1-{len(languages)}){Colors.RESET}")
+                        print(f"{Colors.RED}[✗] Invalid option{Colors.RESET}")
                         input("Press Enter...")
                 except ValueError:
-                    print(f"{Colors.RED}[✗] Invalid input. Please enter a number.{Colors.RESET}")
+                    print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
                     input("Press Enter...")
     
     def select_line_break(self) -> bool:
         """Line break type selection"""
+        self.save_checkpoint("line_break")
         while True:
-            self.clear_screen()
+            self.menu.clear_screen()
             print(f"{Colors.CYAN}{Colors.BOLD}LINE BREAK TYPE{Colors.RESET}\n")
             for i, (name, key, desc, range_text) in enumerate(LINE_TYPES, 1):
                 print(f"  {Colors.GREEN}{i}{Colors.RESET}) {Colors.WHITE}{name}{Colors.RESET}")
@@ -939,7 +1107,7 @@ class NotYCaptionGenerator:
                                     self.selection.limit = 5
                                     break
                             except ValueError:
-                                print(f"{Colors.RED}[✗] Invalid input. Please enter a number.{Colors.RESET}")
+                                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
                     elif self.selection.line_type == "letters":
                         while True:
                             try:
@@ -955,17 +1123,17 @@ class NotYCaptionGenerator:
                                     self.selection.limit = 42
                                     break
                             except ValueError:
-                                print(f"{Colors.RED}[✗] Invalid input. Please enter a number.{Colors.RESET}")
+                                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
                     else:
                         self.selection.limit = 0
                     
                     logger.info(f"Selected line break: {self.selection.line_type_name}, limit: {self.selection.limit}")
                     return True
                 else:
-                    print(f"{Colors.RED}[✗] Invalid option (1-{len(LINE_TYPES)}){Colors.RESET}")
+                    print(f"{Colors.RED}[✗] Invalid option{Colors.RESET}")
                     input("Press Enter...")
             except ValueError:
-                print(f"{Colors.RED}[✗] Invalid input. Please enter a number.{Colors.RESET}")
+                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
                 input("Press Enter...")
     
     def download_youtube_audio(self, url: str) -> Tuple[Optional[Path], Optional[str]]:
@@ -1017,34 +1185,16 @@ class NotYCaptionGenerator:
             print(f"{Colors.RED}[✗] Download failed: {e}{Colors.RESET}")
         return None, None
     
-    def is_supported_file(self, file_path: Path) -> bool:
-        """Check if file extension is supported"""
-        return file_path.suffix.lower() in SUPPORTED_EXTENSIONS['all']
-    
     def process_file(self) -> bool:
         """Process the selected file and generate captions"""
         try:
             media_path = Path(self.selection.file_path)
-            
-            # Validate file exists
-            if not media_path.exists():
-                logger.error(f"File not found: {media_path}")
-                print(f"{Colors.RED}[✗] File not found: {media_path}{Colors.RESET}")
-                return False
-            
-            # Validate file extension
-            if not self.is_supported_file(media_path):
-                logger.error(f"Unsupported file format: {media_path.suffix}")
-                print(f"{Colors.RED}[✗] Unsupported file format: {media_path.suffix}{Colors.RESET}")
-                print(f"{Colors.CYAN}[i] Supported formats: {', '.join(SUPPORTED_EXTENSIONS['all'])}{Colors.RESET}")
-                return False
-            
             audio_path = media_path
             
             # Extract audio if needed
             if media_path.suffix.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.mpg', '.mpeg', '.webm', '.flv', '.wmv']:
                 logger.info(f"Extracting audio from video: {media_path}")
-                audio_path = self.audio_processor.extract_audio(media_path)
+                audio_path = self.audio_processor.extract_audio(media_path, self.update_progress)
                 if not audio_path:
                     logger.error("Could not extract audio")
                     print(f"{Colors.RED}[✗] Could not extract audio{Colors.RESET}")
@@ -1053,7 +1203,7 @@ class NotYCaptionGenerator:
             # Vocal separation
             if self.selection.vocal_separation != "none":
                 logger.info(f"Applying vocal separation: {self.selection.vocal_separation}")
-                vocals_path = self.vocal_separator.separate(audio_path, self.selection.vocal_separation)
+                vocals_path = self.vocal_separator.separate(audio_path, self.selection.vocal_separation, self.update_progress)
                 if vocals_path and vocals_path.exists():
                     audio_path = vocals_path
                     print(f"{Colors.GREEN}[✓] Using isolated vocals{Colors.RESET}")
@@ -1061,17 +1211,37 @@ class NotYCaptionGenerator:
                     print(f"{Colors.YELLOW}[!] Vocal separation failed, using original audio{Colors.RESET}")
             
             # Load model
-            if not self.transcriber.load_model(self.selection.model):
+            if not self.transcriber.load_model(self.selection.model, self.update_progress):
                 return False
             
-            # Transcribe
-            logger.info(f"Starting transcription with {self.selection.model} model")
-            print(f"{Colors.CYAN}[i] Transcribing...{Colors.RESET}")
-            result = self.transcriber.transcribe(audio_path, self.selection.language_code, self.selection.mode)
+            # Check cache
+            file_hash = self.cache_manager.get_file_hash(media_path)
+            cached_result = self.cache_manager.get_cached_transcription(
+                file_hash, self.selection.model, self.selection.language_code, 
+                self.selection.mode, self.selection.vocal_separation
+            )
+            
+            if cached_result:
+                logger.info("Using cached transcription")
+                print(f"{Colors.GREEN}[✓] Using cached transcription{Colors.RESET}")
+                result = cached_result
+            else:
+                # Transcribe
+                result = self.transcriber.transcribe(audio_path, self.selection.language_code, self.selection.mode, self.update_progress)
+                # Cache result
+                self.cache_manager.cache_transcription(
+                    file_hash, self.selection.model, self.selection.language_code,
+                    self.selection.mode, self.selection.vocal_separation, result
+                )
             
             # Generate subtitles
             segments = result.get("segments", [])
-            subtitles = self.subtitle_generator.generate_subtitles(segments, self.selection.line_type, self.selection.limit)
+            if not segments:
+                logger.error("No segments found in transcription result")
+                print(f"{Colors.RED}[✗] No segments found in transcription result{Colors.RESET}")
+                return False
+            
+            subtitles = self.subtitle_generator.generate_subtitles(segments, self.selection.line_type, self.selection.limit, self.update_progress)
             
             # Determine output path
             if self.selection.platform == "YouTube" and self.selection.video_title:
@@ -1084,6 +1254,7 @@ class NotYCaptionGenerator:
             # Save subtitles
             self.subtitle_generator.save_srt(output_path, subtitles)
             
+            self.update_progress(100, "Complete!")
             logger.info(f"Captions saved to: {output_path}")
             print(f"\n{Colors.GREEN}[✓] Saved to: {output_path}{Colors.RESET}")
             print(f"{Colors.CYAN}[i] Generated {len(subtitles)} subtitle entries{Colors.RESET}")
@@ -1113,23 +1284,38 @@ class NotYCaptionGenerator:
         if not WHISPER_AVAILABLE:
             logger.error("Whisper not available")
             print(f"{Colors.RED}[✗] Whisper not available!{Colors.RESET}")
+            print(f"{Colors.CYAN}[i] Please ensure packages are installed in _pythonPackages_ folder{Colors.RESET}")
             input("\nPress Enter to exit...")
             return
+        
+        # Display status
+        print(f"{Colors.GREEN}[✓] Whisper: Available{Colors.RESET}")
+        if SPLEETER_AVAILABLE:
+            print(f"{Colors.GREEN}[✓] Spleeter: Available (with TensorFlow){Colors.RESET}")
+        else:
+            print(f"{Colors.YELLOW}[!] Spleeter: Not available (using FFmpeg fallback){Colors.RESET}")
         
         # Check for Send To file
         if self.media_path_arg:
             media_path = Path(self.media_path_arg)
-            if media_path.exists() and self.is_supported_file(media_path):
+            if media_path.exists() and media_path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
                 logger.info(f"File received from Send To: {media_path}")
                 self.selection.platform = "Local File"
                 self.selection.source = "Send To"
                 self.selection.file_path = str(media_path)
                 
                 # Show selection menu and process directly
+                self.menu = None  # No menu needed for Send To
                 if self.select_vocal_separation() and self.select_model() and self.select_mode() and self.select_language() and self.select_line_break():
                     self.print_selection_summary()
-                    if input(f"{Colors.CYAN}Generate captions? (y/n): {Colors.RESET}").lower() in ['y', 'yes']:
-                        self.process_file()
+                    confirm = input(f"{Colors.CYAN}Generate captions? (y/n): {Colors.RESET}").lower()
+                    if confirm in ['y', 'yes']:
+                        print()
+                        success = self.process_file()
+                        if not success:
+                            print(f"{Colors.RED}[✗] Failed to generate captions{Colors.RESET}")
+                    else:
+                        print(f"{Colors.YELLOW}[!] Cancelled by user{Colors.RESET}")
                 return
         
         # Create main menu
@@ -1139,28 +1325,41 @@ class NotYCaptionGenerator:
         youtube_menu = Menu("YouTube Download", main_menu)
         
         def youtube_action():
-            self.clear_screen()
-            print(f"{Colors.CYAN}{Colors.BOLD}YOUTUBE DOWNLOAD{Colors.RESET}\n")
-            url = input(f"{Colors.CYAN}Enter YouTube URL: {Colors.RESET}").strip()
-            if not url:
+            self.menu = youtube_menu
+            while True:
+                self.menu.clear_screen()
+                print(f"{Colors.CYAN}{Colors.BOLD}YOUTUBE DOWNLOAD{Colors.RESET}\n")
+                print(f"{Colors.YELLOW}Supported: YouTube.com, youtu.be, and other YouTube URLs{Colors.RESET}\n")
+                url = input(f"{Colors.CYAN}Enter YouTube URL: {Colors.RESET}").strip()
+                if not url:
+                    return
+                
+                print(f"{Colors.CYAN}[i] Processing URL...{Colors.RESET}")
+                media_path, video_title = self.download_youtube_audio(url)
+                if not media_path:
+                    print(f"{Colors.RED}[✗] Failed to download{Colors.RESET}")
+                    input("Press Enter to try again...")
+                    continue
+                
+                self.selection.platform = "YouTube"
+                self.selection.source = url
+                self.selection.file_path = str(media_path)
+                self.selection.video_title = video_title
+                
+                if self.select_vocal_separation() and self.select_model() and self.select_mode() and self.select_language() and self.select_line_break():
+                    self.print_selection_summary()
+                    confirm = input(f"{Colors.CYAN}Generate captions? (y/n): {Colors.RESET}").lower()
+                    if confirm in ['y', 'yes']:
+                        print()
+                        success = self.process_file()
+                        if not success:
+                            print(f"{Colors.RED}[✗] Failed to generate captions{Colors.RESET}")
+                            retry = input(f"{Colors.CYAN}Try again? (y/n): {Colors.RESET}").lower()
+                            if retry in ['y', 'yes']:
+                                continue
+                    else:
+                        print(f"{Colors.YELLOW}[!] Cancelled by user{Colors.RESET}")
                 return
-            
-            print(f"{Colors.CYAN}[i] Processing URL...{Colors.RESET}")
-            media_path, video_title = self.download_youtube_audio(url)
-            if not media_path:
-                print(f"{Colors.RED}[✗] Failed to download{Colors.RESET}")
-                input("Press Enter to continue...")
-                return
-            
-            self.selection.platform = "YouTube"
-            self.selection.source = url
-            self.selection.file_path = str(media_path)
-            self.selection.video_title = video_title
-            
-            if self.select_vocal_separation() and self.select_model() and self.select_mode() and self.select_language() and self.select_line_break():
-                self.print_selection_summary()
-                if input(f"{Colors.CYAN}Generate captions? (y/n): {Colors.RESET}").lower() in ['y', 'yes']:
-                    self.process_file()
         
         youtube_menu.add("1", "Download from URL", "Paste YouTube URL to download and transcribe", action=youtube_action)
         
@@ -1168,13 +1367,19 @@ class NotYCaptionGenerator:
         local_menu = Menu("Local File", main_menu)
         
         def local_file_action():
+            self.menu = local_menu
             from tkinter import filedialog, Tk
             root = Tk()
             root.withdraw()
             root.attributes('-topmost', True)
             file_path = filedialog.askopenfilename(
                 title="Select Video/Audio File",
-                filetypes=[("Media Files", "*.*")]
+                filetypes=[
+                    ("All Supported Files", "*.mp4;*.avi;*.mkv;*.mov;*.mp3;*.wav;*.m4a;*.flac"),
+                    ("Video Files", "*.mp4;*.avi;*.mkv;*.mov;*.m4v;*.mpg;*.mpeg;*.webm"),
+                    ("Audio Files", "*.mp3;*.wav;*.m4a;*.flac;*.ogg;*.aac"),
+                    ("All Files", "*.*")
+                ]
             )
             root.destroy()
             
@@ -1187,8 +1392,8 @@ class NotYCaptionGenerator:
                 input("Press Enter...")
                 return
             
-            if not self.is_supported_file(media_path):
-                print(f"{Colors.RED}[✗] Unsupported file format: {media_path.suffix}{Colors.RESET}")
+            if media_path.suffix.lower() not in SUPPORTED_EXTENSIONS['all']:
+                print(f"{Colors.RED}[✗] Unsupported file format{Colors.RESET}")
                 print(f"{Colors.CYAN}[i] Supported formats: {', '.join(SUPPORTED_EXTENSIONS['all'])}{Colors.RESET}")
                 input("Press Enter...")
                 return
@@ -1199,14 +1404,23 @@ class NotYCaptionGenerator:
             
             if self.select_vocal_separation() and self.select_model() and self.select_mode() and self.select_language() and self.select_line_break():
                 self.print_selection_summary()
-                if input(f"{Colors.CYAN}Generate captions? (y/n): {Colors.RESET}").lower() in ['y', 'yes']:
-                    self.process_file()
+                confirm = input(f"{Colors.CYAN}Generate captions? (y/n): {Colors.RESET}").lower()
+                if confirm in ['y', 'yes']:
+                    print()
+                    success = self.process_file()
+                    if not success:
+                        print(f"{Colors.RED}[✗] Failed to generate captions{Colors.RESET}")
+                        retry = input(f"{Colors.CYAN}Try again? (y/n): {Colors.RESET}").lower()
+                        if retry in ['y', 'yes']:
+                            local_file_action()
+                else:
+                    print(f"{Colors.YELLOW}[!] Cancelled by user{Colors.RESET}")
         
         local_menu.add("1", "Select File", "Browse and select video/audio file", action=local_file_action)
         
         # About function
         def about_action():
-            self.clear_screen()
+            self.menu.clear_screen()
             print(f"{Colors.CYAN}{Colors.BOLD}")
             print("+" + "=" * 60 + "+")
             print("|" + f"{APP_NAME} v{APP_VERSION}".center(60) + "|")
@@ -1219,12 +1433,15 @@ class NotYCaptionGenerator:
             print(f"\n{Colors.CYAN}Features:{Colors.RESET}")
             print("  • YouTube video download and captioning")
             print("  • Local video/audio file processing")
-            print("  • Vocal separation with Spleeter")
-            print("  • 7+ languages with auto-detection")
-            print("  • Smart subtitle formatting")
-            print(f"\n{Colors.CYAN}Supported Formats:{Colors.RESET}")
-            print(f"  Video: {', '.join(SUPPORTED_EXTENSIONS['video'])}")
-            print(f"  Audio: {', '.join(SUPPORTED_EXTENSIONS['audio'])}")
+            print("  • Vocal separation with Spleeter & TensorFlow")
+            print("  • 20+ languages with accuracy tiers")
+            print("  • Smart subtitle formatting (Auto/Words/Letters)")
+            print("  • Caching for faster reprocessing")
+            print(f"\n{Colors.CYAN}Components:{Colors.RESET}")
+            print(f"  • Whisper: {'Available' if WHISPER_AVAILABLE else 'Not Available'}")
+            print(f"  • Spleeter: {'Available' if SPLEETER_AVAILABLE else 'Not Available'}")
+            print(f"  • TensorFlow: {'Available' if TENSORFLOW_AVAILABLE else 'Not Available'}")
+            print(f"  • FFmpeg: {'Available' if self.audio_processor.check_ffmpeg() else 'Not Available'}")
             print(f"\n{Colors.CYAN}Support:{Colors.RESET}")
             print(f"  Telegram: {APP_TELEGRAM}")
             print(f"  YouTube: {APP_YOUTUBE}")
@@ -1234,7 +1451,7 @@ class NotYCaptionGenerator:
         # Build main menu
         main_menu.add("1", "🌐 YouTube Mode", "Download video from YouTube and generate captions", submenu=youtube_menu)
         main_menu.add("2", "📁 Local File Mode", "Process existing video/audio file from your computer", submenu=local_menu)
-        main_menu.add("3", "ℹ️ About", "Show application information", action=about_action)
+        main_menu.add("3", "ℹ️ About", "Show application information and component status", action=about_action)
         
         # Run menu
         result = main_menu.show()

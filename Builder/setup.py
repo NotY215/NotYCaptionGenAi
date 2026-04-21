@@ -16,35 +16,29 @@ APP_VERSION = "7.1"
 INSTALLER_NAME = f"{APP_NAME}_Installer_v{APP_VERSION}.exe"
 
 def clean_all():
-    """Clean all build artifacts"""
     print("Cleaning all build artifacts...")
     base_dir = Path(__file__).parent.parent
     builder_dir = Path(__file__).parent
     
-    # Remove dist
     dist_dir = base_dir / "dist"
     if dist_dir.exists():
         shutil.rmtree(dist_dir)
         print("  Removed dist folder")
     
-    # Remove build folders
     for build in [builder_dir / "build", base_dir / "build"]:
         if build.exists():
             shutil.rmtree(build)
             print(f"  Removed {build}")
     
-    # Remove temp_installer
     temp_dir = base_dir / "temp_installer"
     if temp_dir.exists():
         shutil.rmtree(temp_dir)
         print("  Removed temp_installer")
     
-    # Remove spec files
     for spec in builder_dir.glob("*.spec"):
         spec.unlink()
         print(f"  Removed {spec.name}")
     
-    # Remove __pycache__
     for pycache in base_dir.rglob("__pycache__"):
         shutil.rmtree(pycache, ignore_errors=True)
     for pycache in builder_dir.rglob("__pycache__"):
@@ -53,7 +47,6 @@ def clean_all():
     print("  Cleanup complete!")
 
 def check_requirements():
-    """Check if PyInstaller is installed"""
     print("Checking build requirements...")
     try:
         subprocess.run([sys.executable, "-m", "PyInstaller", "--version"], 
@@ -78,12 +71,9 @@ def build_all():
     base_dir = Path(__file__).parent.parent
     dist_dir = base_dir / "dist"
     
-    # Step 1: Build executable
     print("\n" + "=" * 60)
-    print("[1/2] Building executable (PURE CODE)...")
+    print("[1/2] Building executable...")
     print("=" * 60)
-    print("  - Size: 5-10 MB")
-    print("  - No packages included")
     
     build_exe = base_dir / "Builder" / "build_exe.py"
     
@@ -96,12 +86,9 @@ def build_all():
         print("\n[INFO] Build cancelled")
         sys.exit(0)
     
-    # Step 2: Build installer
     print("\n" + "=" * 60)
     print("[2/2] Building installer...")
     print("=" * 60)
-    print("  - Includes: executable + packages + assets")
-    print("  - Size: 200-400 MB")
     
     build_installer = base_dir / "Builder" / "build_installer.py"
     
