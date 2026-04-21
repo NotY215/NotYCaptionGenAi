@@ -2,62 +2,48 @@
 # -*- coding: utf-8 -*-
 
 """
-NotY Caption Generator AI v7.1
-All-in-one file - No external src folder dependencies
-Professional Vocal Separation with Spleeter & TensorFlow
+NotY Caption Generator AI v7.1 - Graphical Version
+Professional AI-powered subtitle generator using OpenAI Whisper
 Copyright (c) 2026 NotY215
 """
 
-import os
 import sys
-import atexit
+import os
 import signal
-import time
+import subprocess
 import tempfile
 import shutil
-import argparse
-import platform
-import subprocess
-import re
 import json
+import base64
 import hashlib
-import sqlite3
-import logging
+import time
 import threading
-from datetime import datetime, timedelta
+import re
+from datetime import timedelta
 from pathlib import Path
-from typing import Optional, Tuple, Dict, Any, List, Callable
-from dataclasses import dataclass
-from enum import Enum
-import warnings
+from typing import Optional, List, Dict, Any, Tuple
 
-# Suppress warnings
-warnings.filterwarnings("ignore")
+# PyQt5 imports
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QLabel, QComboBox, QSpinBox, QPushButton, QTextEdit, QFileDialog,
+    QMessageBox, QLineEdit, QScrollArea, QSlider, QProgressBar, QDialog, QFormLayout,
+    QSizePolicy, QStyleFactory, QDesktopWidget, QGroupBox, QRadioButton,
+    QFrame, QSpacerItem, QCheckBox, QTabWidget, QSplitter
+)
+from PyQt5.QtGui import QIcon, QColor, QTextCursor, QFont, QPalette, QCloseEvent
+from PyQt5.QtCore import Qt, QUrl, QCoreApplication, QDir, pyqtSignal, QThread, QTimer
+from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 
-# ============================================================================
-# CRITICAL: Path handling for packaged app
-# ============================================================================
-if getattr(sys, 'frozen', False):
-    application_path = os.path.dirname(sys.executable)
-    
-    packages_path = os.path.join(application_path, '_pythonPackages_')
-    if os.path.exists(packages_path) and packages_path not in sys.path:
-        sys.path.insert(0, packages_path)
-    
-    os.environ['PATH'] = application_path + os.pathsep + os.environ.get('PATH', '')
-    os.environ['TORCH_USE_RTLD_GLOBAL'] = '1'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-    os.environ['OMP_NUM_THREADS'] = '4'
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
-if sys.platform == "win32":
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-    sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8', errors='replace')
+# Third-party imports
+import whisper
+import torch
+from moviepy.editor import VideoFileClip
+import pysrt
+import pysubs2
 
 # ============================================================================
-# Application Metadata
+# Constants and Configuration
 # ============================================================================
 APP_NAME = "NotY Caption Generator AI"
 APP_VERSION = "7.1"
@@ -66,1409 +52,922 @@ APP_YEAR = "2026"
 APP_LICENSE = "LGPL-3.0"
 APP_TELEGRAM = "https://t.me/Noty_215"
 APP_YOUTUBE = "https://www.youtube.com/@NotY215"
-APP_DATA_FOLDER = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'NotYCaptionGenAI')
-APP_LOGS_FOLDER = os.path.join(APP_DATA_FOLDER, 'logs')
-APP_MODELS_FOLDER = os.path.join(APP_DATA_FOLDER, 'models')
 
-# Create AppData folders
-os.makedirs(APP_DATA_FOLDER, exist_ok=True)
-os.makedirs(APP_LOGS_FOLDER, exist_ok=True)
-os.makedirs(APP_MODELS_FOLDER, exist_ok=True)
-
-# ============================================================================
-# Logging Setup
-# ============================================================================
-log_filename = os.path.join(APP_LOGS_FOLDER, f'app_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-
-class CustomFormatter(logging.Formatter):
-    def format(self, record):
-        if record.levelno == logging.INFO:
-            self._style._fmt = '%(asctime)s [i] %(message)s'
-        elif record.levelno == logging.WARNING:
-            self._style._fmt = '%(asctime)s [!] %(message)s'
-        elif record.levelno == logging.ERROR:
-            self._style._fmt = '%(asctime)s [✗] %(message)s'
-        else:
-            self._style._fmt = '%(asctime)s [•] %(message)s'
-        return super().format(record)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-file_handler = logging.FileHandler(log_filename, encoding='utf-8')
-file_handler.setFormatter(CustomFormatter())
-logger.addHandler(file_handler)
-
-# ============================================================================
-# Colors for Console Output
-# ============================================================================
-class Colors:
-    RESET = '\033[0m'
-    RED = '\033[91m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    PURPLE = '\033[95m'
-    CYAN = '\033[96m'
-    WHITE = '\033[97m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-
-if platform.system() == "Windows":
-    try:
-        import colorama
-        colorama.init()
-    except:
-        pass
-
-# ============================================================================
-# Progress Bar
-# ============================================================================
-class ProgressBar:
-    def __init__(self, total: int, description: str = "Processing", width: int = 50):
-        self.total = total
-        self.description = description
-        self.width = width
-        self.current = 0
-        self.lock = threading.Lock()
-        
-    def update(self, increment: int = 1, message: str = ""):
-        with self.lock:
-            self.current = min(self.current + increment, self.total)
-            percent = self.current / self.total
-            filled = int(self.width * percent)
-            bar = '█' * filled + '░' * (self.width - filled)
-            if message:
-                print(f"\r{Colors.CYAN}[{bar}] {percent*100:.0f}% - {self.description} - {message}{Colors.RESET}", end="", flush=True)
-            else:
-                print(f"\r{Colors.CYAN}[{bar}] {percent*100:.0f}% - {self.description}{Colors.RESET}", end="", flush=True)
-            if self.current >= self.total:
-                print()
-                
-    def set_total(self, total: int):
-        self.total = total
-        
-    def reset(self):
-        self.current = 0
-
-# ============================================================================
-# Language Tiers with Accuracy Information
-# ============================================================================
+# Language tiers
 LANGUAGE_TIERS = {
     "high": {
         "name": "High Accuracy (90-95%)",
-        "description": "Best for clean audio, professional content",
         "languages": [
-            ("English", "en", "English - Best for US/UK content"),
-            ("Spanish", "es", "Spanish - European and Latin American"),
-            ("Italian", "it", "Italian - Standard Italian"),
-            ("Portuguese", "pt", "Portuguese - European and Brazilian"),
-            ("German", "de", "German - Standard German"),
-            ("Japanese", "ja", "Japanese - Standard Japanese"),
-            ("French", "fr", "French - European and Canadian"),
-            ("Catalan", "ca", "Catalan - Catalonia region"),
+            ("English", "en"), ("Spanish", "es"), ("Italian", "it"),
+            ("Portuguese", "pt"), ("German", "de"), ("Japanese", "ja"),
+            ("French", "fr"), ("Catalan", "ca")
         ]
     },
     "medium": {
         "name": "Medium Accuracy (70-85%)",
-        "description": "Good for clear audio with some background noise",
         "languages": [
-            ("Swedish", "sv", "Swedish - Standard Swedish"),
-            ("Russian", "ru", "Russian - Standard Russian"),
-            ("Polish", "pl", "Polish - Standard Polish"),
-            ("Dutch", "nl", "Dutch - Netherlands and Belgian"),
+            ("Swedish", "sv"), ("Russian", "ru"), ("Polish", "pl"), ("Dutch", "nl")
         ]
     },
     "low": {
         "name": "Lower Accuracy (50-70%)",
-        "description": "May have errors, best for short clips",
         "languages": [
-            ("Hindi", "hi", "Hindi - Devanagari script"),
-            ("Tamil", "ta", "Tamil - Dravidian language"),
-            ("Telugu", "te", "Telugu - South Indian language"),
-            ("Punjabi", "pa", "Punjabi - Gurmukhi script"),
-            ("Bengali", "bn", "Bengali - Eastern Indo-Aryan"),
-            ("Urdu", "ur", "Urdu - Nastaliq script"),
-            ("Marathi", "mr", "Marathi - Western India"),
-            ("Gujarati", "gu", "Gujarati - Western India"),
-            ("Kannada", "kn", "Kannada - South Indian"),
-            ("Malayalam", "ml", "Malayalam - Kerala region"),
+            ("Hindi", "hi"), ("Tamil", "ta"), ("Telugu", "te"), ("Punjabi", "pa"),
+            ("Bengali", "bn"), ("Urdu", "ur"), ("Marathi", "mr"), ("Gujarati", "gu"),
+            ("Kannada", "kn"), ("Malayalam", "ml")
         ]
     }
 }
 
-# ============================================================================
-# Whisper Models
-# ============================================================================
+# Whisper models
 WHISPER_MODELS = [
-    ("tiny", "75 MB", "Fastest, lowest accuracy, good for testing", "0.5x realtime"),
-    ("base", "150 MB", "Fast, moderate accuracy, good for short files", "1.0x realtime"),
-    ("small", "500 MB", "Balanced speed/accuracy, recommended", "2.0x realtime"),
-    ("medium", "1.5 GB", "High accuracy, slower, good for important content", "4.0x realtime"),
-    ("large", "2.9 GB", "Best accuracy, slowest, for professional use", "8.0x realtime")
+    ("tiny", "75 MB", "Fastest"), ("base", "150 MB", "Balanced"),
+    ("small", "500 MB", "Good"), ("medium", "1.5 GB", "Accurate"),
+    ("large", "2.9 GB", "Best")
 ]
 
-# ============================================================================
-# Modes
-# ============================================================================
-MODES = [
-    ("Normal Mode", "normal", "Transcribe in selected language without translation"),
-    ("Translate Mode", "translate", "Transcribe and translate to English")
-]
-
-# ============================================================================
-# Line Break Types
-# ============================================================================
-LINE_TYPES = [
-    ("Auto (Recommended)", "auto", "Smart sentence detection with natural breaks", "1-50 chars"),
-    ("Words", "words", "Break by word count", "1-30 words"),
-    ("Letters", "letters", "Break by character limit", "10-80 chars")
-]
-
-# ============================================================================
-# Vocal Separation Options
-# ============================================================================
+# Vocal separation options
 VOCAL_OPTIONS = [
-    ("No vocal separation", "none", "Fastest, use original audio", "0-1x speed"),
-    ("2 Stems (Fast)", "2stems", "Vocals + Accompaniment, good quality", "1-2x slower"),
-    ("4 Stems (Better)", "4stems", "Vocals + Drums + Bass + Other, better separation", "2-3x slower"),
-    ("5 Stems (Best)", "5stems", "Vocals + Drums + Bass + Piano + Other, best quality", "3-4x slower")
+    ("No vocal separation", "none", "Fastest"),
+    ("2 Stems (Fast)", "2stems", "Vocals + Accompaniment"),
+    ("4 Stems (Better)", "4stems", "Vocals + Drums + Bass + Other"),
+    ("5 Stems (Best)", "5stems", "Vocals + Drums + Bass + Piano + Other")
 ]
 
-# ============================================================================
-# Supported File Extensions
-# ============================================================================
 SUPPORTED_EXTENSIONS = {
-    'video': ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm', '.flv', '.wmv'],
-    'audio': ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac', '.wma'],
-    'all': ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm', '.flv', '.wmv',
-            '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac', '.wma']
+    'video': ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.mpg', '.mpeg', '.webm'],
+    'audio': ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac'],
 }
 
 # ============================================================================
-# Data Classes
+# Worker Thread for Transcription
 # ============================================================================
-@dataclass
-class SubtitleEntry:
-    index: int
-    start: float
-    end: float
-    text: str
+class TranscriptionWorker(QThread):
+    progress = pyqtSignal(int, str)
+    finished = pyqtSignal(dict)
+    error = pyqtSignal(str)
     
-    def to_srt(self) -> str:
-        def format_time(seconds: float) -> str:
-            hours = int(seconds // 3600)
-            minutes = int((seconds % 3600) // 60)
-            secs = int(seconds % 60)
-            millis = int((seconds % 1) * 1000)
-            return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
-        
-        return f"{self.index}\n{format_time(self.start)} --> {format_time(self.end)}\n{self.text}\n\n"
-
-@dataclass
-class UserSelection:
-    platform: str = ""
-    source: str = ""
-    vocal_separation: str = ""
-    vocal_separation_name: str = ""
-    model: str = ""
-    model_name: str = ""
-    mode: str = ""
-    mode_name: str = ""
-    language_code: str = ""
-    language_name: str = ""
-    line_type: str = ""
-    line_type_name: str = ""
-    limit: int = 5
-    file_path: str = ""
-    video_title: str = ""
-    checkpoint: str = ""
-
-# ============================================================================
-# Whisper Import with Error Handling
-# ============================================================================
-WHISPER_AVAILABLE = False
-SPLEETER_AVAILABLE = False
-TENSORFLOW_AVAILABLE = False
-whisper = None
-Separator = None
-
-try:
-    import whisper
-    WHISPER_AVAILABLE = True
-    logger.info("Whisper loaded successfully")
-    print(f"{Colors.GREEN}[✓] Whisper loaded successfully{Colors.RESET}")
-except ImportError as e:
-    logger.error(f"Whisper import failed: {e}")
-    print(f"{Colors.YELLOW}[!] Whisper not found: {e}{Colors.RESET}")
-
-try:
-    import tensorflow as tf
-    tf.get_logger().setLevel('ERROR')
-    tf.autograph.set_verbosity(0)
-    TENSORFLOW_AVAILABLE = True
-    logger.info("TensorFlow loaded successfully")
-    print(f"{Colors.GREEN}[✓] TensorFlow loaded successfully{Colors.RESET}")
-    
-    from spleeter.separator import Separator
-    SPLEETER_AVAILABLE = True
-    logger.info("Spleeter loaded successfully")
-    print(f"{Colors.GREEN}[✓] Spleeter loaded successfully{Colors.RESET}")
-except ImportError as e:
-    logger.warning(f"Spleeter/TensorFlow not available: {e}")
-    print(f"{Colors.YELLOW}[!] Spleeter/TensorFlow not available. Vocal separation will use FFmpeg.{Colors.RESET}")
-
-# ============================================================================
-# Cache Manager
-# ============================================================================
-class CacheManager:
-    def __init__(self, cache_dir: Path):
-        self.cache_dir = cache_dir
-        self.conn = None
-        self.cursor = None
-        self.init_database()
-        
-    def init_database(self):
-        try:
-            self.cache_dir.mkdir(parents=True, exist_ok=True)
-            self.db_path = self.cache_dir / "cache.db"
-            self.conn = sqlite3.connect(str(self.db_path))
-            self.cursor = self.conn.cursor()
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS transcriptions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    file_hash TEXT UNIQUE,
-                    model_name TEXT,
-                    language TEXT,
-                    mode TEXT,
-                    vocal_separation TEXT,
-                    result TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            self.conn.commit()
-            logger.info("Database initialized")
-        except Exception as e:
-            logger.error(f"Database init failed: {e}")
-            
-    def get_file_hash(self, file_path: Path) -> str:
-        hasher = hashlib.md5()
-        with open(file_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(65536), b''):
-                hasher.update(chunk)
-        return hasher.hexdigest()
-        
-    def cache_transcription(self, file_hash: str, model_name: str, language: str, 
-                           mode: str, vocal_separation: str, result: dict):
-        if not self.conn or not self.cursor:
-            return
-        try:
-            self.cursor.execute(
-                "INSERT OR REPLACE INTO transcriptions (file_hash, model_name, language, mode, vocal_separation, result) VALUES (?, ?, ?, ?, ?, ?)",
-                (file_hash, model_name, language, mode, vocal_separation, json.dumps(result))
-            )
-            self.conn.commit()
-            logger.info(f"Cached transcription for {file_hash[:8]}")
-        except Exception as e:
-            logger.error(f"Cache write failed: {e}")
-            
-    def get_cached_transcription(self, file_hash: str, model_name: str, language: str,
-                                 mode: str, vocal_separation: str) -> Optional[dict]:
-        if not self.conn or not self.cursor:
-            return None
-        try:
-            self.cursor.execute(
-                "SELECT result FROM transcriptions WHERE file_hash = ? AND model_name = ? AND language = ? AND mode = ? AND vocal_separation = ?",
-                (file_hash, model_name, language, mode, vocal_separation)
-            )
-            row = self.cursor.fetchone()
-            if row:
-                logger.info(f"Cache hit for {file_hash[:8]}")
-                return json.loads(row[0])
-        except Exception as e:
-            logger.error(f"Cache read failed: {e}")
-        return None
-
-# ============================================================================
-# Audio Processor
-# ============================================================================
-class AudioProcessor:
-    def __init__(self, ffmpeg_exe: Optional[Path] = None, ffprobe_exe: Optional[Path] = None):
+    def __init__(self, audio_path: str, model_name: str, language: str, mode: str,
+                 vocal_separation: str, ffmpeg_exe: str = None):
+        super().__init__()
+        self.audio_path = audio_path
+        self.model_name = model_name
+        self.language = language
+        self.mode = mode
+        self.vocal_separation = vocal_separation
         self.ffmpeg_exe = ffmpeg_exe
-        self.ffprobe_exe = ffprobe_exe
+        self._is_cancelled = False
         
-    def check_ffmpeg(self) -> bool:
-        if self.ffmpeg_exe and self.ffmpeg_exe.exists():
-            return True
+    def cancel(self):
+        self._is_cancelled = True
+        
+    def run(self):
         try:
-            subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=5)
-            return True
-        except:
-            return False
+            # Load model
+            self.progress.emit(10, f"Loading {self.model_name} model...")
+            model = whisper.load_model(self.model_name)
             
-    def get_audio_duration(self, audio_path: Path) -> float:
-        ffprobe_cmd = str(self.ffprobe_exe) if self.ffprobe_exe and self.ffprobe_exe.exists() else 'ffprobe'
-        cmd = [ffprobe_cmd, '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(audio_path)]
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            if result.returncode == 0:
-                return float(result.stdout.strip())
-        except:
-            pass
-        return 0.0
-        
-    def extract_audio(self, video_path: Path, progress_callback: Optional[Callable] = None) -> Optional[Path]:
-        if not self.check_ffmpeg():
-            logger.error("FFmpeg not found")
-            return None
-        temp_dir = Path(tempfile.gettempdir())
-        audio_path = temp_dir / f"{video_path.stem}_temp_audio.wav"
-        ffmpeg_cmd = str(self.ffmpeg_exe) if self.ffmpeg_exe and self.ffmpeg_exe.exists() else 'ffmpeg'
-        cmd = [ffmpeg_cmd, '-i', str(video_path), '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', '-y', str(audio_path)]
-        try:
-            if progress_callback:
-                progress_callback(10, "Extracting audio...")
-            subprocess.run(cmd, capture_output=True, timeout=120)
-            if audio_path.exists() and audio_path.stat().st_size > 0:
-                logger.info(f"Audio extracted: {audio_path}")
-                if progress_callback:
-                    progress_callback(20, "Audio extracted")
-                return audio_path
-        except Exception as e:
-            logger.error(f"Audio extraction failed: {e}")
-        return None
-
-# ============================================================================
-# Vocal Separator with Spleeter and TensorFlow
-# ============================================================================
-class VocalSeparator:
-    def __init__(self, ffmpeg_exe: Optional[Path] = None, pretrained_models_dir: Optional[Path] = None):
-        self.ffmpeg_exe = ffmpeg_exe
-        self.pretrained_models_dir = pretrained_models_dir
-        self.separator = None
-        self.current_model = "2stems"
-        
-    def is_available(self) -> bool:
-        return SPLEETER_AVAILABLE or (self.ffmpeg_exe is not None and self.ffmpeg_exe.exists())
-    
-    def separate_vocals_spleeter(self, audio_path: Path, model: str = "2stems", progress_callback: Optional[Callable] = None) -> Optional[Path]:
-        if not SPLEETER_AVAILABLE:
-            return None
+            # Apply vocal separation if needed
+            audio_path = self.audio_path
+            if self.vocal_separation != "none":
+                self.progress.emit(25, f"Applying vocal separation ({self.vocal_separation})...")
+                # For now, use FFmpeg for vocal separation
+                if self.ffmpeg_exe and os.path.exists(self.ffmpeg_exe):
+                    vocal_path = self._separate_vocals_ffmpeg(audio_path)
+                    if vocal_path:
+                        audio_path = vocal_path
             
-        if progress_callback:
-            progress_callback(25, f"Separating vocals with Spleeter ({model})...")
-        logger.info(f"Separating vocals with Spleeter ({model})...")
-        print(f"{Colors.CYAN}[→] Separating vocals with Spleeter ({model})...{Colors.RESET}")
-        
-        temp_dir = Path(tempfile.gettempdir())
-        output_dir = temp_dir / f"spleeter_output_{int(time.time())}"
-        
-        try:
-            if self.pretrained_models_dir and self.pretrained_models_dir.exists():
-                os.environ['SPLEETER_PRETRAINED_PATH'] = str(self.pretrained_models_dir)
-                logger.info(f"Using local models from: {self.pretrained_models_dir}")
+            # Transcribe
+            self.progress.emit(50, "Transcribing...")
+            task = "translate" if self.mode == "translate" else "transcribe"
+            lang = None if self.language == "auto" else self.language
             
-            if self.separator is None or self.current_model != model:
-                logger.info(f"Loading Spleeter model...")
-                print(f"{Colors.CYAN}[i] Loading Spleeter model...{Colors.RESET}")
-                model_map = {
-                    "2stems": "spleeter:2stems",
-                    "4stems": "spleeter:4stems", 
-                    "5stems": "spleeter:5stems"
-                }
-                self.separator = Separator(model_map.get(model, "spleeter:2stems"))
-                self.current_model = model
-            
-            self.separator.separate_to_file(
-                str(audio_path), str(output_dir),
-                filename_format="{filename}_{instrument}.{codec}"
+            result = model.transcribe(
+                audio_path, language=lang, task=task, verbose=False,
+                word_timestamps=True, fp16=False
             )
             
-            vocal_file = None
-            for file in output_dir.rglob("*vocals.wav"):
-                vocal_file = file
-                break
+            # Clean up temporary vocal file
+            if audio_path != self.audio_path and os.path.exists(audio_path):
+                try:
+                    os.remove(audio_path)
+                except:
+                    pass
             
-            if vocal_file and vocal_file.exists():
-                final_vocals = temp_dir / f"{audio_path.stem}_vocals.wav"
-                shutil.copy2(vocal_file, final_vocals)
-                shutil.rmtree(output_dir, ignore_errors=True)
-                logger.info("Spleeter vocal separation complete")
-                if progress_callback:
-                    progress_callback(40, "Vocal separation complete")
-                print(f"{Colors.GREEN}[✓] Spleeter vocal separation complete{Colors.RESET}")
-                return final_vocals
-            else:
-                logger.warning("Could not find vocal track")
-                return None
+            self.progress.emit(90, "Processing results...")
+            
+            if self._is_cancelled:
+                self.error.emit("Cancelled by user")
+                return
                 
+            self.finished.emit(result)
+            
         except Exception as e:
-            logger.error(f"Spleeter error: {e}")
-            print(f"{Colors.YELLOW}[!] Spleeter error: {e}{Colors.RESET}")
-            return None
-            
-    def separate_vocals_ffmpeg(self, audio_path: Path, progress_callback: Optional[Callable] = None) -> Optional[Path]:
-        if not self.ffmpeg_exe or not self.ffmpeg_exe.exists():
-            return None
-            
-        if progress_callback:
-            progress_callback(25, "Isolating vocals with FFmpeg...")
-        logger.info("Isolating vocals with FFmpeg...")
-        print(f"{Colors.CYAN}[→] Isolating vocals with FFmpeg...{Colors.RESET}")
-        
-        temp_dir = Path(tempfile.gettempdir())
-        vocal_path = temp_dir / f"{audio_path.stem}_vocals.wav"
-        ffmpeg_cmd = str(self.ffmpeg_exe)
+            self.error.emit(str(e))
+    
+    def _separate_vocals_ffmpeg(self, audio_path: str) -> Optional[str]:
+        """Separate vocals using FFmpeg"""
+        temp_dir = tempfile.gettempdir()
+        vocal_path = os.path.join(temp_dir, f"vocals_{int(time.time())}.wav")
         
         cmd = [
-            ffmpeg_cmd, '-i', str(audio_path),
-            '-af', 'highpass=f=100, lowpass=f=10000, volume=2.0, acompressor=threshold=0.1:ratio=2:attack=5:release=50',
-            '-y', str(vocal_path)
+            self.ffmpeg_exe, '-i', audio_path,
+            '-af', 'highpass=f=100, lowpass=f=10000, volume=2.0',
+            '-y', vocal_path
         ]
         
         try:
             subprocess.run(cmd, capture_output=True, timeout=180)
-            if vocal_path.exists() and vocal_path.stat().st_size > 0:
-                logger.info("FFmpeg vocal isolation complete")
-                if progress_callback:
-                    progress_callback(40, "Vocal isolation complete")
-                print(f"{Colors.GREEN}[✓] FFmpeg vocal isolation complete{Colors.RESET}")
+            if os.path.exists(vocal_path) and os.path.getsize(vocal_path) > 0:
                 return vocal_path
-        except Exception as e:
-            logger.error(f"FFmpeg error: {e}")
-            print(f"{Colors.YELLOW}[!] FFmpeg error: {e}{Colors.RESET}")
+        except:
+            pass
         return None
-        
-    def separate(self, audio_path: Path, model: str = "2stems", progress_callback: Optional[Callable] = None) -> Optional[Path]:
-        if SPLEETER_AVAILABLE and model != "none":
-            result = self.separate_vocals_spleeter(audio_path, model, progress_callback)
-            if result:
-                return result
-        return self.separate_vocals_ffmpeg(audio_path, progress_callback)
 
 # ============================================================================
-# Transcriber
+# Settings Dialog
 # ============================================================================
-class Transcriber:
-    def __init__(self, models_dir: Path):
-        self.models_dir = models_dir
-        self.model = None
-        self.current_model_name = None
-        self.models_dir.mkdir(parents=True, exist_ok=True)
+class SettingsDialog(QDialog):
+    settingsChanged = pyqtSignal(dict)
+    
+    def __init__(self, current_settings, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Settings")
+        self.setGeometry(300, 200, 500, 450)
+        self.setStyleSheet("background-color: #1e1e1e; color: #e0e0e0;")
         
-    def is_available(self) -> bool:
-        return WHISPER_AVAILABLE and whisper is not None
+        layout = QVBoxLayout()
+        self.setLayout(layout)
         
-    def load_model(self, model_name: str, progress_callback: Optional[Callable] = None) -> bool:
-        if not self.is_available():
-            logger.error("Whisper not available")
-            return False
-        try:
-            if progress_callback:
-                progress_callback(50, f"Loading {model_name} model...")
-            logger.info(f"Loading {model_name} model...")
-            print(f"{Colors.CYAN}[→] Loading {model_name} model...{Colors.RESET}")
-            load_start = time.time()
-            self.model = whisper.load_model(model_name, download_root=str(self.models_dir))
-            self.current_model_name = model_name
-            load_time = time.time() - load_start
-            logger.info(f"Model loaded in {load_time:.1f}s")
-            if progress_callback:
-                progress_callback(60, f"Model loaded in {load_time:.1f}s")
-            print(f"{Colors.GREEN}[✓] Model loaded in {load_time:.1f}s{Colors.RESET}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to load model: {e}")
-            print(f"{Colors.RED}[✗] Failed to load model: {e}{Colors.RESET}")
-            return False
-            
-    def clean_text(self, text: str) -> str:
-        if not text:
-            return ""
-        words = text.split()
-        cleaned = []
-        prev = None
-        count = 0
-        for w in words:
-            if w == prev:
-                count += 1
-                if count < 2:
-                    cleaned.append(w)
-            else:
-                count = 0
-                cleaned.append(w)
-                prev = w
-        text = ' '.join(cleaned)
-        patterns = [r'(\S+)\s+\1\s+\1', r'\b(?:सुबासे|गुम्राम|अपने)\s+\1']
-        for p in patterns:
-            text = re.sub(p, '', text)
-        return re.sub(r'\s+', ' ', text).strip()
+        # Title
+        title = QLabel("Preferences")
+        title.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
         
-    def transcribe(self, audio_path: Path, language: str, mode: str, progress_callback: Optional[Callable] = None) -> Dict:
-        if not self.model:
-            logger.error("No model loaded")
-            return {"segments": []}
+        layout.addSpacing(20)
         
-        task = "translate" if mode == "translate" else "transcribe"
-        lang = None if language == "auto" else language
+        # Theme
+        theme_group = QGroupBox("Appearance")
+        theme_group.setStyleSheet("QGroupBox { color: #a0a0ff; font-weight: bold; border: 1px solid #444; border-radius: 6px; padding: 10px; }")
+        theme_layout = QVBoxLayout()
+        theme_group.setLayout(theme_layout)
         
-        if progress_callback:
-            progress_callback(70, f"Transcribing with {task} mode...")
-        logger.info(f"Transcribing with {task} mode...")
-        print(f"{Colors.CYAN}[i] Transcribing with {task} mode...{Colors.RESET}")
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["Dark", "Light", "System Default"])
+        self.theme_combo.setCurrentText(current_settings.get("theme", "Dark"))
+        theme_layout.addWidget(QLabel("Theme:"))
+        theme_layout.addWidget(self.theme_combo)
+        layout.addWidget(theme_group)
         
-        try:
-            result = self.model.transcribe(
-                str(audio_path), language=lang, task=task, verbose=False,
-                word_timestamps=True, fp16=False, no_speech_threshold=0.6,
-                compression_ratio_threshold=2.4, logprob_threshold=-1.0
-            )
-            
-            if "segments" in result:
-                for seg in result["segments"]:
-                    if "text" in seg:
-                        seg["text"] = self.clean_text(seg["text"])
-            
-            logger.info(f"Transcription completed")
-            if progress_callback:
-                progress_callback(85, "Transcription complete")
-            return result
-        except Exception as e:
-            logger.error(f"Transcription failed: {e}")
-            print(f"{Colors.RED}[✗] Transcription failed: {e}{Colors.RESET}")
-            return {"segments": []}
+        layout.addSpacing(15)
+        
+        # Model directory
+        model_group = QGroupBox("Model Settings")
+        model_group.setStyleSheet("QGroupBox { color: #a0a0ff; font-weight: bold; border: 1px solid #444; border-radius: 6px; padding: 10px; }")
+        model_layout = QVBoxLayout()
+        model_group.setLayout(model_layout)
+        
+        model_dir_layout = QHBoxLayout()
+        self.model_dir_line = QLineEdit(current_settings.get("models_dir", ""))
+        self.model_dir_browse = QPushButton("Browse")
+        self.model_dir_browse.clicked.connect(self.browse_models_dir)
+        model_dir_layout.addWidget(QLabel("Models Folder:"))
+        model_dir_layout.addWidget(self.model_dir_line)
+        model_dir_layout.addWidget(self.model_dir_browse)
+        model_layout.addLayout(model_dir_layout)
+        
+        layout.addWidget(model_group)
+        
+        layout.addSpacing(15)
+        
+        # Temp directory
+        temp_group = QGroupBox("Temporary Files")
+        temp_group.setStyleSheet("QGroupBox { color: #a0a0ff; font-weight: bold; border: 1px solid #444; border-radius: 6px; padding: 10px; }")
+        temp_layout = QVBoxLayout()
+        temp_group.setLayout(temp_layout)
+        
+        temp_dir_layout = QHBoxLayout()
+        self.temp_dir_line = QLineEdit(current_settings.get("temp_dir", tempfile.gettempdir()))
+        self.temp_dir_browse = QPushButton("Browse")
+        self.temp_dir_browse.clicked.connect(self.browse_temp_dir)
+        temp_dir_layout.addWidget(QLabel("Temp Folder:"))
+        temp_dir_layout.addWidget(self.temp_dir_line)
+        temp_dir_layout.addWidget(self.temp_dir_browse)
+        temp_layout.addLayout(temp_dir_layout)
+        
+        layout.addWidget(temp_group)
+        
+        layout.addStretch()
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        save_btn = QPushButton("Save")
+        save_btn.setStyleSheet("background-color: #0a84ff; color: white; padding: 8px; border-radius: 6px;")
+        save_btn.clicked.connect(self.save_settings)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setStyleSheet("background-color: #3c3c3c; color: white; padding: 8px; border-radius: 6px;")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addStretch()
+        btn_layout.addWidget(save_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+    
+    def browse_models_dir(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Models Folder")
+        if folder:
+            self.model_dir_line.setText(folder)
+    
+    def browse_temp_dir(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Temporary Files Folder")
+        if folder:
+            self.temp_dir_line.setText(folder)
+    
+    def save_settings(self):
+        settings = {
+            "theme": self.theme_combo.currentText(),
+            "models_dir": self.model_dir_line.text(),
+            "temp_dir": self.temp_dir_line.text(),
+        }
+        self.settingsChanged.emit(settings)
+        self.accept()
 
 # ============================================================================
-# Subtitle Generator
+# Main Window
 # ============================================================================
-class SubtitleGenerator:
-    def split_by_words(self, text: str, words_per_line: int) -> List[str]:
-        words = text.split()
-        return [' '.join(words[i:i+words_per_line]) for i in range(0, len(words), words_per_line)]
-    
-    def split_by_letters(self, text: str, letters_per_line: int) -> List[str]:
-        if len(text) <= letters_per_line:
-            return [text]
-        lines = []
-        current = ""
-        for word in text.split():
-            if len(current) + len(word) + (1 if current else 0) <= letters_per_line:
-                current += (" " + word) if current else word
-            else:
-                if current:
-                    lines.append(current)
-                current = word
-        if current:
-            lines.append(current)
-        return lines
-    
-    def split_smart(self, text: str, max_chars: int = 42) -> List[str]:
-        if len(text) <= max_chars:
-            return [text]
-        for punct in ['. ', '! ', '? ', '; ', ': ', ', ']:
-            if punct in text:
-                parts = [p.strip() + punct.strip() for p in text.split(punct) if p.strip()]
-                lines = []
-                current = ""
-                for part in parts:
-                    if len(current) + len(part) <= max_chars:
-                        current += part
-                    else:
-                        if current:
-                            lines.append(current.strip())
-                        current = part
-                if current:
-                    lines.append(current.strip())
-                if len(lines) > 1:
-                    return lines
-        return self.split_by_words(text, max(1, max_chars // 10))
-    
-    def generate_subtitles(self, segments: List[Dict], line_type: str, limit: int, progress_callback: Optional[Callable] = None) -> List[SubtitleEntry]:
-        subtitles = []
-        idx = 1
+class NotyCaptionWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
+        self.setWindowIcon(QIcon('App.ico') if os.path.exists('App.ico') else QIcon())
+        self.setGeometry(100, 100, 1200, 800)
         
-        if progress_callback:
-            progress_callback(90, "Generating subtitles...")
-        
-        for seg in segments:
-            text = seg.get("text", "").strip()
-            if not text or len(text) < 2:
-                continue
-            
-            start = seg.get("start", 0)
-            end = seg.get("end", start + 1)
-            duration = end - start
-            
-            if line_type == "words":
-                lines = self.split_by_words(text, max(1, limit))
-            elif line_type == "letters":
-                lines = self.split_by_letters(text, max(10, limit))
-            else:
-                lines = self.split_smart(text)
-            
-            if len(lines) == 1:
-                subtitles.append(SubtitleEntry(idx, start, end, lines[0]))
-                idx += 1
-            else:
-                line_duration = duration / len(lines)
-                for i, line in enumerate(lines):
-                    line_start = start + (i * line_duration)
-                    line_end = line_start + line_duration
-                    subtitles.append(SubtitleEntry(idx, line_start, line_end, line))
-                    idx += 1
-        
-        if progress_callback:
-            progress_callback(95, f"Generated {len(subtitles)} subtitles")
-        
-        return subtitles
-    
-    def save_srt(self, output_path: Path, subtitles: List[SubtitleEntry]):
-        with open(output_path, 'w', encoding='utf-8') as f:
-            for sub in subtitles:
-                f.write(sub.to_srt())
-
-# ============================================================================
-# Menu System with Checkpoint-Based Back Navigation
-# ============================================================================
-class MenuItem:
-    def __init__(self, key: str, title: str, description: str = "", action=None, submenu=None):
-        self.key = key
-        self.title = title
-        self.description = description
-        self.action = action
-        self.submenu = submenu
-
-class Menu:
-    def __init__(self, name: str = "main", parent=None, checkpoint_id: str = None):
-        self.name = name
-        self.parent = parent
-        self.items: List[MenuItem] = []
-        self.checkpoint_id = checkpoint_id or name
-        
-    def add(self, key: str, title: str, description: str = "", action=None, submenu=None):
-        self.items.append(MenuItem(key, title, description, action, submenu))
-        return self
-    
-    def clear_screen(self):
-        os.system('cls' if platform.system() == 'Windows' else 'clear')
-    
-    def show(self):
-        while True:
-            self.clear_screen()
-            print(f"{Colors.CYAN}{Colors.BOLD}")
-            print("+" + "=" * 60 + "+")
-            print("|" + f"{APP_NAME} v{APP_VERSION}".center(60) + "|")
-            print("|" + f"Copyright (c) {APP_YEAR} {APP_AUTHOR}".center(60) + "|")
-            print("|" + f"License: {APP_LICENSE}".center(60) + "|")
-            print("|" + "Powered by OpenAI Whisper + Spleeter".center(60) + "|")
-            print("+" + "=" * 60 + "+")
-            print(f"{Colors.RESET}")
-            
-            if self.parent:
-                print(f"\n{Colors.CYAN}📍 Path: {self.get_path()}{Colors.RESET}\n")
-            
-            print(f"{Colors.CYAN}{Colors.BOLD}{self.name.upper()}{Colors.RESET}\n")
-            
-            for i, item in enumerate(self.items, 1):
-                print(f"  {Colors.GREEN}{i}{Colors.RESET}) {Colors.WHITE}{item.title}{Colors.RESET}")
-                if item.description:
-                    print(f"     {Colors.CYAN}└─ {item.description}{Colors.RESET}")
-            
-            if self.parent:
-                print(f"\n  {Colors.YELLOW}0{Colors.RESET}) {Colors.YELLOW}Back to previous menu{Colors.RESET}")
-            else:
-                print(f"\n  {Colors.RED}0{Colors.RESET}) {Colors.RED}Exit{Colors.RESET}")
-            
-            print()
-            choice = input(f"{Colors.CYAN}Choose option (0-{len(self.items)}): {Colors.RESET}").strip()
-            
-            if choice == "0":
-                if self.parent:
-                    return "back"
-                else:
-                    return "exit"
-            
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(self.items):
-                    item = self.items[idx]
-                    if item.submenu:
-                        result = item.submenu.show()
-                        if result == "exit":
-                            return "exit"
-                    elif item.action:
-                        item.action()
-                else:
-                    print(f"{Colors.RED}[✗] Invalid option. Choose 0-{len(self.items)}{Colors.RESET}")
-                    input("Press Enter to continue...")
-            except ValueError:
-                print(f"{Colors.RED}[✗] Invalid input. Please enter a number.{Colors.RESET}")
-                input("Press Enter to continue...")
-    
-    def get_path(self) -> str:
-        path = []
-        current = self
-        while current:
-            path.insert(0, current.name)
-            current = current.parent
-        return " > ".join(path)
-
-# ============================================================================
-# NotYCaptionGenerator - Main Application Class
-# ============================================================================
-class NotYCaptionGenerator:
-    def __init__(self, media_path: Optional[str] = None):
-        logger.info(f"Starting {APP_NAME} v{APP_VERSION}")
-        logger.info(f"Log file: {log_filename}")
-        
-        # Initialize paths
-        if getattr(sys, 'frozen', False):
-            self.base_dir = Path(sys.executable).parent
-        else:
-            self.base_dir = Path(__file__).parent
-            
-        self.models_dir = self.base_dir / "models"
-        self.ffmpeg_dir = self.base_dir / "ffmpeg"
-        self.cache_dir = self.base_dir / "cache"
-        self.pretrained_models_dir = self.base_dir / "pretrained_models"
-        
-        # Check AppData models (priority)
-        appdata_models = Path(APP_MODELS_FOLDER)
-        if appdata_models.exists() and any(appdata_models.iterdir()):
-            self.models_dir = appdata_models
-            logger.info(f"Using models from AppData: {appdata_models}")
-        
-        self.models_dir.mkdir(parents=True, exist_ok=True)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        
-        # FFmpeg setup
-        if platform.system() == "Windows":
-            self.ffmpeg_exe = self.ffmpeg_dir / "ffmpeg.exe"
-            self.ffprobe_exe = self.ffmpeg_dir / "ffprobe.exe"
-        else:
-            self.ffmpeg_exe = self.ffmpeg_dir / "ffmpeg"
-            self.ffprobe_exe = self.ffmpeg_dir / "ffprobe"
-        
-        if self.ffmpeg_dir.exists():
-            os.environ['PATH'] = str(self.ffmpeg_dir) + os.pathsep + os.environ.get('PATH', '')
-        
-        # Initialize components
-        self.cache_manager = CacheManager(self.cache_dir)
-        self.audio_processor = AudioProcessor(self.ffmpeg_exe, self.ffprobe_exe)
-        self.vocal_separator = VocalSeparator(self.ffmpeg_exe, self.pretrained_models_dir)
-        self.transcriber = Transcriber(self.models_dir)
-        self.subtitle_generator = SubtitleGenerator()
-        
-        self.media_path_arg = media_path
-        self.selection = UserSelection()
-        self.checkpoint_stack = []
-        
-        atexit.register(self.cleanup)
-        logger.info("Application initialized successfully")
-    
-    def cleanup(self):
-        """Clean up temporary files"""
-        try:
-            temp_dir = Path(tempfile.gettempdir())
-            patterns = ["*_temp_audio.wav", "*_vocals.wav", "youtube_audio_*", "spleeter_*", "chunk_*", "spleeter_output_*"]
-            for pattern in patterns:
-                for file in temp_dir.glob(pattern):
-                    try:
-                        if file.is_file():
-                            file.unlink()
-                            logger.debug(f"Removed temp file: {file}")
-                    except:
-                        pass
-        except Exception as e:
-            logger.error(f"Cleanup error: {e}")
-    
-    def update_progress(self, percent: int, message: str):
-        """Update progress display"""
-        bar_length = 40
-        filled = int(bar_length * percent / 100)
-        bar = '█' * filled + '░' * (bar_length - filled)
-        print(f"\r{Colors.CYAN}[{bar}] {percent}% - {message}{Colors.RESET}", end="", flush=True)
-        if percent >= 100:
-            print()
-    
-    def print_selection_summary(self):
-        """Print a summary of all user selections"""
-        print(f"\n{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.RESET}")
-        print(f"{Colors.CYAN}{Colors.BOLD}SELECTION SUMMARY{Colors.RESET}")
-        print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.RESET}")
-        print(f"  {Colors.GREEN}Platform:{Colors.RESET} {self.selection.platform}")
-        print(f"  {Colors.GREEN}Source:{Colors.RESET} {self.selection.source}")
-        print(f"  {Colors.GREEN}Vocal Separation:{Colors.RESET} {self.selection.vocal_separation_name}")
-        print(f"  {Colors.GREEN}Whisper Model:{Colors.RESET} {self.selection.model_name.upper()}")
-        print(f"  {Colors.GREEN}Mode:{Colors.RESET} {self.selection.mode_name}")
-        print(f"  {Colors.GREEN}Language:{Colors.RESET} {self.selection.language_name}")
-        print(f"  {Colors.GREEN}Line Break:{Colors.RESET} {self.selection.line_type_name}")
-        if self.selection.line_type != "auto":
-            print(f"  {Colors.GREEN}Limit:{Colors.RESET} {self.selection.limit}")
-        print(f"  {Colors.GREEN}File:{Colors.RESET} {self.selection.file_path}")
-        if self.selection.video_title:
-            print(f"  {Colors.GREEN}Video Title:{Colors.RESET} {self.selection.video_title[:60]}")
-        print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.RESET}\n")
-    
-    def save_checkpoint(self, checkpoint_name: str):
-        """Save current checkpoint for back navigation"""
-        self.selection.checkpoint = checkpoint_name
-        self.checkpoint_stack.append(checkpoint_name)
-        logger.debug(f"Checkpoint saved: {checkpoint_name}")
-    
-    def go_back_to_checkpoint(self, target_checkpoint: str) -> bool:
-        """Navigate back to a specific checkpoint"""
-        while self.checkpoint_stack and self.checkpoint_stack[-1] != target_checkpoint:
-            self.checkpoint_stack.pop()
-        if self.checkpoint_stack:
-            self.selection.checkpoint = self.checkpoint_stack[-1]
-            return True
-        return False
-    
-    def select_vocal_separation(self) -> bool:
-        """Vocal separation selection menu"""
-        self.save_checkpoint("vocal_separation")
-        while True:
-            self.menu.clear_screen()
-            print(f"{Colors.CYAN}{Colors.BOLD}VOCAL SEPARATION{Colors.RESET}\n")
-            print(f"{Colors.YELLOW}Note: Spleeter with TensorFlow provides better quality{Colors.RESET}\n")
-            for i, (name, key, desc, speed) in enumerate(VOCAL_OPTIONS, 1):
-                print(f"  {Colors.GREEN}{i}{Colors.RESET}) {Colors.WHITE}{name}{Colors.RESET}")
-                print(f"     {Colors.CYAN}└─ {desc}{Colors.RESET}")
-                print(f"     {Colors.CYAN}   Speed: {speed}{Colors.RESET}")
-            print(f"\n  {Colors.YELLOW}0{Colors.RESET}) {Colors.YELLOW}Back{Colors.RESET}")
-            
-            choice = input(f"\n{Colors.CYAN}Choose option (0-{len(VOCAL_OPTIONS)}): {Colors.RESET}").strip()
-            if choice == "0":
-                return False
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(VOCAL_OPTIONS):
-                    self.selection.vocal_separation = VOCAL_OPTIONS[idx][1]
-                    self.selection.vocal_separation_name = VOCAL_OPTIONS[idx][0]
-                    logger.info(f"Selected vocal separation: {self.selection.vocal_separation_name}")
-                    return True
-                else:
-                    print(f"{Colors.RED}[✗] Invalid option{Colors.RESET}")
-                    input("Press Enter...")
-            except ValueError:
-                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
-                input("Press Enter...")
-    
-    def select_model(self) -> bool:
-        """Whisper model selection menu"""
-        self.save_checkpoint("model")
-        while True:
-            self.menu.clear_screen()
-            print(f"{Colors.CYAN}{Colors.BOLD}WHISPER MODEL{Colors.RESET}\n")
-            print(f"{Colors.YELLOW}Note: Larger models = better accuracy but slower{Colors.RESET}\n")
-            for i, (name, size, desc, speed) in enumerate(WHISPER_MODELS, 1):
-                print(f"  {Colors.GREEN}{i}{Colors.RESET}) {Colors.WHITE}{name.upper()}{Colors.RESET}")
-                print(f"     {Colors.CYAN}└─ Size: {size}{Colors.RESET}")
-                print(f"     {Colors.CYAN}   {desc}{Colors.RESET}")
-                print(f"     {Colors.CYAN}   Speed: {speed}{Colors.RESET}")
-            print(f"\n  {Colors.YELLOW}0{Colors.RESET}) {Colors.YELLOW}Back{Colors.RESET}")
-            
-            choice = input(f"\n{Colors.CYAN}Choose option (0-{len(WHISPER_MODELS)}): {Colors.RESET}").strip()
-            if choice == "0":
-                return False
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(WHISPER_MODELS):
-                    self.selection.model = WHISPER_MODELS[idx][0]
-                    self.selection.model_name = WHISPER_MODELS[idx][0]
-                    logger.info(f"Selected model: {self.selection.model}")
-                    return True
-                else:
-                    print(f"{Colors.RED}[✗] Invalid option{Colors.RESET}")
-                    input("Press Enter...")
-            except ValueError:
-                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
-                input("Press Enter...")
-    
-    def select_mode(self) -> bool:
-        """Mode selection menu"""
-        self.save_checkpoint("mode")
-        while True:
-            self.menu.clear_screen()
-            print(f"{Colors.CYAN}{Colors.BOLD}MODE SELECTION{Colors.RESET}\n")
-            for i, (name, key, desc) in enumerate(MODES, 1):
-                print(f"  {Colors.GREEN}{i}{Colors.RESET}) {Colors.WHITE}{name}{Colors.RESET}")
-                print(f"     {Colors.CYAN}└─ {desc}{Colors.RESET}")
-            print(f"\n  {Colors.YELLOW}0{Colors.RESET}) {Colors.YELLOW}Back{Colors.RESET}")
-            
-            choice = input(f"\n{Colors.CYAN}Choose option (0-{len(MODES)}): {Colors.RESET}").strip()
-            if choice == "0":
-                return False
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(MODES):
-                    self.selection.mode = MODES[idx][1]
-                    self.selection.mode_name = MODES[idx][0]
-                    logger.info(f"Selected mode: {self.selection.mode_name}")
-                    return True
-                else:
-                    print(f"{Colors.RED}[✗] Invalid option{Colors.RESET}")
-                    input("Press Enter...")
-            except ValueError:
-                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
-                input("Press Enter...")
-    
-    def select_language(self) -> bool:
-        """Language selection with tiers"""
-        self.save_checkpoint("language")
-        while True:
-            self.menu.clear_screen()
-            print(f"{Colors.CYAN}{Colors.BOLD}LANGUAGE SELECTION{Colors.RESET}\n")
-            print(f"  {Colors.GREEN}1{Colors.RESET}) {Colors.WHITE}High Accuracy (90-95%){Colors.RESET}")
-            print(f"     {Colors.CYAN}└─ Best for clean audio, professional content{Colors.RESET}")
-            print(f"  {Colors.GREEN}2{Colors.RESET}) {Colors.WHITE}Medium Accuracy (70-85%){Colors.RESET}")
-            print(f"     {Colors.CYAN}└─ Good for clear audio with some background noise{Colors.RESET}")
-            print(f"  {Colors.GREEN}3{Colors.RESET}) {Colors.WHITE}Lower Accuracy (50-70%){Colors.RESET}")
-            print(f"     {Colors.CYAN}└─ May have errors, best for short clips{Colors.RESET}")
-            print(f"\n  {Colors.YELLOW}0{Colors.RESET}) {Colors.YELLOW}Back{Colors.RESET}")
-            
-            tier_choice = input(f"\n{Colors.CYAN}Choose tier (0-3): {Colors.RESET}").strip()
-            if tier_choice == "0":
-                return False
-            elif tier_choice == "1":
-                tier = "high"
-            elif tier_choice == "2":
-                tier = "medium"
-            elif tier_choice == "3":
-                tier = "low"
-            else:
-                print(f"{Colors.RED}[✗] Invalid choice{Colors.RESET}")
-                input("Press Enter...")
-                continue
-            
-            languages = LANGUAGE_TIERS[tier]["languages"]
-            while True:
-                self.menu.clear_screen()
-                print(f"{Colors.CYAN}{Colors.BOLD}SELECT LANGUAGE{Colors.RESET}")
-                print(f"{Colors.GREEN}Tier: {LANGUAGE_TIERS[tier]['name']}{Colors.RESET}")
-                print(f"{Colors.CYAN}Description: {LANGUAGE_TIERS[tier]['description']}{Colors.RESET}\n")
-                
-                for i, (name, code, desc) in enumerate(languages, 1):
-                    print(f"  {Colors.GREEN}{i}{Colors.RESET}) {Colors.WHITE}{name}{Colors.RESET}")
-                    print(f"     {Colors.CYAN}└─ {desc}{Colors.RESET}")
-                print(f"\n  {Colors.YELLOW}0{Colors.RESET}) {Colors.YELLOW}Back to tiers{Colors.RESET}")
-                
-                lang_choice = input(f"\n{Colors.CYAN}Choose language (0-{len(languages)}): {Colors.RESET}").strip()
-                if lang_choice == "0":
-                    break
-                try:
-                    idx = int(lang_choice) - 1
-                    if 0 <= idx < len(languages):
-                        self.selection.language_code = languages[idx][1]
-                        self.selection.language_name = languages[idx][0]
-                        logger.info(f"Selected language: {self.selection.language_name}")
-                        return True
-                    else:
-                        print(f"{Colors.RED}[✗] Invalid option{Colors.RESET}")
-                        input("Press Enter...")
-                except ValueError:
-                    print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
-                    input("Press Enter...")
-    
-    def select_line_break(self) -> bool:
-        """Line break type selection"""
-        self.save_checkpoint("line_break")
-        while True:
-            self.menu.clear_screen()
-            print(f"{Colors.CYAN}{Colors.BOLD}LINE BREAK TYPE{Colors.RESET}\n")
-            for i, (name, key, desc, range_text) in enumerate(LINE_TYPES, 1):
-                print(f"  {Colors.GREEN}{i}{Colors.RESET}) {Colors.WHITE}{name}{Colors.RESET}")
-                print(f"     {Colors.CYAN}└─ {desc}{Colors.RESET}")
-                print(f"     {Colors.CYAN}   Range: {range_text}{Colors.RESET}")
-            print(f"\n  {Colors.YELLOW}0{Colors.RESET}) {Colors.YELLOW}Back{Colors.RESET}")
-            
-            choice = input(f"\n{Colors.CYAN}Choose option (0-{len(LINE_TYPES)}): {Colors.RESET}").strip()
-            if choice == "0":
-                return False
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(LINE_TYPES):
-                    self.selection.line_type = LINE_TYPES[idx][1]
-                    self.selection.line_type_name = LINE_TYPES[idx][0]
-                    
-                    if self.selection.line_type == "words":
-                        while True:
-                            try:
-                                val = input(f"{Colors.CYAN}Words per line (1-30): {Colors.RESET}").strip()
-                                if val:
-                                    limit = int(val)
-                                    if 1 <= limit <= 30:
-                                        self.selection.limit = limit
-                                        break
-                                    else:
-                                        print(f"{Colors.RED}[✗] Please enter a number between 1 and 30{Colors.RESET}")
-                                else:
-                                    self.selection.limit = 5
-                                    break
-                            except ValueError:
-                                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
-                    elif self.selection.line_type == "letters":
-                        while True:
-                            try:
-                                val = input(f"{Colors.CYAN}Letters per line (10-80): {Colors.RESET}").strip()
-                                if val:
-                                    limit = int(val)
-                                    if 10 <= limit <= 80:
-                                        self.selection.limit = limit
-                                        break
-                                    else:
-                                        print(f"{Colors.RED}[✗] Please enter a number between 10 and 80{Colors.RESET}")
-                                else:
-                                    self.selection.limit = 42
-                                    break
-                            except ValueError:
-                                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
-                    else:
-                        self.selection.limit = 0
-                    
-                    logger.info(f"Selected line break: {self.selection.line_type_name}, limit: {self.selection.limit}")
-                    return True
-                else:
-                    print(f"{Colors.RED}[✗] Invalid option{Colors.RESET}")
-                    input("Press Enter...")
-            except ValueError:
-                print(f"{Colors.RED}[✗] Invalid input{Colors.RESET}")
-                input("Press Enter...")
-    
-    def download_youtube_audio(self, url: str) -> Tuple[Optional[Path], Optional[str]]:
-        """Download audio from YouTube"""
-        try:
-            import yt_dlp
-        except ImportError:
-            logger.error("yt-dlp not available")
-            print(f"{Colors.RED}[✗] yt-dlp not available{Colors.RESET}")
-            return None, None
-            
-        logger.info(f"Downloading YouTube audio from: {url}")
-        print(f"{Colors.CYAN}[i] Downloading audio from YouTube...{Colors.RESET}")
-        
-        temp_dir = Path(tempfile.gettempdir())
-        output_template = str(temp_dir / "youtube_audio_%(id)s.%(ext)s")
-        
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'wav',
-                'preferredquality': '16000',
-            }],
-            'outtmpl': output_template,
-            'quiet': True,
-            'no_warnings': True,
+        # Settings
+        self.settings = {
+            "theme": "Dark",
+            "models_dir": "",
+            "temp_dir": tempfile.gettempdir()
         }
         
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                video_title = info.get('title', '')
-                video_title_clean = re.sub(r'[<>:"/\\|?*]', '', str(video_title))[:50]
-                logger.info(f"Downloaded: {video_title_clean}")
-                
-                for f in temp_dir.glob("youtube_audio_*"):
-                    if f.suffix in ['.wav', '.mp3', '.m4a']:
-                        if f.suffix != '.wav':
-                            wav_path = f.with_suffix('.wav')
-                            ffmpeg_cmd = ['ffmpeg', '-i', str(f), '-acodec', 'pcm_s16le', 
-                                         '-ar', '16000', '-ac', '1', '-y', str(wav_path)]
-                            subprocess.run(ffmpeg_cmd, capture_output=True)
-                            f.unlink()
-                            f = wav_path
-                        return f, video_title_clean
-        except Exception as e:
-            logger.error(f"YouTube download failed: {e}")
-            print(f"{Colors.RED}[✗] Download failed: {e}{Colors.RESET}")
-        return None, None
+        # State variables
+        self.input_file = None
+        self.audio_file = None
+        self.output_folder = None
+        self.subtitles = []
+        self.player = QMediaPlayer()
+        self.worker = None
+        self.current_media_path = None
+        self.captions_generated = False
+        self.duration = 0
+        
+        # Setup UI
+        self.setup_ui()
+        self.setup_connections()
+        self.apply_theme()
+        
+        # Timer for slider update
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_slider)
+        self.timer.start(100)
     
-    def process_file(self) -> bool:
-        """Process the selected file and generate captions"""
-        try:
-            media_path = Path(self.selection.file_path)
-            audio_path = media_path
-            
-            # Extract audio if needed
-            if media_path.suffix.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.mpg', '.mpeg', '.webm', '.flv', '.wmv']:
-                logger.info(f"Extracting audio from video: {media_path}")
-                audio_path = self.audio_processor.extract_audio(media_path, self.update_progress)
-                if not audio_path:
-                    logger.error("Could not extract audio")
-                    print(f"{Colors.RED}[✗] Could not extract audio{Colors.RESET}")
-                    return False
-            
-            # Vocal separation
-            if self.selection.vocal_separation != "none":
-                logger.info(f"Applying vocal separation: {self.selection.vocal_separation}")
-                vocals_path = self.vocal_separator.separate(audio_path, self.selection.vocal_separation, self.update_progress)
-                if vocals_path and vocals_path.exists():
-                    audio_path = vocals_path
-                    print(f"{Colors.GREEN}[✓] Using isolated vocals{Colors.RESET}")
-                else:
-                    print(f"{Colors.YELLOW}[!] Vocal separation failed, using original audio{Colors.RESET}")
-            
-            # Load model
-            if not self.transcriber.load_model(self.selection.model, self.update_progress):
-                return False
-            
-            # Check cache
-            file_hash = self.cache_manager.get_file_hash(media_path)
-            cached_result = self.cache_manager.get_cached_transcription(
-                file_hash, self.selection.model, self.selection.language_code, 
-                self.selection.mode, self.selection.vocal_separation
-            )
-            
-            if cached_result:
-                logger.info("Using cached transcription")
-                print(f"{Colors.GREEN}[✓] Using cached transcription{Colors.RESET}")
-                result = cached_result
-            else:
-                # Transcribe
-                result = self.transcriber.transcribe(audio_path, self.selection.language_code, self.selection.mode, self.update_progress)
-                # Cache result
-                self.cache_manager.cache_transcription(
-                    file_hash, self.selection.model, self.selection.language_code,
-                    self.selection.mode, self.selection.vocal_separation, result
-                )
-            
-            # Generate subtitles
-            segments = result.get("segments", [])
-            if not segments:
-                logger.error("No segments found in transcription result")
-                print(f"{Colors.RED}[✗] No segments found in transcription result{Colors.RESET}")
-                return False
-            
-            subtitles = self.subtitle_generator.generate_subtitles(segments, self.selection.line_type, self.selection.limit, self.update_progress)
-            
-            # Determine output path
-            if self.selection.platform == "YouTube" and self.selection.video_title:
-                suffix = f"{self.selection.language_code}" if self.selection.mode == "normal" else f"{self.selection.language_code}_translated"
-                output_path = Path.cwd() / f"{self.selection.video_title}_{suffix}.srt"
-            else:
-                suffix = f"{self.selection.language_code}" if self.selection.mode == "normal" else f"{self.selection.language_code}_translated"
-                output_path = media_path.parent / f"{media_path.stem}_{suffix}.srt"
-            
-            # Save subtitles
-            self.subtitle_generator.save_srt(output_path, subtitles)
-            
-            self.update_progress(100, "Complete!")
-            logger.info(f"Captions saved to: {output_path}")
-            print(f"\n{Colors.GREEN}[✓] Saved to: {output_path}{Colors.RESET}")
-            print(f"{Colors.CYAN}[i] Generated {len(subtitles)} subtitle entries{Colors.RESET}")
-            
-            # Cleanup
-            if audio_path != media_path and audio_path and audio_path.exists():
-                try:
-                    audio_path.unlink()
-                except:
-                    pass
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Processing failed: {e}")
-            print(f"{Colors.RED}[✗] Error: {e}{Colors.RESET}")
-            import traceback
-            traceback.print_exc()
-            return False
+    def setup_ui(self):
+        """Setup the user interface"""
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QHBoxLayout()
+        central_widget.setLayout(main_layout)
+        
+        # Left panel - Caption Editor
+        left_panel = QWidget()
+        left_panel.setMinimumWidth(500)
+        left_layout = QVBoxLayout()
+        left_panel.setLayout(left_layout)
+        
+        # Caption editor title
+        editor_title = QLabel("Caption Editor")
+        editor_title.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        left_layout.addWidget(editor_title)
+        
+        # Caption text edit
+        self.caption_edit = QTextEdit()
+        self.caption_edit.setReadOnly(True)
+        self.caption_edit.setFont(QFont("Consolas", 12))
+        self.caption_edit.setStyleSheet("""
+            QTextEdit {
+                background-color: #2d2d2d;
+                color: #e0e0e0;
+                border: 1px solid #3d3d3d;
+                border-radius: 8px;
+                padding: 10px;
+            }
+        """)
+        left_layout.addWidget(self.caption_edit, 1)
+        
+        # Edit button
+        self.edit_btn = QPushButton("Edit Captions")
+        self.edit_btn.setEnabled(False)
+        self.edit_btn.setMinimumHeight(40)
+        left_layout.addWidget(self.edit_btn)
+        
+        # Right panel - Controls
+        right_panel = QScrollArea()
+        right_panel.setWidgetResizable(True)
+        right_panel.setMinimumWidth(350)
+        right_panel.setStyleSheet("QScrollArea { border: none; }")
+        
+        controls_widget = QWidget()
+        controls_layout = QVBoxLayout()
+        controls_widget.setLayout(controls_layout)
+        
+        # File selection
+        file_group = QGroupBox("File Selection")
+        file_group.setStyleSheet("QGroupBox { font-weight: bold; margin-top: 10px; }")
+        file_layout = QVBoxLayout()
+        file_group.setLayout(file_layout)
+        
+        self.import_btn = QPushButton("Import Media File")
+        self.import_btn.setMinimumHeight(50)
+        self.import_btn.setStyleSheet("background-color: #0a84ff; color: white; font-size: 14px; border-radius: 8px;")
+        file_layout.addWidget(self.import_btn)
+        
+        self.file_label = QLabel("No file selected")
+        self.file_label.setWordWrap(True)
+        file_layout.addWidget(self.file_label)
+        
+        controls_layout.addWidget(file_group)
+        
+        # Model selection
+        model_group = QGroupBox("Whisper Model")
+        model_layout = QVBoxLayout()
+        model_group.setLayout(model_layout)
+        
+        self.model_combo = QComboBox()
+        for name, size, desc in WHISPER_MODELS:
+            self.model_combo.addItem(f"{name.upper()} ({size}) - {desc}")
+        model_layout.addWidget(self.model_combo)
+        
+        controls_layout.addWidget(model_group)
+        
+        # Language selection
+        lang_group = QGroupBox("Language")
+        lang_layout = QVBoxLayout()
+        lang_group.setLayout(lang_layout)
+        
+        self.lang_tier_combo = QComboBox()
+        self.lang_tier_combo.addItems(["High Accuracy (90-95%)", "Medium Accuracy (70-85%)", "Lower Accuracy (50-70%)"])
+        lang_layout.addWidget(self.lang_tier_combo)
+        
+        self.lang_combo = QComboBox()
+        self.update_language_list()
+        self.lang_tier_combo.currentTextChanged.connect(self.update_language_list)
+        lang_layout.addWidget(self.lang_combo)
+        
+        controls_layout.addWidget(lang_group)
+        
+        # Mode selection
+        mode_group = QGroupBox("Mode")
+        mode_layout = QVBoxLayout()
+        mode_group.setLayout(mode_layout)
+        
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItems(["Normal Mode (Transcribe)", "Translate Mode (Translate to English)"])
+        mode_layout.addWidget(self.mode_combo)
+        
+        controls_layout.addWidget(mode_group)
+        
+        # Vocal separation
+        vocal_group = QGroupBox("Vocal Separation")
+        vocal_layout = QVBoxLayout()
+        vocal_group.setLayout(vocal_layout)
+        
+        self.vocal_combo = QComboBox()
+        for name, key, desc in VOCAL_OPTIONS:
+            self.vocal_combo.addItem(f"{name} - {desc}")
+        vocal_layout.addWidget(self.vocal_combo)
+        
+        controls_layout.addWidget(vocal_group)
+        
+        # Line break settings
+        line_group = QGroupBox("Line Break Settings")
+        line_layout = QVBoxLayout()
+        line_group.setLayout(line_layout)
+        
+        self.line_type_combo = QComboBox()
+        self.line_type_combo.addItems(["Auto (Recommended)", "Words", "Letters"])
+        line_layout.addWidget(self.line_type_combo)
+        
+        line_limit_layout = QHBoxLayout()
+        line_limit_layout.addWidget(QLabel("Limit:"))
+        self.line_limit_spin = QSpinBox()
+        self.line_limit_spin.setRange(1, 50)
+        self.line_limit_spin.setValue(5)
+        line_limit_layout.addWidget(self.line_limit_spin)
+        line_layout.addLayout(line_limit_layout)
+        
+        controls_layout.addWidget(line_group)
+        
+        # Output format
+        format_group = QGroupBox("Output Format")
+        format_layout = QVBoxLayout()
+        format_group.setLayout(format_layout)
+        
+        self.format_combo = QComboBox()
+        self.format_combo.addItems(["SRT (.srt)", "ASS (.ass)"])
+        format_layout.addWidget(self.format_combo)
+        
+        controls_layout.addWidget(format_group)
+        
+        # Output folder
+        output_group = QGroupBox("Output Location")
+        output_layout = QVBoxLayout()
+        output_group.setLayout(output_layout)
+        
+        output_folder_layout = QHBoxLayout()
+        self.output_folder_line = QLineEdit()
+        self.output_folder_line.setReadOnly(True)
+        output_folder_layout.addWidget(self.output_folder_line)
+        
+        self.browse_btn = QPushButton("Browse")
+        self.browse_btn.clicked.connect(self.select_output_folder)
+        output_folder_layout.addWidget(self.browse_btn)
+        output_layout.addLayout(output_folder_layout)
+        
+        controls_layout.addWidget(output_group)
+        
+        # Generate button
+        self.generate_btn = QPushButton("Generate Captions")
+        self.generate_btn.setMinimumHeight(60)
+        self.generate_btn.setStyleSheet("background-color: #ff2d55; color: white; font-size: 16px; font-weight: bold; border-radius: 10px;")
+        controls_layout.addWidget(self.generate_btn)
+        
+        # Progress bars
+        progress_group = QGroupBox("Progress")
+        progress_layout = QVBoxLayout()
+        progress_group.setLayout(progress_layout)
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimumHeight(25)
+        progress_layout.addWidget(self.progress_bar)
+        
+        self.status_label = QLabel("Ready")
+        progress_layout.addWidget(self.status_label)
+        
+        controls_layout.addWidget(progress_group)
+        
+        # Media controls
+        media_group = QGroupBox("Media Controls")
+        media_layout = QVBoxLayout()
+        media_group.setLayout(media_layout)
+        
+        self.play_btn = QPushButton("Play")
+        self.play_btn.setEnabled(False)
+        self.play_btn.clicked.connect(self.toggle_play)
+        media_layout.addWidget(self.play_btn)
+        
+        self.timeline_slider = QSlider(Qt.Horizontal)
+        self.timeline_slider.setEnabled(False)
+        self.timeline_slider.sliderMoved.connect(self.seek_audio)
+        media_layout.addWidget(self.timeline_slider)
+        
+        controls_layout.addWidget(media_group)
+        
+        # Settings button
+        self.settings_btn = QPushButton("Settings")
+        self.settings_btn.clicked.connect(self.open_settings)
+        controls_layout.addWidget(self.settings_btn)
+        
+        # About button
+        about_btn = QPushButton("About")
+        about_btn.clicked.connect(self.show_about)
+        controls_layout.addWidget(about_btn)
+        
+        controls_layout.addStretch()
+        
+        right_panel.setWidget(controls_widget)
+        
+        # Add panels to main layout
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.addWidget(left_panel)
+        splitter.addWidget(right_panel)
+        splitter.setSizes([600, 400])
+        main_layout.addWidget(splitter)
     
-    def run(self):
-        """Main application loop"""
-        # Check requirements
-        if not self.audio_processor.check_ffmpeg():
-            logger.warning("FFmpeg not found")
-            print(f"{Colors.YELLOW}[!] FFmpeg not found. Some features may not work.{Colors.RESET}")
-        if not WHISPER_AVAILABLE:
-            logger.error("Whisper not available")
-            print(f"{Colors.RED}[✗] Whisper not available!{Colors.RESET}")
-            print(f"{Colors.CYAN}[i] Please ensure packages are installed in _pythonPackages_ folder{Colors.RESET}")
-            input("\nPress Enter to exit...")
+    def setup_connections(self):
+        """Setup signal connections"""
+        self.import_btn.clicked.connect(self.import_file)
+        self.generate_btn.clicked.connect(self.generate_captions)
+        self.edit_btn.clicked.connect(self.toggle_edit)
+        self.player.positionChanged.connect(self.update_highlight)
+        self.player.durationChanged.connect(self.set_duration)
+        self.player.error.connect(self.on_player_error)
+    
+    def update_language_list(self):
+        """Update language list based on selected tier"""
+        self.lang_combo.clear()
+        tier_text = self.lang_tier_combo.currentText()
+        if "High" in tier_text:
+            tier = "high"
+        elif "Medium" in tier_text:
+            tier = "medium"
+        else:
+            tier = "low"
+        
+        for name, code in LANGUAGE_TIERS[tier]["languages"]:
+            self.lang_combo.addItem(f"{name} ({code})", code)
+    
+    def apply_theme(self):
+        """Apply the selected theme"""
+        theme = self.settings.get("theme", "Dark")
+        if theme == "Light":
+            palette = QPalette()
+            palette.setColor(QPalette.Window, QColor(240, 240, 240))
+            palette.setColor(QPalette.WindowText, Qt.black)
+            palette.setColor(QPalette.Base, Qt.white)
+            palette.setColor(QPalette.Text, Qt.black)
+            self.setPalette(palette)
+        else:
+            palette = QPalette()
+            palette.setColor(QPalette.Window, QColor(30, 30, 30))
+            palette.setColor(QPalette.WindowText, Qt.white)
+            palette.setColor(QPalette.Base, QColor(45, 45, 45))
+            palette.setColor(QPalette.Text, Qt.white)
+            self.setPalette(palette)
+    
+    def open_settings(self):
+        """Open settings dialog"""
+        dialog = SettingsDialog(self.settings, self)
+        dialog.settingsChanged.connect(self.on_settings_changed)
+        dialog.exec_()
+    
+    def on_settings_changed(self, settings):
+        self.settings = settings
+        self.apply_theme()
+    
+    def import_file(self):
+        """Import media file"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Import Media File", "",
+            "Media Files (*.mp4 *.avi *.mkv *.mov *.mp3 *.wav *.m4a *.flac);;All Files (*.*)"
+        )
+        
+        if not file_path:
             return
         
-        # Display status
-        print(f"{Colors.GREEN}[✓] Whisper: Available{Colors.RESET}")
-        if SPLEETER_AVAILABLE:
-            print(f"{Colors.GREEN}[✓] Spleeter: Available (with TensorFlow){Colors.RESET}")
+        self.input_file = file_path
+        self.file_label.setText(os.path.basename(file_path))
+        
+        # Set output folder to same as input file
+        self.output_folder = os.path.dirname(file_path)
+        self.output_folder_line.setText(self.output_folder)
+        
+        # Extract audio from video
+        if file_path.lower().endswith(tuple(SUPPORTED_EXTENSIONS['video'])):
+            self.status_label.setText("Extracting audio from video...")
+            QApplication.processEvents()
+            
+            temp_dir = self.settings.get("temp_dir", tempfile.gettempdir())
+            temp_audio = os.path.join(temp_dir, f"{os.path.basename(file_path)}.temp.wav")
+            
+            try:
+                video = VideoFileClip(file_path)
+                video.audio.write_audiofile(temp_audio, codec='pcm_s16le', verbose=False, logger=None)
+                video.close()
+                self.audio_file = temp_audio
+                self.status_label.setText("Audio extracted successfully")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to extract audio: {str(e)}")
+                self.audio_file = file_path
         else:
-            print(f"{Colors.YELLOW}[!] Spleeter: Not available (using FFmpeg fallback){Colors.RESET}")
+            self.audio_file = file_path
         
-        # Check for Send To file
-        if self.media_path_arg:
-            media_path = Path(self.media_path_arg)
-            if media_path.exists() and media_path.suffix.lower() in SUPPORTED_EXTENSIONS['all']:
-                logger.info(f"File received from Send To: {media_path}")
-                self.selection.platform = "Local File"
-                self.selection.source = "Send To"
-                self.selection.file_path = str(media_path)
-                
-                # Show selection menu and process directly
-                self.menu = None  # No menu needed for Send To
-                if self.select_vocal_separation() and self.select_model() and self.select_mode() and self.select_language() and self.select_line_break():
-                    self.print_selection_summary()
-                    confirm = input(f"{Colors.CYAN}Generate captions? (y/n): {Colors.RESET}").lower()
-                    if confirm in ['y', 'yes']:
-                        print()
-                        success = self.process_file()
-                        if not success:
-                            print(f"{Colors.RED}[✗] Failed to generate captions{Colors.RESET}")
-                    else:
-                        print(f"{Colors.YELLOW}[!] Cancelled by user{Colors.RESET}")
-                return
+        # Setup media player
+        self.current_media_path = None
+        self.play_btn.setEnabled(True)
+        self.timeline_slider.setEnabled(True)
         
-        # Create main menu
-        main_menu = Menu("Main Menu")
+        QMessageBox.information(self, "Success", f"File imported successfully:\n{os.path.basename(file_path)}")
+    
+    def select_output_folder(self):
+        """Select output folder"""
+        folder = QFileDialog.getExistingDirectory(self, "Select Output Folder", self.output_folder or "")
+        if folder:
+            self.output_folder = folder
+            self.output_folder_line.setText(folder)
+    
+    def generate_captions(self):
+        """Generate captions using Whisper"""
+        if not self.audio_file or not os.path.exists(self.audio_file):
+            QMessageBox.warning(self, "Error", "Please import a media file first.")
+            return
         
-        # YouTube menu
-        youtube_menu = Menu("YouTube Download", main_menu)
+        # Get settings
+        model_idx = self.model_combo.currentIndex()
+        model_name = WHISPER_MODELS[model_idx][0]
         
-        def youtube_action():
-            self.menu = youtube_menu
-            while True:
-                self.menu.clear_screen()
-                print(f"{Colors.CYAN}{Colors.BOLD}YOUTUBE DOWNLOAD{Colors.RESET}\n")
-                print(f"{Colors.YELLOW}Supported: YouTube.com, youtu.be, and other YouTube URLs{Colors.RESET}\n")
-                url = input(f"{Colors.CYAN}Enter YouTube URL: {Colors.RESET}").strip()
-                if not url:
-                    return
-                
-                print(f"{Colors.CYAN}[i] Processing URL...{Colors.RESET}")
-                media_path, video_title = self.download_youtube_audio(url)
-                if not media_path:
-                    print(f"{Colors.RED}[✗] Failed to download{Colors.RESET}")
-                    input("Press Enter to try again...")
+        language_code = self.lang_combo.currentData()
+        mode = "translate" if "Translate" in self.mode_combo.currentText() else "transcribe"
+        
+        vocal_idx = self.vocal_combo.currentIndex()
+        vocal_separation = VOCAL_OPTIONS[vocal_idx][1]
+        
+        # Start worker thread
+        self.generate_btn.setEnabled(False)
+        self.import_btn.setEnabled(False)
+        self.progress_bar.setValue(0)
+        self.status_label.setText("Starting...")
+        
+        self.worker = TranscriptionWorker(
+            self.audio_file, model_name, language_code, mode, vocal_separation,
+            str(Path(__file__).parent / "ffmpeg" / "ffmpeg.exe") if os.path.exists(Path(__file__).parent / "ffmpeg") else None
+        )
+        self.worker.progress.connect(self.update_progress)
+        self.worker.finished.connect(self.on_transcription_finished)
+        self.worker.error.connect(self.on_transcription_error)
+        self.worker.start()
+    
+    def update_progress(self, value, message):
+        """Update progress bar and status"""
+        self.progress_bar.setValue(value)
+        self.status_label.setText(message)
+        QApplication.processEvents()
+    
+    def on_transcription_finished(self, result):
+        """Handle transcription completion"""
+        self.progress_bar.setValue(100)
+        self.status_label.setText("Processing results...")
+        QApplication.processEvents()
+        
+        try:
+            # Process segments into subtitles
+            self.subtitles = []
+            index = 1
+            words_per_line = self.line_limit_spin.value()
+            line_type = self.line_type_combo.currentText()
+            
+            for segment in result.get("segments", []):
+                text = segment.get("text", "").strip()
+                if not text:
                     continue
                 
-                self.selection.platform = "YouTube"
-                self.selection.source = url
-                self.selection.file_path = str(media_path)
-                self.selection.video_title = video_title
+                start = segment.get("start", 0)
+                end = segment.get("end", start + 1)
                 
-                if self.select_vocal_separation() and self.select_model() and self.select_mode() and self.select_language() and self.select_line_break():
-                    self.print_selection_summary()
-                    confirm = input(f"{Colors.CYAN}Generate captions? (y/n): {Colors.RESET}").lower()
-                    if confirm in ['y', 'yes']:
-                        print()
-                        success = self.process_file()
-                        if not success:
-                            print(f"{Colors.RED}[✗] Failed to generate captions{Colors.RESET}")
-                            retry = input(f"{Colors.CYAN}Try again? (y/n): {Colors.RESET}").lower()
-                            if retry in ['y', 'yes']:
-                                continue
-                    else:
-                        print(f"{Colors.YELLOW}[!] Cancelled by user{Colors.RESET}")
-                return
-        
-        youtube_menu.add("1", "Download from URL", "Paste YouTube URL to download and transcribe", action=youtube_action)
-        
-        # Local file menu
-        local_menu = Menu("Local File", main_menu)
-        
-        def local_file_action():
-            self.menu = local_menu
-            from tkinter import filedialog, Tk
-            root = Tk()
-            root.withdraw()
-            root.attributes('-topmost', True)
-            file_path = filedialog.askopenfilename(
-                title="Select Video/Audio File",
-                filetypes=[
-                    ("All Supported Files", "*.mp4;*.avi;*.mkv;*.mov;*.mp3;*.wav;*.m4a;*.flac"),
-                    ("Video Files", "*.mp4;*.avi;*.mkv;*.mov;*.m4v;*.mpg;*.mpeg;*.webm"),
-                    ("Audio Files", "*.mp3;*.wav;*.m4a;*.flac;*.ogg;*.aac"),
-                    ("All Files", "*.*")
-                ]
-            )
-            root.destroy()
-            
-            if not file_path:
-                return
-            
-            media_path = Path(file_path)
-            if not media_path.exists():
-                print(f"{Colors.RED}[✗] File not found{Colors.RESET}")
-                input("Press Enter...")
-                return
-            
-            if media_path.suffix.lower() not in SUPPORTED_EXTENSIONS['all']:
-                print(f"{Colors.RED}[✗] Unsupported file format{Colors.RESET}")
-                print(f"{Colors.CYAN}[i] Supported formats: {', '.join(SUPPORTED_EXTENSIONS['all'])}{Colors.RESET}")
-                input("Press Enter...")
-                return
-            
-            self.selection.platform = "Local File"
-            self.selection.source = "File Dialog"
-            self.selection.file_path = str(media_path)
-            
-            if self.select_vocal_separation() and self.select_model() and self.select_mode() and self.select_language() and self.select_line_break():
-                self.print_selection_summary()
-                confirm = input(f"{Colors.CYAN}Generate captions? (y/n): {Colors.RESET}").lower()
-                if confirm in ['y', 'yes']:
-                    print()
-                    success = self.process_file()
-                    if not success:
-                        print(f"{Colors.RED}[✗] Failed to generate captions{Colors.RESET}")
-                        retry = input(f"{Colors.CYAN}Try again? (y/n): {Colors.RESET}").lower()
-                        if retry in ['y', 'yes']:
-                            local_file_action()
+                # Split text based on line type
+                if line_type == "Words":
+                    words = text.split()
+                    for i in range(0, len(words), words_per_line):
+                        chunk = ' '.join(words[i:i+words_per_line])
+                        chunk_end = start + (end - start) * min(i + words_per_line, len(words)) / len(words)
+                        self.subtitles.append({
+                            "index": index,
+                            "start": timedelta(seconds=start + i * (end - start) / len(words)),
+                            "end": timedelta(seconds=chunk_end),
+                            "text": chunk
+                        })
+                        index += 1
                 else:
-                    print(f"{Colors.YELLOW}[!] Cancelled by user{Colors.RESET}")
+                    # Auto or Letters
+                    self.subtitles.append({
+                        "index": index,
+                        "start": timedelta(seconds=start),
+                        "end": timedelta(seconds=end),
+                        "text": text
+                    })
+                    index += 1
+            
+            # Update caption editor
+            caption_text = ""
+            for sub in self.subtitles:
+                caption_text += f"{sub['index']}\n{sub['text']}\n\n"
+            self.caption_edit.setText(caption_text.strip())
+            
+            # Save to file
+            output_format = self.format_combo.currentText()
+            base_name = os.path.splitext(os.path.basename(self.input_file))[0]
+            output_file = os.path.join(self.output_folder or os.path.dirname(self.input_file), f"{base_name}_captions")
+            
+            if output_format == "SRT (.srt)":
+                output_file += ".srt"
+                subs = pysrt.SubRipFile()
+                for sub in self.subtitles:
+                    item = pysrt.SubRipItem(
+                        index=sub["index"],
+                        start=pysrt.SubRipTime.from_ordinal(sub["start"].total_seconds() * 1000),
+                        end=pysrt.SubRipTime.from_ordinal(sub["end"].total_seconds() * 1000),
+                        text=sub["text"]
+                    )
+                    subs.append(item)
+                subs.save(output_file, encoding='utf-8')
+            else:
+                output_file += ".ass"
+                subs = pysubs2.SSAFile()
+                for sub in self.subtitles:
+                    event = pysubs2.SSAEvent(
+                        start=int(sub["start"].total_seconds() * 1000),
+                        end=int(sub["end"].total_seconds() * 1000),
+                        text=sub["text"]
+                    )
+                    subs.events.append(event)
+                subs.save(output_file)
+            
+            self.captions_generated = True
+            self.edit_btn.setEnabled(True)
+            self.status_label.setText(f"Captions saved to {os.path.basename(output_file)}")
+            
+            QMessageBox.information(self, "Success", f"Captions generated successfully!\nSaved to: {output_file}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to process transcription: {str(e)}")
+            self.status_label.setText("Error processing transcription")
         
-        local_menu.add("1", "Select File", "Browse and select video/audio file", action=local_file_action)
+        finally:
+            self.generate_btn.setEnabled(True)
+            self.import_btn.setEnabled(True)
+    
+    def on_transcription_error(self, error_msg):
+        """Handle transcription error"""
+        self.generate_btn.setEnabled(True)
+        self.import_btn.setEnabled(True)
+        self.status_label.setText("Error occurred")
+        QMessageBox.critical(self, "Error", f"Transcription failed:\n{error_msg}")
+    
+    def toggle_edit(self):
+        """Toggle edit mode for captions"""
+        if not self.captions_generated:
+            return
         
-        # About function
-        def about_action():
-            self.menu.clear_screen()
-            print(f"{Colors.CYAN}{Colors.BOLD}")
-            print("+" + "=" * 60 + "+")
-            print("|" + f"{APP_NAME} v{APP_VERSION}".center(60) + "|")
-            print("|" + f"Author: {APP_AUTHOR}".center(60) + "|")
-            print("|" + f"License: {APP_LICENSE}".center(60) + "|")
-            print("+" + "=" * 60 + "+")
-            print(f"{Colors.RESET}")
-            print(f"\n{Colors.CYAN}Description:{Colors.RESET}")
-            print("  Professional AI-powered subtitle generator using OpenAI Whisper")
-            print(f"\n{Colors.CYAN}Features:{Colors.RESET}")
-            print("  • YouTube video download and captioning")
-            print("  • Local video/audio file processing")
-            print("  • Vocal separation with Spleeter & TensorFlow")
-            print("  • 20+ languages with accuracy tiers")
-            print("  • Smart subtitle formatting (Auto/Words/Letters)")
-            print("  • Caching for faster reprocessing")
-            print(f"\n{Colors.CYAN}Components:{Colors.RESET}")
-            print(f"  • Whisper: {'Available' if WHISPER_AVAILABLE else 'Not Available'}")
-            print(f"  • Spleeter: {'Available' if SPLEETER_AVAILABLE else 'Not Available'}")
-            print(f"  • TensorFlow: {'Available' if TENSORFLOW_AVAILABLE else 'Not Available'}")
-            print(f"  • FFmpeg: {'Available' if self.audio_processor.check_ffmpeg() else 'Not Available'}")
-            print(f"\n{Colors.CYAN}Support:{Colors.RESET}")
-            print(f"  Telegram: {APP_TELEGRAM}")
-            print(f"  YouTube: {APP_YOUTUBE}")
-            print(f"  Logs: {APP_LOGS_FOLDER}")
-            input(f"\n{Colors.CYAN}Press Enter to continue...{Colors.RESET}")
+        if self.caption_edit.isReadOnly():
+            self.caption_edit.setReadOnly(False)
+            self.edit_btn.setText("Save Changes")
+            self.status_label.setText("Edit mode - modify captions as needed")
+        else:
+            # Save changes
+            self.caption_edit.setReadOnly(True)
+            self.edit_btn.setText("Edit Captions")
+            self.update_subtitles_from_text()
+            self.status_label.setText("Changes saved")
+    
+    def update_subtitles_from_text(self):
+        """Update subtitles from edited text"""
+        text = self.caption_edit.toPlainText().strip()
+        blocks = text.split('\n\n')
+        new_subtitles = []
         
-        # Build main menu
-        main_menu.add("1", "🌐 YouTube Mode", "Download video from YouTube and generate captions", submenu=youtube_menu)
-        main_menu.add("2", "📁 Local File Mode", "Process existing video/audio file from your computer", submenu=local_menu)
-        main_menu.add("3", "ℹ️ About", "Show application information and component status", action=about_action)
+        for block in blocks:
+            lines = block.split('\n')
+            if len(lines) >= 2 and lines[0].strip().isdigit():
+                try:
+                    idx = int(lines[0].strip())
+                    sub_text = '\n'.join(lines[1:]).strip()
+                    for sub in self.subtitles:
+                        if sub["index"] == idx:
+                            sub["text"] = sub_text
+                            new_subtitles.append(sub)
+                            break
+                except:
+                    pass
         
-        # Run menu
-        result = main_menu.show()
+        self.subtitles = new_subtitles
+        QMessageBox.information(self, "Success", "Captions updated successfully")
+    
+    def toggle_play(self):
+        """Toggle media playback"""
+        if not self.audio_file or not os.path.exists(self.audio_file):
+            return
         
-        # Cleanup
-        print(f"\n{Colors.GREEN}[✓] Thanks for using {APP_NAME}!{Colors.RESET}")
-        logger.info("Application shutting down")
-        self.cleanup()
-        time.sleep(2)
+        if self.player.state() == QMediaPlayer.PlayingState:
+            self.player.pause()
+            self.play_btn.setText("Play")
+        else:
+            try:
+                if self.current_media_path != self.audio_file:
+                    self.player.setMedia(QMediaContent(QUrl.fromLocalFile(self.audio_file)))
+                    self.current_media_path = self.audio_file
+                self.player.play()
+                self.play_btn.setText("Pause")
+            except Exception as e:
+                QMessageBox.warning(self, "Playback Error", str(e))
+    
+    def set_duration(self, duration):
+        """Set media duration"""
+        self.duration = duration
+        self.timeline_slider.setRange(0, duration)
+    
+    def update_slider(self):
+        """Update timeline slider position"""
+        if self.duration > 0:
+            pos = self.player.position()
+            self.timeline_slider.setValue(pos)
+    
+    def seek_audio(self, position):
+        """Seek to position in audio"""
+        self.player.setPosition(position)
+    
+    def update_highlight(self, position):
+        """Highlight current subtitle during playback"""
+        if not self.subtitles or not self.captions_generated:
+            return
+        
+        current_time = position / 1000.0
+        
+        # Find current subtitle
+        for sub in self.subtitles:
+            start = sub["start"].total_seconds()
+            end = sub["end"].total_seconds()
+            if start <= current_time < end:
+                # Highlight in text edit
+                text = self.caption_edit.toPlainText()
+                cursor = self.caption_edit.textCursor()
+                cursor.movePosition(QTextCursor.Start)
+                
+                # Find the block containing this subtitle
+                blocks = text.split('\n\n')
+                block_idx = sub["index"] - 1
+                if 0 <= block_idx < len(blocks):
+                    block_start = sum(len(b) + 2 for b in blocks[:block_idx])
+                    cursor.setPosition(block_start)
+                    cursor.movePosition(QTextCursor.NextBlock, QTextCursor.KeepAnchor, len(blocks[block_idx].split('\n')))
+                    
+                    # Set highlight
+                    format = cursor.charFormat()
+                    format.setBackground(QColor(255, 200, 0))
+                    cursor.setCharFormat(format)
+                    
+                    self.caption_edit.setTextCursor(cursor)
+                    self.caption_edit.ensureCursorVisible()
+                break
+    
+    def on_player_error(self, error):
+        """Handle player errors"""
+        QMessageBox.warning(self, "Media Error", f"Cannot play media:\n{self.player.errorString()}")
+    
+    def show_about(self):
+        """Show about dialog"""
+        QMessageBox.about(self, "About", f"""
+            <h2>{APP_NAME} v{APP_VERSION}</h2>
+            <p>Professional AI-powered subtitle generator using OpenAI Whisper</p>
+            <br/>
+            <b>Features:</b><br/>
+            • YouTube video download and captioning<br/>
+            • Local video/audio file processing<br/>
+            • Vocal separation with FFmpeg<br/>
+            • 20+ languages with accuracy tiers<br/>
+            • Smart subtitle formatting<br/>
+            • Real-time playback with highlighting<br/>
+            <br/>
+            <b>Author:</b> {APP_AUTHOR}<br/>
+            <b>License:</b> {APP_LICENSE}<br/>
+            <br/>
+            <b>Support:</b><br/>
+            Telegram: <a href="{APP_TELEGRAM}">{APP_TELEGRAM}</a><br/>
+            YouTube: <a href="{APP_YOUTUBE}">{APP_YOUTUBE}</a>
+        """)
+    
+    def closeEvent(self, event: QCloseEvent):
+        """Handle window close event - cleanup all processes"""
+        # Cancel any running worker
+        if self.worker and self.worker.isRunning():
+            self.worker.cancel()
+            self.worker.quit()
+            self.worker.wait(2000)
+        
+        # Stop media player
+        if self.player.state() == QMediaPlayer.PlayingState:
+            self.player.stop()
+        
+        # Clean up temporary audio file
+        if self.audio_file and self.audio_file.endswith(".temp.wav") and os.path.exists(self.audio_file):
+            try:
+                os.remove(self.audio_file)
+            except:
+                pass
+        
+        # Clean up any remaining temp files
+        temp_dir = self.settings.get("temp_dir", tempfile.gettempdir())
+        for file in os.listdir(temp_dir):
+            if file.startswith("vocals_") and file.endswith(".wav"):
+                try:
+                    os.remove(os.path.join(temp_dir, file))
+                except:
+                    pass
+        
+        event.accept()
 
 # ============================================================================
 # Main Entry Point
 # ============================================================================
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=f'{APP_NAME} - {APP_AUTHOR}')
-    parser.add_argument('file', nargs='?', help='Video/Audio file to process (supports Send To)')
-    args = parser.parse_args()
+def main():
+    app = QApplication(sys.argv)
+    app.setStyle('Fusion')
     
-    app = NotYCaptionGenerator(args.file)
-    app.run()
+    # Set application icon
+    if os.path.exists('App.ico'):
+        app.setWindowIcon(QIcon('App.ico'))
+    
+    window = NotyCaptionWindow()
+    window.show()
+    
+    sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()
