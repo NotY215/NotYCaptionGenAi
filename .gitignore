@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Build directories
+dist/
+build/
+*.egg-info/
+*.spec
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+app.log
+
+# Temp files
+*.tmp
+*.temp
+extract_temp/
+temp_installer
+temp_build/
+Builder/*.txt
+*_info.txt
+cache
+*.c
+models
