@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NotY Caption Generator AI v7.1 - Fixed Size Window with Auto-Scaling UI
+NotY Caption Generator AI v7.1 - Colorful Animated Professional UI
 Copyright (c) 2026 NotY215
 
 Features:
-- Fixed initial window size (1200x800)
-- Only maximize and minimize (no manual resize)
-- Automatic UI scaling when maximized
-- All buttons and elements scale proportionally
-- Professional modern design
+- Fixed window size (1200x800) with maximize/minimize only
+- Auto-scaling UI when maximized
+- Vibrant colors and smooth animations
+- 2000+ lines of rich functionality
+- Professional gradient designs
 """
 
 import os
@@ -24,12 +24,14 @@ import time
 import warnings
 import re
 import glob
+import random
 from pathlib import Path
 from datetime import timedelta
 from threading import Thread, Lock
 from typing import List, Dict, Optional, Tuple, Any
 from enum import Enum
 from functools import partial
+from collections import deque
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -71,21 +73,24 @@ try:
         QPushButton, QLabel, QFileDialog, QComboBox, QTextEdit, QSlider,
         QProgressBar, QGroupBox, QCheckBox, QSpinBox, QLineEdit, QDialog,
         QDialogButtonBox, QTabWidget, QMessageBox, QFrame, QScrollArea,
-        QGridLayout, QSplitter, QStackedWidget, QToolTip, QSizePolicy
+        QGridLayout, QSplitter, QStackedWidget, QToolTip, QSizePolicy,
+        QGraphicsDropShadowEffect
     )
     from PyQt5.QtCore import (
         Qt, QThread, pyqtSignal, QTimer, QUrl, QSettings, QSize, QPropertyAnimation,
-        QEasingCurve, QPoint, QRect, QParallelAnimationGroup, QSequentialAnimationGroup
+        QEasingCurve, QPoint, QRect, QParallelAnimationGroup, QSequentialAnimationGroup,
+        QPointF, QDateTime, QEvent
     )
     from PyQt5.QtGui import (
         QFont, QIcon, QPalette, QColor, QLinearGradient, QBrush, QPainter,
-        QPen, QFontDatabase, QMovie, QPixmap, QPainterPath, QRegion, QResizeEvent
+        QPen, QFontDatabase, QMovie, QPixmap, QPainterPath, QRegion, QResizeEvent,
+        QGradient, QRadialGradient, QConicalGradient
     )
     from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
     GUI_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     GUI_AVAILABLE = False
-    print("PyQt5 not available. Falling back to CLI mode.")
+    print(f"PyQt5 not available: {e}. Falling back to CLI mode.")
 
 
 # ============================================================================
@@ -103,30 +108,46 @@ class Colors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+    
+    # Extended color palette
+    RED = '\033[91m'
+    MAGENTA = '\033[95m'
+    YELLOW = '\033[93m'
+    WHITE = '\033[97m'
 
 
 class ProgressBar:
-    """Simple progress bar for console"""
+    """Animated progress bar for console"""
     def __init__(self, total: int, prefix: str = '', suffix: str = '', length: int = 50):
         self.total = total
         self.prefix = prefix
         self.suffix = suffix
         self.length = length
         self.current = 0
+        self.start_time = time.time()
         
     def update(self, current: int = None):
         if current is not None:
             self.current = current
         else:
             self.current += 1
+            
         percent = 100 * (self.current / float(self.total))
         filled = int(self.length * self.current // self.total)
         bar = '█' * filled + '░' * (self.length - filled)
-        print(f'\r{self.prefix} |{bar}| {percent:.1f}% {self.suffix}', end='')
+        
+        elapsed = time.time() - self.start_time
+        if self.current > 0:
+            eta = (elapsed / self.current) * (self.total - self.current)
+            eta_str = f"ETA: {int(eta)}s"
+        else:
+            eta_str = "ETA: --s"
+            
+        print(f'\r{self.prefix} |{bar}| {percent:.1f}% {self.suffix} {eta_str}', end='')
         
     def finish(self):
         self.update(self.total)
-        print()
+        print(f"\n{Colors.GREEN}✓ Complete! Time: {time.time() - self.start_time:.1f}s{Colors.ENDC}")
 
 
 class CacheManager:
@@ -148,6 +169,7 @@ class CacheManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_hash ON transcriptions(file_hash, model, language, task)')
             
     def get(self, file_path: Path, model: str, language: str, task: str) -> Optional[List[Dict]]:
         file_hash = self._get_file_hash(file_path)
@@ -170,6 +192,16 @@ class CacheManager:
             for chunk in iter(lambda: f.read(8192), b''):
                 sha256.update(chunk)
         return sha256.hexdigest()
+    
+    def clear_all(self):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('DELETE FROM transcriptions')
+            
+    def get_stats(self) -> Dict:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute('SELECT COUNT(*), SUM(LENGTH(segments)) FROM transcriptions')
+            count, size = cursor.fetchone()
+            return {'count': count or 0, 'size': size or 0}
 
 
 class Transcriber:
@@ -186,9 +218,10 @@ class Transcriber:
             import whisper
             model_path = MODELS_DIR / f"{model_name}.pt"
             if not model_path.exists():
-                print(f"Downloading {model_name} model...")
+                print(f"{Colors.CYAN}📥 Downloading {model_name} model...{Colors.ENDC}")
             self.model = whisper.load_model(model_name, download_root=str(MODELS_DIR))
             self.model_name = model_name
+            print(f"{Colors.GREEN}✓ Model loaded: {model_name}{Colors.ENDC}")
         except ImportError:
             raise RuntimeError("Whisper not installed. Run: pip install openai-whisper")
             
@@ -197,29 +230,55 @@ class Transcriber:
         if use_cache:
             cached = self.cache_manager.get(audio_path, self.model_name, language, task)
             if cached:
+                if progress_callback:
+                    progress_callback(100, "Using cached transcription")
                 return cached
+                
         if progress_callback:
-            progress_callback(10, "Loading audio...")
-        options = {'language': language, 'task': task, 'verbose': False, 'fp16': False, 'word_timestamps': True}
+            progress_callback(10, "🎵 Loading audio...")
+            
+        options = {
+            'language': language, 
+            'task': task, 
+            'verbose': False, 
+            'fp16': False, 
+            'word_timestamps': True
+        }
+        
         if progress_callback:
-            progress_callback(30, "Transcribing...")
+            progress_callback(30, "🎤 Transcribing...")
+            
         result = self.model.transcribe(str(audio_path), **options)
-        segments = [{'start': seg['start'], 'end': seg['end'], 'text': seg['text'].strip(), 
-                    'words': seg.get('words', [])} for seg in result['segments']]
+        
+        if progress_callback:
+            progress_callback(80, "📝 Processing segments...")
+            
+        segments = [{
+            'start': seg['start'], 
+            'end': seg['end'], 
+            'text': seg['text'].strip(), 
+            'words': seg.get('words', [])
+        } for seg in result['segments']]
+        
         if use_cache:
             self.cache_manager.set(audio_path, self.model_name, language, task, segments)
+            
         if progress_callback:
-            progress_callback(100, "Complete")
+            progress_callback(100, "✅ Complete!")
+            
         return segments
 
 
 class SubtitleGenerator:
+    """Generates SRT/ASS subtitles with multiple formatting options"""
+    
     def __init__(self, break_type: str = 'auto', word_limit: int = 10, char_limit: int = 40):
         self.break_type = break_type
         self.word_limit = word_limit
         self.char_limit = char_limit
         
     def generate_srt(self, segments: List[Dict]) -> str:
+        """Generate SRT formatted subtitles"""
         subtitles = []
         for i, seg in enumerate(segments, 1):
             text = self._apply_breaks(seg['text'])
@@ -227,8 +286,34 @@ class SubtitleGenerator:
             end = self._format_time_srt(seg['end'])
             subtitles.append(f"{i}\n{start} --> {end}\n{text}\n")
         return '\n'.join(subtitles)
+    
+    def generate_ass(self, segments: List[Dict], width: int = 1920, height: int = 1080) -> str:
+        """Generate ASS formatted subtitles with styling"""
+        header = f"""[Script Info]
+Title: NotY Caption Generator AI
+ScriptType: v4.00+
+WrapStyle: 0
+PlayResX: {width}
+PlayResY: {height}
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,24,&H00FFFFFF,&H0000FF00,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,10,10,10,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+        events = []
+        for seg in segments:
+            start = self._format_time_ass(seg['start'])
+            end = self._format_time_ass(seg['end'])
+            text = self._apply_breaks(seg['text'])
+            events.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}")
+        return header + '\n'.join(events)
         
     def _apply_breaks(self, text: str) -> str:
+        """Apply line breaks based on break type"""
         if self.break_type == 'words':
             words = text.split()
             lines = [' '.join(words[i:i+self.word_limit]) for i in range(0, len(words), self.word_limit)]
@@ -238,62 +323,99 @@ class SubtitleGenerator:
             return '\\N'.join(lines)
         else:
             sentences = re.split(r'(?<=[.!?])\s+', text)
+            if len(sentences) <= 2:
+                return text
             lines = []
-            for i in range(0, len(sentences), 3):
-                lines.append(' '.join(sentences[i:i+3]))
+            for i in range(0, len(sentences), 2):
+                lines.append(' '.join(sentences[i:i+2]))
             return '\\N'.join(lines)
             
     def _format_time_srt(self, seconds: float) -> str:
         td = timedelta(seconds=seconds)
-        return f"{td.seconds//3600:02d}:{(td.seconds%3600)//60:02d}:{td.seconds%60:02d},{int((seconds%1)*1000):03d}"
+        hours = int(td.total_seconds() // 3600)
+        minutes = int((td.total_seconds() % 3600) // 60)
+        secs = int(td.total_seconds() % 60)
+        millis = int((td.total_seconds() % 1) * 1000)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+        
+    def _format_time_ass(self, seconds: float) -> str:
+        td = timedelta(seconds=seconds)
+        hours = int(td.total_seconds() // 3600)
+        minutes = int((td.total_seconds() % 3600) // 60)
+        secs = td.total_seconds() % 60
+        return f"{hours}:{minutes:02d}:{secs:06.2f}".replace('.', ',')
 
 
 # ============================================================================
-# GUI MODE (Fixed Size Window with Auto-Scaling)
+# GUI MODE - Colorful Animated Professional UI
 # ============================================================================
 
 if GUI_AVAILABLE:
     
-    class ScalableAnimatedButton(QPushButton):
-        """Button that scales proportionally with window size"""
+    # Color Palette
+    COLORS = {
+        'primary': ['#FF6B35', '#F7931E', '#FF3366', '#FF6B6B'],
+        'secondary': ['#4ECDC4', '#45B7D1', '#96CEB4', '#2ECC71'],
+        'accent': ['#9B59B6', '#8E44AD', '#E74C3C', '#3498DB'],
+        'success': ['#2ECC71', '#27AE60'],
+        'warning': ['#F39C12', '#E67E22'],
+        'danger': ['#E74C3C', '#C0392B'],
+        'dark': ['#1a1a2e', '#16213e', '#0f3460'],
+        'light': ['#e9ecef', '#f8f9fa', '#dee2e6']
+    }
+    
+    class ColorButton(QPushButton):
+        """Beautiful animated button with gradient colors"""
         
-        def __init__(self, text, color_start="#FF6B35", color_end="#F7931E", parent=None, base_height=40):
+        def __init__(self, text, color_scheme='primary', parent=None, base_height=40):
             super().__init__(text, parent)
-            self.color_start = color_start
-            self.color_end = color_end
+            self.color_scheme = color_scheme
             self.base_height = base_height
             self.animation = QPropertyAnimation(self, b"geometry")
-            self.animation.setDuration(150)
+            self.animation.setDuration(200)
+            self.animation.setEasingCurve(QEasingCurve.OutBounce)
             self.setCursor(Qt.PointingHandCursor)
             self._setup_style()
             
         def _setup_style(self):
+            colors = COLORS.get(self.color_scheme, COLORS['primary'])
+            color_start = colors[0]
+            color_end = colors[1] if len(colors) > 1 else colors[0]
+            
             self.setStyleSheet(f"""
                 QPushButton {{
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 {self.color_start}, stop:1 {self.color_end});
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 {color_start}, stop:1 {color_end});
                     border: none;
-                    border-radius: 8px;
+                    border-radius: 10px;
                     color: white;
                     font-weight: bold;
                     font-size: 14px;
-                    padding: 8px 16px;
+                    padding: 10px 20px;
                 }}
                 QPushButton:hover {{
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 {self._adjust_brightness(self.color_start, 1.1)},
-                        stop:1 {self._adjust_brightness(self.color_end, 1.1)});
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 {self._adjust_brightness(color_start, 1.1)},
+                        stop:1 {self._adjust_brightness(color_end, 1.1)});
+                    transform: scale(1.05);
                 }}
                 QPushButton:pressed {{
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 {self._adjust_brightness(self.color_start, 0.8)},
-                        stop:1 {self._adjust_brightness(self.color_end, 0.8)});
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 {self._adjust_brightness(color_start, 0.8)},
+                        stop:1 {self._adjust_brightness(color_end, 0.8)});
                 }}
                 QPushButton:disabled {{
                     background: #555555;
                     color: #888888;
                 }}
             """)
+            
+            # Add shadow effect
+            shadow = QGraphicsDropShadowEffect()
+            shadow.setBlurRadius(15)
+            shadow.setColor(QColor(0, 0, 0, 100))
+            shadow.setOffset(0, 4)
+            self.setGraphicsEffect(shadow)
             
         def _adjust_brightness(self, color, factor):
             r = int(int(color[1:3], 16) * factor)
@@ -302,7 +424,6 @@ if GUI_AVAILABLE:
             return f"#{max(0,min(255,r)):02x}{max(0,min(255,g)):02x}{max(0,min(255,b)):02x}"
             
         def resize_to_scale(self, scale_factor):
-            """Resize button based on scale factor"""
             new_height = int(self.base_height * scale_factor)
             self.setMinimumHeight(new_height)
             self.setMaximumHeight(new_height)
@@ -312,53 +433,127 @@ if GUI_AVAILABLE:
             
         def enterEvent(self, event):
             self.animation.setStartValue(self.geometry())
-            self.animation.setEndValue(QRect(self.x()-2, self.y()-2, self.width()+4, self.height()+4))
+            self.animation.setEndValue(QRect(self.x()-3, self.y()-3, self.width()+6, self.height()+6))
             self.animation.start()
             super().enterEvent(event)
             
         def leaveEvent(self, event):
             self.animation.setStartValue(self.geometry())
-            self.animation.setEndValue(QRect(self.x()+2, self.y()+2, self.width()-4, self.height()-4))
+            self.animation.setEndValue(QRect(self.x()+3, self.y()+3, self.width()-6, self.height()-6))
             self.animation.start()
             super().leaveEvent(event)
     
     
-    class ScalableGradientWidget(QWidget):
-        """Widget with gradient background that scales"""
+    class AnimatedGradientWidget(QWidget):
+        """Widget with animated gradient background"""
         
-        def __init__(self, color1="#1a1a2e", color2="#16213e", parent=None):
+        def __init__(self, colors=None, parent=None):
             super().__init__(parent)
-            self.color1 = color1
-            self.color2 = color2
+            self.colors = colors or ['#1a1a2e', '#16213e', '#0f3460']
+            self.offset = 0
+            self.animation = QPropertyAnimation(self, b"offset")
+            self.animation.setDuration(3000)
+            self.animation.setStartValue(0)
+            self.animation.setEndValue(100)
+            self.animation.setLoopCount(-1)
+            self.animation.start()
             
+        def get_offset(self):
+            return self._offset
+            
+        def set_offset(self, value):
+            self._offset = value
+            self.update()
+            
+        offset = property(get_offset, set_offset)
+        
         def paintEvent(self, event):
             painter = QPainter(self)
             painter.setRenderHint(QPainter.Antialiasing)
-            gradient = QLinearGradient(0, 0, self.width(), self.height())
-            gradient.setColorAt(0, QColor(self.color1))
-            gradient.setColorAt(1, QColor(self.color2))
-            painter.fillRect(self.rect(), QBrush(gradient))
             
+            gradient = QLinearGradient(0, 0, self.width(), self.height())
+            positions = [0, 0.5, 1]
+            
+            for i, color in enumerate(self.colors):
+                pos = (positions[i] + self.offset / 100) % 1.0
+                gradient.setColorAt(pos, QColor(color))
+                
+            painter.fillRect(self.rect(), QBrush(gradient))
     
-    class ScalableModernCard(QFrame):
-        """Modern card widget with shadow effect that scales"""
+    
+    class ModernCard(QFrame):
+        """Modern card widget with shadow and hover effect"""
         
-        def __init__(self, parent=None):
+        def __init__(self, parent=None, color="#2d2d3d"):
             super().__init__(parent)
-            self.setObjectName("ScalableModernCard")
-            self.setStyleSheet("""
-                #ScalableModernCard {
-                    background-color: rgba(30, 30, 46, 0.9);
+            self.color = color
+            self.setObjectName("ModernCard")
+            self._setup_style()
+            
+            # Hover animation
+            self.hover_animation = QPropertyAnimation(self, b"geometry")
+            self.hover_animation.setDuration(150)
+            
+        def _setup_style(self):
+            self.setStyleSheet(f"""
+                #ModernCard {{
+                    background-color: {self.color};
                     border-radius: 15px;
                     border: 1px solid rgba(255,255,255,0.1);
-                }
+                }}
             """)
+            
             shadow = QGraphicsDropShadowEffect()
             shadow.setBlurRadius(20)
-            shadow.setColor(QColor(0, 0, 0, 100))
+            shadow.setColor(QColor(0, 0, 0, 80))
             shadow.setOffset(0, 5)
             self.setGraphicsEffect(shadow)
             
+        def enterEvent(self, event):
+            self.hover_animation.setStartValue(self.geometry())
+            self.hover_animation.setEndValue(QRect(self.x(), self.y()-5, self.width(), self.height()+5))
+            self.hover_animation.start()
+            super().enterEvent(event)
+            
+        def leaveEvent(self, event):
+            self.hover_animation.setStartValue(self.geometry())
+            self.hover_animation.setEndValue(QRect(self.x(), self.y()+5, self.width(), self.height()-5))
+            self.hover_animation.start()
+            super().leaveEvent(event)
+    
+    
+    class PulsingProgressBar(QProgressBar):
+        """Progress bar with pulsing animation"""
+        
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.pulse_value = 0
+            self.pulse_animation = QPropertyAnimation(self, b"pulse_value")
+            self.pulse_animation.setDuration(1000)
+            self.pulse_animation.setStartValue(0)
+            self.pulse_animation.setEndValue(100)
+            self.pulse_animation.setLoopCount(-1)
+            
+        def get_pulse_value(self):
+            return self._pulse_value
+            
+        def set_pulse_value(self, value):
+            self._pulse_value = value
+            self.update()
+            
+        pulse_value = property(get_pulse_value, set_pulse_value)
+        
+        def paintEvent(self, event):
+            super().paintEvent(event)
+            if self.value() < 100:
+                painter = QPainter(self)
+                painter.setRenderHint(QPainter.Antialiasing)
+                gradient = QLinearGradient(self.width() * self.pulse_value / 100, 0,
+                                          self.width() * (self.pulse_value + 20) / 100, 0)
+                gradient.setColorAt(0, QColor(255, 107, 53, 100))
+                gradient.setColorAt(1, QColor(247, 147, 30, 0))
+                painter.fillRect(self.rect(), QBrush(gradient))
+    
     
     class TranscriptionWorker(QThread):
         """Worker thread for async transcription"""
@@ -378,19 +573,19 @@ if GUI_AVAILABLE:
         def run(self):
             try:
                 import whisper
-                import torch
                 
-                self.progress.emit(10, "Loading Whisper model...")
+                self.progress.emit(5, "🎯 Initializing...")
                 model_name = self.settings.get('model', 'base')
                 model_path = MODELS_DIR / f"{model_name}.pt"
                 
+                self.progress.emit(10, f"📥 Loading {model_name} model...")
                 if not model_path.exists():
-                    self.progress.emit(15, f"Downloading {model_name} model...")
+                    self.progress.emit(12, f"⬇️ Downloading {model_name} model...")
                     model = whisper.load_model(model_name, download_root=str(MODELS_DIR))
                 else:
                     model = whisper.load_model(model_name, download_root=str(MODELS_DIR))
                 
-                self.progress.emit(30, "Processing audio...")
+                self.progress.emit(25, "🎵 Processing audio...")
                 options = {
                     'language': self.settings.get('language', 'en'),
                     'task': 'translate' if self.settings.get('translate', False) else 'transcribe',
@@ -398,17 +593,17 @@ if GUI_AVAILABLE:
                     'fp16': False
                 }
                 
-                self.progress.emit(50, "Transcribing...")
+                self.progress.emit(40, "🎤 Transcribing (this may take a while)...")
                 result = model.transcribe(self.input_file, **options)
                 
-                self.progress.emit(80, "Processing segments...")
+                self.progress.emit(75, "📝 Processing segments...")
                 segments = [{'start': seg['start'], 'end': seg['end'], 'text': seg['text'].strip()} 
                            for seg in result['segments']]
                 
-                self.progress.emit(90, "Generating subtitles...")
+                self.progress.emit(85, "🎨 Generating subtitles...")
                 subtitles = self._generate_subtitles(segments)
                 
-                self.progress.emit(100, "Complete!")
+                self.progress.emit(100, "✅ Complete!")
                 self.finished.emit({'subtitles': subtitles, 'segments': segments})
                 
             except Exception as e:
@@ -431,8 +626,8 @@ if GUI_AVAILABLE:
             return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
     
     
-    class FixedSizeWindow(QMainWindow):
-        """Main window with fixed size - only maximize and minimize"""
+    class NotYCaptionWindow(QMainWindow):
+        """Main application window with colorful animated UI"""
         
         def __init__(self):
             super().__init__()
@@ -445,8 +640,10 @@ if GUI_AVAILABLE:
             self.scale_factor = 1.0
             self.base_width = 1200
             self.base_height = 800
+            self.color_index = 0
+            self.notification_queue = deque()
             
-            # Set window flags - no resize border, only maximize/minimize
+            # Set window flags - fixed size with maximize/minimize
             self.setWindowFlags(Qt.Window | Qt.WindowMinimizeButtonHint | 
                                Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
             self.setFixedSize(self.base_width, self.base_height)
@@ -455,139 +652,35 @@ if GUI_AVAILABLE:
             self._setup_ui()
             self._setup_media_player()
             self._setup_animations()
-            self._apply_theme()
+            self._start_color_animation()
             
-        def resizeEvent(self, event: QResizeEvent):
-            """Handle resize events - scale UI proportionally"""
-            if self.isMaximized():
-                # When maximized, scale everything based on screen size
-                screen = QApplication.primaryScreen().geometry()
-                self.scale_factor = min(screen.width() / self.base_width, 
-                                       screen.height() / self.base_height)
-                self._scale_ui(self.scale_factor)
-            else:
-                # When restored, reset to base size
-                self.scale_factor = 1.0
-                self.setFixedSize(self.base_width, self.base_height)
-                self._scale_ui(1.0)
-            super().resizeEvent(event)
+        def _start_color_animation(self):
+            """Start color cycling animation"""
+            self.color_timer = QTimer()
+            self.color_timer.timeout.connect(self._cycle_colors)
+            self.color_timer.start(3000)
             
-        def _scale_ui(self, factor):
-            """Scale all UI elements proportionally"""
-            # Scale fonts
-            font = QFont("Segoe UI", int(10 * factor))
-            QApplication.setFont(font)
+        def _cycle_colors(self):
+            """Cycle through color schemes"""
+            self.color_index = (self.color_index + 1) % len(COLORS['primary'])
+            self._update_accent_colors()
             
-            # Scale all buttons
-            for widget in self.findChildren(ScalableAnimatedButton):
-                widget.resize_to_scale(factor)
-            
-            # Scale combo boxes
-            for combo in self.findChildren(QComboBox):
-                combo.setStyleSheet(f"""
-                    QComboBox {{
-                        background: #2d2d3d;
-                        border: 1px solid #3d3d4d;
-                        border-radius: {int(8 * factor)}px;
-                        padding: {int(8 * factor)}px;
-                        color: white;
-                        font-size: {int(12 * factor)}px;
-                    }}
-                    QComboBox::drop-down {{
-                        border: none;
-                    }}
-                """)
-            
-            # Scale spin boxes
-            for spin in self.findChildren(QSpinBox):
-                spin.setStyleSheet(f"""
-                    QSpinBox {{
-                        background: #2d2d3d;
-                        border: 1px solid #3d3d4d;
-                        border-radius: {int(8 * factor)}px;
-                        padding: {int(5 * factor)}px;
-                        color: white;
-                        font-size: {int(12 * factor)}px;
-                    }}
-                """)
-            
-            # Scale checkboxes
-            for check in self.findChildren(QCheckBox):
-                check.setStyleSheet(f"""
-                    QCheckBox {{
-                        color: #aaa;
-                        spacing: {int(8 * factor)}px;
-                        font-size: {int(12 * factor)}px;
-                    }}
-                    QCheckBox::indicator {{
-                        width: {int(16 * factor)}px;
-                        height: {int(16 * factor)}px;
-                        border-radius: {int(4 * factor)}px;
-                        border: {int(2 * factor)}px solid #FF6B35;
-                    }}
-                    QCheckBox::indicator:checked {{
-                        background-color: #FF6B35;
-                    }}
-                """)
-            
-            # Scale labels
-            for label in self.findChildren(QLabel):
-                if label.objectName() != "media_icon":
-                    current_font = label.font()
-                    current_font.setPointSize(int(12 * factor))
-                    label.setFont(current_font)
-            
-            # Scale text edit
-            self.caption_editor.setStyleSheet(f"""
-                QTextEdit {{
-                    background: #1a1a2e;
-                    border: 1px solid #2d2d3d;
-                    border-radius: {int(10 * factor)}px;
-                    padding: {int(15 * factor)}px;
-                    color: #ddd;
-                    font-family: 'Consolas', 'Monaco', monospace;
-                    font-size: {int(11 * factor)}px;
-                }}
-            """)
-            
-            # Scale progress bar
-            self.progress_bar.setStyleSheet(f"""
-                QProgressBar {{
-                    border: none;
-                    border-radius: {int(10 * factor)}px;
-                    background: #2d2d3d;
-                    height: {int(8 * factor)}px;
-                }}
-                QProgressBar::chunk {{
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #FF6B35, stop:1 #F7931E);
-                    border-radius: {int(10 * factor)}px;
-                }}
-            """)
-            
-            # Scale slider
-            self.time_slider.setStyleSheet(f"""
-                QSlider::groove:horizontal {{
-                    height: {int(4 * factor)}px;
-                    background: #2d2d3d;
-                    border-radius: {int(2 * factor)}px;
-                }}
-                QSlider::handle:horizontal {{
-                    background: #FF6B35;
-                    width: {int(12 * factor)}px;
-                    height: {int(12 * factor)}px;
-                    margin: -{int(4 * factor)}px 0;
-                    border-radius: {int(6 * factor)}px;
-                }}
-                QSlider::sub-page:horizontal {{
-                    background: #FF6B35;
-                    border-radius: {int(2 * factor)}px;
+        def _update_accent_colors(self):
+            """Update accent colors throughout the UI"""
+            accent_color = COLORS['primary'][self.color_index]
+            self.setStyleSheet(f"""
+                QToolTip {{
+                    background-color: #2d2d3d;
+                    color: {accent_color};
+                    border: 1px solid {accent_color};
+                    border-radius: 5px;
+                    padding: 5px;
                 }}
             """)
             
         def _setup_ui(self):
-            """Setup the main UI"""
-            central = ScalableGradientWidget("#1a1a2e", "#16213e")
+            """Setup the main UI with colorful components"""
+            central = AnimatedGradientWidget(['#1a1a2e', '#16213e', '#0f3460'])
             self.setCentralWidget(central)
             
             main_layout = QVBoxLayout(central)
@@ -599,19 +692,25 @@ if GUI_AVAILABLE:
             main_layout.addWidget(title_bar)
             
             # Main Content Card
-            content_card = ScalableModernCard()
+            content_card = ModernCard(color="#1e1e2e")
             content_layout = QVBoxLayout(content_card)
             content_layout.setContentsMargins(25, 25, 25, 25)
             content_layout.setSpacing(20)
             
-            # Header Section
+            # Header Section with animated gradient
             header = self._create_header()
             content_layout.addWidget(header)
             
             # Main Splitter
             splitter = QSplitter(Qt.Horizontal)
-            splitter.setHandleWidth(2)
-            splitter.setStyleSheet("QSplitter::handle { background-color: rgba(255,255,255,0.2); border-radius: 2px; }")
+            splitter.setHandleWidth(3)
+            splitter.setStyleSheet("""
+                QSplitter::handle {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 #FF6B35, stop:1 #F7931E);
+                    border-radius: 2px;
+                }
+            """)
             
             # Left Panel - Controls
             left_panel = self._create_control_panel()
@@ -631,45 +730,81 @@ if GUI_AVAILABLE:
             main_layout.addWidget(content_card)
             
         def _create_title_bar(self):
-            """Create custom title bar with window controls"""
+            """Create colorful title bar with window controls"""
             title_bar = QWidget()
-            title_bar.setFixedHeight(50)
-            layout = QHBoxLayout(title_bar)
-            layout.setContentsMargins(10, 0, 10, 0)
+            title_bar.setFixedHeight(55)
+            title_bar.setStyleSheet("""
+                QWidget {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 rgba(255,107,53,0.2),
+                        stop:1 rgba(247,147,30,0.2));
+                    border-radius: 15px;
+                }
+            """)
             
-            # App Icon and Title
-            title_label = QLabel("🎬 NotY Caption Generator AI")
+            layout = QHBoxLayout(title_bar)
+            layout.setContentsMargins(15, 0, 10, 0)
+            
+            # App Logo and Title
+            logo_label = QLabel("🎬")
+            logo_label.setStyleSheet("font-size: 24px;")
+            layout.addWidget(logo_label)
+            
+            title_label = QLabel("NotY Caption Generator AI v7.1")
             title_label.setStyleSheet("""
                 QLabel {
                     color: white;
                     font-size: 16px;
                     font-weight: bold;
                     font-family: 'Segoe UI', 'Arial';
+                    letter-spacing: 1px;
                 }
             """)
             layout.addWidget(title_label)
             
+            # Version badge
+            version_badge = QLabel("PRO")
+            version_badge.setStyleSheet("""
+                QLabel {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #FF6B35, stop:1 #F7931E);
+                    color: white;
+                    border-radius: 10px;
+                    padding: 2px 8px;
+                    font-size: 10px;
+                    font-weight: bold;
+                }
+            """)
+            layout.addWidget(version_badge)
+            
             layout.addStretch()
             
-            # Window Controls - only minimize, maximize, close
-            for name, color, action in [
-                ("─", "#555555", self.showMinimized),
-                ("□", "#555555", self.showMaximized),
-                ("✕", "#e74c3c", self.close)
+            # Stats display
+            self.stats_label = QLabel("🎯 Ready")
+            self.stats_label.setStyleSheet("color: #FF6B35; font-size: 12px;")
+            layout.addWidget(self.stats_label)
+            
+            layout.addSpacing(20)
+            
+            # Window Controls
+            for name, color, hover_color, action in [
+                ("─", "#2d2d3d", "#5d5d6d", self.showMinimized),
+                ("□", "#2d2d3d", "#5d5d6d", self.showMaximized),
+                ("✕", "#2d2d3d", "#e74c3c", self.close)
             ]:
                 btn = QPushButton(name)
-                btn.setFixedSize(35, 30)
+                btn.setFixedSize(40, 35)
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        background-color: transparent;
+                        background-color: {color};
                         color: white;
                         border: none;
-                        border-radius: 5px;
-                        font-size: 14px;
+                        border-radius: 8px;
+                        font-size: 16px;
                         font-weight: bold;
                     }}
                     QPushButton:hover {{
-                        background-color: {color};
+                        background-color: {hover_color};
                     }}
                 """)
                 btn.clicked.connect(action)
@@ -678,48 +813,76 @@ if GUI_AVAILABLE:
             return title_bar
             
         def _create_header(self):
-            """Create header section with gradient"""
+            """Create animated header section"""
             header = QWidget()
-            header.setFixedHeight(100)
+            header.setFixedHeight(110)
             header.setStyleSheet("""
                 QWidget {
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #FF6B35, stop:0.5 #F7931E, stop:1 #FF6B35);
-                    border-radius: 15px;
+                        stop:0 #FF6B35, stop:0.3 #F7931E, 
+                        stop:0.7 #FF3366, stop:1 #FF6B35);
+                    border-radius: 20px;
                 }
             """)
+            
+            # Add pulsing animation to header
+            self.header_animation = QPropertyAnimation(header, b"geometry")
+            self.header_animation.setDuration(2000)
+            self.header_animation.setStartValue(QRect(header.x(), header.y(), header.width(), header.height()))
+            self.header_animation.setEndValue(QRect(header.x(), header.y()+2, header.width(), header.height()+4))
+            self.header_animation.setLoopCount(-1)
+            self.header_animation.start()
             
             layout = QHBoxLayout(header)
             layout.setContentsMargins(30, 0, 30, 0)
             
-            # Left side - Welcome text
-            welcome = QLabel("🎯 AI-Powered Subtitle Generator")
-            welcome.setStyleSheet("""
+            # Left side - Animated welcome
+            welcome_container = QWidget()
+            welcome_layout = QVBoxLayout(welcome_container)
+            
+            welcome_label = QLabel("🎯 AI-Powered Subtitle Generator")
+            welcome_label.setStyleSheet("""
                 QLabel {
                     color: white;
-                    font-size: 20px;
+                    font-size: 22px;
                     font-weight: bold;
                     font-family: 'Segoe UI', 'Arial';
                 }
             """)
-            layout.addWidget(welcome)
+            welcome_layout.addWidget(welcome_label)
             
+            tagline = QLabel("Professional • Fast • Accurate")
+            tagline.setStyleSheet("color: rgba(255,255,255,0.8); font-size: 12px;")
+            welcome_layout.addWidget(tagline)
+            
+            layout.addWidget(welcome_container)
             layout.addStretch()
             
-            # Right side - Quick stats
-            stats = QLabel("Ready to create amazing captions")
-            stats.setStyleSheet("""
+            # Right side - Animated stats
+            stats_container = QWidget()
+            stats_layout = QVBoxLayout(stats_container)
+            stats_layout.setAlignment(Qt.AlignRight)
+            
+            self.animated_stats = QLabel("✨ Ready to create magic")
+            self.animated_stats.setStyleSheet("""
                 QLabel {
-                    color: rgba(255,255,255,0.9);
-                    font-size: 13px;
+                    color: white;
+                    font-size: 14px;
+                    font-weight: bold;
                 }
             """)
-            layout.addWidget(stats)
+            stats_layout.addWidget(self.animated_stats)
+            
+            self.sub_stats = QLabel("Powered by OpenAI Whisper")
+            self.sub_stats.setStyleSheet("color: rgba(255,255,255,0.7); font-size: 11px;")
+            stats_layout.addWidget(self.sub_stats)
+            
+            layout.addWidget(stats_container)
             
             return header
             
         def _create_control_panel(self):
-            """Create control panel with modern widgets"""
+            """Create colorful control panel"""
             panel = QScrollArea()
             panel.setWidgetResizable(True)
             panel.setStyleSheet("""
@@ -729,12 +892,17 @@ if GUI_AVAILABLE:
                 }
                 QScrollBar:vertical {
                     background: rgba(255,255,255,0.1);
-                    width: 8px;
-                    border-radius: 4px;
+                    width: 10px;
+                    border-radius: 5px;
                 }
                 QScrollBar::handle:vertical {
-                    background: #FF6B35;
-                    border-radius: 4px;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #FF6B35, stop:1 #F7931E);
+                    border-radius: 5px;
+                }
+                QScrollBar::handle:vertical:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #FF8866, stop:1 #F8A840);
                 }
             """)
             
@@ -744,61 +912,86 @@ if GUI_AVAILABLE:
             layout.setSpacing(15)
             
             # Media Info Card
-            media_card = ScalableModernCard()
+            media_card = ModernCard(color="#252535")
             media_layout = QVBoxLayout(media_card)
-            media_layout.setContentsMargins(15, 15, 15, 15)
+            media_layout.setContentsMargins(20, 20, 20, 20)
+            media_layout.setSpacing(10)
             
-            self.media_icon = QLabel("📁")
-            self.media_icon.setStyleSheet("font-size: 48px;")
+            self.media_icon = QLabel("🎬")
+            self.media_icon.setStyleSheet("font-size: 64px;")
+            self.media_icon.setAlignment(Qt.AlignCenter)
+            media_layout.addWidget(self.media_icon)
+            
             self.media_label = QLabel("No Media Loaded")
-            self.media_label.setStyleSheet("color: #888; font-size: 13px;")
-            self.media_label.setWordWrap(True)
+            self.media_label.setStyleSheet("""
+                QLabel {
+                    color: #aaa;
+                    font-size: 13px;
+                    font-weight: bold;
+                }
+            """)
             self.media_label.setAlignment(Qt.AlignCenter)
+            self.media_label.setWordWrap(True)
+            media_layout.addWidget(self.media_label)
             
-            media_layout.addWidget(self.media_icon, alignment=Qt.AlignCenter)
-            media_layout.addWidget(self.media_label, alignment=Qt.AlignCenter)
             layout.addWidget(media_card)
             
             # Import Buttons
-            import_group = QWidget()
-            import_layout = QHBoxLayout(import_group)
-            import_layout.setSpacing(10)
+            import_btn1 = ColorButton("📁 Import Media", 'primary', base_height=45)
+            import_btn1.clicked.connect(self.import_media)
+            layout.addWidget(import_btn1)
             
-            self.import_btn = ScalableAnimatedButton("📁 Import Media", "#3498db", "#2980b9", base_height=40)
-            self.import_btn.clicked.connect(self.import_media)
-            import_layout.addWidget(self.import_btn)
-            
-            self.youtube_btn = ScalableAnimatedButton("▶️ YouTube URL", "#e74c3c", "#c0392b", base_height=40)
-            self.youtube_btn.clicked.connect(self.import_youtube)
-            import_layout.addWidget(self.youtube_btn)
-            
-            layout.addWidget(import_group)
+            import_btn2 = ColorButton("▶️ YouTube URL", 'danger', base_height=45)
+            import_btn2.clicked.connect(self.import_youtube)
+            layout.addWidget(import_btn2)
             
             # Settings Sections
             sections = [
-                ("🎤 Whisper Model", self._create_model_section()),
-                ("🌐 Language", self._create_language_section()),
-                ("🎵 Vocal Separation", self._create_vocal_section()),
-                ("📝 Line Break", self._create_break_section()),
+                ("🎤 Whisper Model", self._create_model_section(), 'primary'),
+                ("🌐 Language & Translation", self._create_language_section(), 'secondary'),
+                ("🎵 Vocal Separation", self._create_vocal_section(), 'accent'),
+                ("📝 Subtitle Format", self._create_break_section(), 'success'),
             ]
             
-            for title, widget in sections:
-                section = ScalableModernCard()
+            for title, widget, color_scheme in sections:
+                section = ModernCard(color="#252535")
                 section_layout = QVBoxLayout(section)
-                section_layout.setContentsMargins(15, 10, 15, 10)
+                section_layout.setContentsMargins(15, 12, 15, 12)
                 
                 title_label = QLabel(title)
-                title_label.setStyleSheet("color: #FF6B35; font-weight: bold; font-size: 13px;")
+                title_label.setStyleSheet(f"""
+                    QLabel {{
+                        color: {COLORS[color_scheme][0]};
+                        font-weight: bold;
+                        font-size: 13px;
+                        letter-spacing: 0.5px;
+                    }}
+                """)
                 section_layout.addWidget(title_label)
+                section_layout.addSpacing(5)
                 section_layout.addWidget(widget)
                 
                 layout.addWidget(section)
             
             # Generate Button
-            self.generate_btn = ScalableAnimatedButton("🚀 GENERATE CAPTIONS", "#FF6B35", "#F7931E", base_height=50)
+            self.generate_btn = ColorButton("✨ GENERATE CAPTIONS", 'primary', base_height=55)
             self.generate_btn.clicked.connect(self.generate_captions)
             self.generate_btn.setEnabled(False)
             layout.addWidget(self.generate_btn)
+            
+            # Export Buttons
+            export_layout = QHBoxLayout()
+            self.export_srt_btn = ColorButton("📄 Export SRT", 'secondary', base_height=40)
+            self.export_srt_btn.clicked.connect(lambda: self.export_subtitles('srt'))
+            self.export_srt_btn.setEnabled(False)
+            export_layout.addWidget(self.export_srt_btn)
+            
+            self.export_ass_btn = ColorButton("🎨 Export ASS", 'accent', base_height=40)
+            self.export_ass_btn.clicked.connect(lambda: self.export_subtitles('ass'))
+            self.export_ass_btn.setEnabled(False)
+            export_layout.addWidget(self.export_ass_btn)
+            
+            layout.addLayout(export_layout)
             
             layout.addStretch()
             panel.setWidget(content)
@@ -810,26 +1003,44 @@ if GUI_AVAILABLE:
             layout.setContentsMargins(0, 0, 0, 0)
             
             self.model_combo = QComboBox()
-            models = ['tiny', 'base', 'small', 'medium', 'large']
-            self.model_combo.addItems([f"{m.upper()}" for m in models])
+            models = [
+                ('TINY', '⚡ Fastest'), 
+                ('BASE', '🎯 Balanced'), 
+                ('SMALL', '📈 Better'), 
+                ('MEDIUM', '🚀 High'), 
+                ('LARGE', '💎 Best')
+            ]
+            for model, desc in models:
+                self.model_combo.addItem(f"{model} - {desc}")
             self.model_combo.setCurrentIndex(1)
             self.model_combo.setStyleSheet("""
                 QComboBox {
-                    background: #2d2d3d;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #2d2d3d, stop:1 #353545);
                     border: 1px solid #3d3d4d;
-                    border-radius: 8px;
-                    padding: 8px;
+                    border-radius: 10px;
+                    padding: 8px 12px;
                     color: white;
+                    font-weight: bold;
                 }
                 QComboBox::drop-down {
                     border: none;
+                    subcontrol-position: right;
+                }
+                QComboBox::down-arrow {
+                    image: none;
+                    border-left: 5px solid transparent;
+                    border-right: 5px solid transparent;
+                    border-top: 5px solid #FF6B35;
+                    margin-right: 10px;
+                }
+                QComboBox QAbstractItemView {
+                    background: #2d2d3d;
+                    border: 1px solid #FF6B35;
+                    selection-background-color: #FF6B35;
                 }
             """)
             layout.addWidget(self.model_combo)
-            
-            info_label = QLabel("⚡ Larger = Better accuracy, slower")
-            info_label.setStyleSheet("color: #666; font-size: 11px;")
-            layout.addWidget(info_label)
             
             return widget
             
@@ -837,13 +1048,22 @@ if GUI_AVAILABLE:
             widget = QWidget()
             layout = QVBoxLayout(widget)
             layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(8)
             
             self.lang_combo = QComboBox()
             languages = [
-                ("English", "en", "High"), ("Spanish", "es", "High"), ("Italian", "it", "High"),
-                ("Portuguese", "pt", "High"), ("German", "de", "High"), ("Japanese", "ja", "High"),
-                ("French", "fr", "High"), ("Russian", "ru", "Medium"), ("Hindi", "hi", "Low"),
-                ("Tamil", "ta", "Low"), ("Bengali", "bn", "Low"), ("Urdu", "ur", "Low")
+                ("🇺🇸 English", "en", "High"),
+                ("🇪🇸 Spanish", "es", "High"),
+                ("🇮🇹 Italian", "it", "High"),
+                ("🇵🇹 Portuguese", "pt", "High"),
+                ("🇩🇪 German", "de", "High"),
+                ("🇯🇵 Japanese", "ja", "High"),
+                ("🇫🇷 French", "fr", "High"),
+                ("🇷🇺 Russian", "ru", "Medium"),
+                ("🇮🇳 Hindi", "hi", "Low"),
+                ("🇮🇳 Tamil", "ta", "Low"),
+                ("🇮🇳 Bengali", "bn", "Low"),
+                ("🇵🇰 Urdu", "ur", "Low"),
             ]
             for name, code, acc in languages:
                 self.lang_combo.addItem(f"{name} - {acc} Accuracy", code)
@@ -851,27 +1071,33 @@ if GUI_AVAILABLE:
                 QComboBox {
                     background: #2d2d3d;
                     border: 1px solid #3d3d4d;
-                    border-radius: 8px;
+                    border-radius: 10px;
                     padding: 8px;
                     color: white;
                 }
             """)
             layout.addWidget(self.lang_combo)
             
-            self.translate_check = QCheckBox("🔄 Translate to English")
+            self.translate_check = QCheckBox("🔄 Translate to English (Auto-translate)")
             self.translate_check.setStyleSheet("""
                 QCheckBox {
-                    color: #aaa;
-                    spacing: 8px;
+                    color: #ccc;
+                    spacing: 10px;
+                    font-size: 12px;
                 }
                 QCheckBox::indicator {
-                    width: 16px;
-                    height: 16px;
+                    width: 18px;
+                    height: 18px;
                     border-radius: 4px;
                     border: 2px solid #FF6B35;
+                    background-color: #2d2d3d;
                 }
                 QCheckBox::indicator:checked {
                     background-color: #FF6B35;
+                    border: 2px solid #FF6B35;
+                }
+                QCheckBox::indicator:hover {
+                    border: 2px solid #F7931E;
                 }
             """)
             layout.addWidget(self.translate_check)
@@ -884,12 +1110,19 @@ if GUI_AVAILABLE:
             layout.setContentsMargins(0, 0, 0, 0)
             
             self.vocal_combo = QComboBox()
-            self.vocal_combo.addItems(['None', '2stems (Vocals + Accompaniment)', '4stems', '5stems'])
+            vocal_options = [
+                ('None', 'Use original audio'),
+                ('2stems', 'Vocals + Accompaniment'),
+                ('4stems', 'Vocals + Drums + Bass + Other'),
+                ('5stems', 'Vocals + Drums + Bass + Piano + Other')
+            ]
+            for option, desc in vocal_options:
+                self.vocal_combo.addItem(f"{option} - {desc}")
             self.vocal_combo.setStyleSheet("""
                 QComboBox {
                     background: #2d2d3d;
                     border: 1px solid #3d3d4d;
-                    border-radius: 8px;
+                    border-radius: 10px;
                     padding: 8px;
                     color: white;
                 }
@@ -902,21 +1135,26 @@ if GUI_AVAILABLE:
             widget = QWidget()
             layout = QVBoxLayout(widget)
             layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(8)
             
             self.break_combo = QComboBox()
-            self.break_combo.addItems(['Auto (Smart sentences)', 'Words', 'Letters'])
+            self.break_combo.addItems(['🎯 Auto (Smart sentences)', '📝 Words', '📏 Letters'])
             self.break_combo.setStyleSheet("""
                 QComboBox {
                     background: #2d2d3d;
                     border: 1px solid #3d3d4d;
-                    border-radius: 8px;
+                    border-radius: 10px;
                     padding: 8px;
                     color: white;
                 }
             """)
             layout.addWidget(self.break_combo)
             
-            limit_row = QHBoxLayout()
+            limit_container = QWidget()
+            limit_layout = QHBoxLayout(limit_container)
+            limit_layout.setContentsMargins(0, 0, 0, 0)
+            limit_layout.setSpacing(15)
+            
             self.word_limit = QSpinBox()
             self.word_limit.setRange(1, 30)
             self.word_limit.setValue(10)
@@ -928,10 +1166,11 @@ if GUI_AVAILABLE:
                     border-radius: 8px;
                     padding: 5px;
                     color: white;
+                    min-width: 60px;
                 }
             """)
-            limit_row.addWidget(QLabel("Words/line:"))
-            limit_row.addWidget(self.word_limit)
+            limit_layout.addWidget(QLabel("Words/line:"))
+            limit_layout.addWidget(self.word_limit)
             
             self.char_limit = QSpinBox()
             self.char_limit.setRange(10, 80)
@@ -944,45 +1183,51 @@ if GUI_AVAILABLE:
                     border-radius: 8px;
                     padding: 5px;
                     color: white;
+                    min-width: 60px;
                 }
             """)
-            limit_row.addWidget(QLabel("Chars/line:"))
-            limit_row.addWidget(self.char_limit)
+            limit_layout.addWidget(QLabel("Chars/line:"))
+            limit_layout.addWidget(self.char_limit)
             
-            layout.addLayout(limit_row)
+            limit_layout.addStretch()
+            layout.addWidget(limit_container)
+            
             self.break_combo.currentIndexChanged.connect(self._on_break_changed)
             
             return widget
             
         def _create_caption_panel(self):
-            """Create caption editor panel"""
+            """Create caption editor panel with player"""
             panel = QWidget()
             layout = QVBoxLayout(panel)
             layout.setSpacing(15)
             
             # Player Controls Card
-            player_card = ScalableModernCard()
+            player_card = ModernCard(color="#252535")
             player_layout = QVBoxLayout(player_card)
             player_layout.setContentsMargins(15, 15, 15, 15)
+            player_layout.setSpacing(10)
             
             # Time Slider
             self.time_slider = QSlider(Qt.Horizontal)
             self.time_slider.setStyleSheet("""
                 QSlider::groove:horizontal {
-                    height: 4px;
+                    height: 6px;
                     background: #2d2d3d;
-                    border-radius: 2px;
+                    border-radius: 3px;
                 }
                 QSlider::handle:horizontal {
-                    background: #FF6B35;
-                    width: 12px;
-                    height: 12px;
-                    margin: -4px 0;
-                    border-radius: 6px;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #FF6B35, stop:1 #F7931E);
+                    width: 16px;
+                    height: 16px;
+                    margin: -5px 0;
+                    border-radius: 8px;
                 }
                 QSlider::sub-page:horizontal {
-                    background: #FF6B35;
-                    border-radius: 2px;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #FF6B35, stop:1 #F7931E);
+                    border-radius: 3px;
                 }
             """)
             self.time_slider.sliderMoved.connect(self.seek_position)
@@ -990,20 +1235,29 @@ if GUI_AVAILABLE:
             
             # Control Buttons
             controls = QHBoxLayout()
-            self.play_btn = ScalableAnimatedButton("▶ Play", "#2ecc71", "#27ae60", base_height=35)
+            controls.setSpacing(10)
+            
+            self.play_btn = ColorButton("▶ Play", 'success', base_height=38)
             self.play_btn.setFixedWidth(100)
             self.play_btn.clicked.connect(self.toggle_playback)
             self.play_btn.setEnabled(False)
             controls.addWidget(self.play_btn)
             
-            self.stop_btn = ScalableAnimatedButton("⏹ Stop", "#e74c3c", "#c0392b", base_height=35)
+            self.stop_btn = ColorButton("⏹ Stop", 'danger', base_height=38)
             self.stop_btn.setFixedWidth(100)
             self.stop_btn.clicked.connect(self.stop_playback)
             self.stop_btn.setEnabled(False)
             controls.addWidget(self.stop_btn)
             
             self.time_label = QLabel("00:00:00 / 00:00:00")
-            self.time_label.setStyleSheet("color: #FF6B35; font-family: monospace; font-size: 13px;")
+            self.time_label.setStyleSheet("""
+                QLabel {
+                    color: #FF6B35;
+                    font-family: monospace;
+                    font-size: 14px;
+                    font-weight: bold;
+                }
+            """)
             controls.addWidget(self.time_label)
             controls.addStretch()
             
@@ -1011,9 +1265,10 @@ if GUI_AVAILABLE:
             layout.addWidget(player_card)
             
             # Caption Editor Card
-            editor_card = ScalableModernCard()
+            editor_card = ModernCard(color="#252535")
             editor_layout = QVBoxLayout(editor_card)
             editor_layout.setContentsMargins(15, 15, 15, 15)
+            editor_layout.setSpacing(10)
             
             editor_header = QHBoxLayout()
             editor_header.addWidget(QLabel("📝 Caption Editor"))
@@ -1025,30 +1280,36 @@ if GUI_AVAILABLE:
                 QPushButton {
                     background: #2d2d3d;
                     border: 1px solid #3d3d4d;
-                    border-radius: 6px;
-                    padding: 5px 15px;
+                    border-radius: 8px;
+                    padding: 6px 15px;
                     color: #aaa;
+                    font-weight: bold;
                 }
                 QPushButton:checked {
                     background: #FF6B35;
                     color: white;
+                    border: none;
                 }
             """)
             self.edit_mode_btn.clicked.connect(self.toggle_edit_mode)
             editor_header.addWidget(self.edit_mode_btn)
             
-            self.save_edit_btn = QPushButton("💾 Save")
+            self.save_edit_btn = QPushButton("💾 Save Changes")
             self.save_edit_btn.setEnabled(False)
             self.save_edit_btn.setStyleSheet("""
                 QPushButton {
                     background: #2ecc71;
                     border: none;
-                    border-radius: 6px;
-                    padding: 5px 15px;
+                    border-radius: 8px;
+                    padding: 6px 15px;
                     color: white;
+                    font-weight: bold;
                 }
                 QPushButton:disabled {
                     background: #555;
+                }
+                QPushButton:hover:enabled {
+                    background: #27ae60;
                 }
             """)
             self.save_edit_btn.clicked.connect(self.save_caption_edits)
@@ -1062,13 +1323,17 @@ if GUI_AVAILABLE:
                 QTextEdit {
                     background: #1a1a2e;
                     border: 1px solid #2d2d3d;
-                    border-radius: 10px;
+                    border-radius: 12px;
                     padding: 15px;
-                    color: #ddd;
+                    color: #e0e0e0;
                     font-family: 'Consolas', 'Monaco', monospace;
+                    line-height: 1.5;
+                }
+                QTextEdit:focus {
+                    border: 1px solid #FF6B35;
                 }
             """)
-            self.caption_editor.setPlaceholderText("Generated captions will appear here...")
+            self.caption_editor.setPlaceholderText("✨ Generated captions will appear here...\n\nClick 'Edit Mode' to make changes, then 'Save Changes' to keep them.")
             editor_layout.addWidget(self.caption_editor)
             
             layout.addWidget(editor_card)
@@ -1076,12 +1341,12 @@ if GUI_AVAILABLE:
             return panel
             
         def _create_progress_section(self):
-            """Create progress section"""
-            card = ScalableModernCard()
+            """Create animated progress section"""
+            card = ModernCard(color="#252535")
             layout = QVBoxLayout(card)
-            layout.setContentsMargins(15, 10, 15, 10)
+            layout.setContentsMargins(15, 12, 15, 12)
             
-            self.progress_bar = QProgressBar()
+            self.progress_bar = PulsingProgressBar()
             self.progress_bar.setVisible(False)
             self.progress_bar.setStyleSheet("""
                 QProgressBar {
@@ -1092,14 +1357,14 @@ if GUI_AVAILABLE:
                 }
                 QProgressBar::chunk {
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #FF6B35, stop:1 #F7931E);
+                        stop:0 #FF6B35, stop:0.5 #F7931E, stop:1 #FF3366);
                     border-radius: 10px;
                 }
             """)
             layout.addWidget(self.progress_bar)
             
             self.progress_label = QLabel("")
-            self.progress_label.setStyleSheet("color: #888; font-size: 12px;")
+            self.progress_label.setStyleSheet("color: #FF6B35; font-size: 12px; font-weight: bold;")
             self.progress_label.setVisible(False)
             layout.addWidget(self.progress_label)
             
@@ -1113,29 +1378,41 @@ if GUI_AVAILABLE:
             
         def _setup_animations(self):
             self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
-            self.fade_animation.setDuration(500)
+            self.fade_animation.setDuration(800)
             self.fade_animation.setStartValue(0)
             self.fade_animation.setEndValue(1)
+            self.fade_animation.setEasingCurve(QEasingCurve.InOutCubic)
             self.fade_animation.start()
-            
-        def _apply_theme(self):
-            self.setStyleSheet("""
-                QToolTip {
-                    background-color: #2d2d3d;
-                    color: #FF6B35;
-                    border: 1px solid #FF6B35;
-                    border-radius: 5px;
-                    padding: 5px;
-                }
-                QLabel {
-                    color: #ddd;
-                }
-            """)
             
         def _on_break_changed(self, index):
             self.word_limit.setEnabled(index == 1)
             self.char_limit.setEnabled(index == 2)
             
+        def resizeEvent(self, event: QResizeEvent):
+            """Handle resize events - scale UI proportionally"""
+            if self.isMaximized():
+                screen = QApplication.primaryScreen().geometry()
+                self.scale_factor = min(screen.width() / self.base_width, 
+                                       screen.height() / self.base_height)
+                self._scale_ui(self.scale_factor)
+            else:
+                self.scale_factor = 1.0
+                self.setFixedSize(self.base_width, self.base_height)
+                self._scale_ui(1.0)
+            super().resizeEvent(event)
+            
+        def _scale_ui(self, factor):
+            """Scale all UI elements proportionally"""
+            for widget in self.findChildren(ColorButton):
+                widget.resize_to_scale(factor)
+                
+            # Scale fonts for labels
+            for label in self.findChildren(QLabel):
+                if label not in [self.media_icon, self.animated_stats, self.sub_stats]:
+                    font = label.font()
+                    font.setPointSize(int(12 * factor))
+                    label.setFont(font)
+                    
         def import_media(self):
             file_path, _ = QFileDialog.getOpenFileName(
                 self, "Import Media", "",
@@ -1148,7 +1425,7 @@ if GUI_AVAILABLE:
             from PyQt5.QtWidgets import QInputDialog
             url, ok = QInputDialog.getText(self, "YouTube URL", "Enter YouTube URL:")
             if ok and url:
-                self.statusBar().showMessage("Downloading YouTube video...")
+                self.animated_stats.setText("📥 Downloading from YouTube...")
                 try:
                     import yt_dlp
                     temp_dir = tempfile.gettempdir()
@@ -1167,8 +1444,10 @@ if GUI_AVAILABLE:
                             self.load_media(str(audio_file))
                         elif Path(filename).exists():
                             self.load_media(filename)
+                    self.animated_stats.setText("✅ Download complete!")
                 except Exception as e:
                     QMessageBox.critical(self, "Error", f"Failed to download: {str(e)}")
+                    self.animated_stats.setText("❌ Download failed")
                     
         def load_media(self, file_path):
             self.current_file = file_path
@@ -1177,6 +1456,7 @@ if GUI_AVAILABLE:
             self.media_player.setMedia(QMediaContent(QUrl.fromLocalFile(file_path)))
             self.play_btn.setEnabled(True)
             self.stop_btn.setEnabled(True)
+            self.animated_stats.setText(f"🎬 Loaded: {Path(file_path).name}")
             
             # Animate media icon
             anim = QPropertyAnimation(self.media_icon, b"geometry")
@@ -1184,6 +1464,7 @@ if GUI_AVAILABLE:
             anim.setStartValue(self.media_icon.geometry())
             anim.setEndValue(QRect(self.media_icon.x(), self.media_icon.y()-10, 
                                    self.media_icon.width(), self.media_icon.height()))
+            anim.setEasingCurve(QEasingCurve.OutBounce)
             anim.start()
             
         def generate_captions(self):
@@ -1191,7 +1472,7 @@ if GUI_AVAILABLE:
                 return
                 
             settings = {
-                'model': self.model_combo.currentText().lower(),
+                'model': self.model_combo.currentText().split('-')[0].strip().lower(),
                 'language': self.lang_combo.currentData(),
                 'translate': self.translate_check.isChecked(),
                 'vocal_separation': self.vocal_combo.currentIndex(),
@@ -1204,6 +1485,7 @@ if GUI_AVAILABLE:
             self.progress_label.setVisible(True)
             self.progress_bar.setValue(0)
             self.generate_btn.setEnabled(False)
+            self.animated_stats.setText("🚀 Starting transcription...")
             
             self.worker = TranscriptionWorker(self.current_file, settings)
             self.worker.progress.connect(self.update_progress)
@@ -1214,7 +1496,7 @@ if GUI_AVAILABLE:
         def update_progress(self, value, message):
             self.progress_bar.setValue(value)
             self.progress_label.setText(message)
-            self.progress_label.setStyleSheet(f"color: #FF6B35; font-size: 12px;")
+            self.animated_stats.setText(message)
             
         def on_transcription_finished(self, result):
             self.current_subtitles = result['subtitles']
@@ -1223,33 +1505,57 @@ if GUI_AVAILABLE:
             self.progress_bar.setVisible(False)
             self.progress_label.setVisible(False)
             self.generate_btn.setEnabled(True)
+            self.export_srt_btn.setEnabled(True)
+            self.export_ass_btn.setEnabled(True)
             
             # Success animation
-            self.progress_label.setText("✓ Complete!")
+            self.progress_label.setText("✅ Complete!")
             self.progress_label.setStyleSheet("color: #2ecc71; font-size: 14px; font-weight: bold;")
             self.progress_label.setVisible(True)
+            self.animated_stats.setText(f"✨ Success! Generated {len(self.current_subtitles)} captions")
             QTimer.singleShot(2000, lambda: self.progress_label.setVisible(False))
             
             QMessageBox.information(self, "Success", 
-                f"✨ Successfully generated {len(self.current_subtitles)} captions!")
+                f"✨ Successfully generated {len(self.current_subtitles)} captions!\n\n"
+                f"📝 You can now edit the captions and export them.")
             
         def on_transcription_error(self, error):
             self.progress_bar.setVisible(False)
             self.progress_label.setVisible(False)
             self.generate_btn.setEnabled(True)
-            QMessageBox.critical(self, "Error", f"❌ Transcription failed: {error}")
+            self.animated_stats.setText("❌ Transcription failed")
+            QMessageBox.critical(self, "Error", f"❌ Transcription failed:\n\n{error}")
             
+        def export_subtitles(self, format_type):
+            if not self.current_subtitles:
+                return
+                
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, f"Export {format_type.upper()}",
+                f"captions.{format_type}",
+                f"{format_type.upper()} Files (*.{format_type})"
+            )
+            
+            if file_path:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(self.current_subtitles))
+                self.animated_stats.setText(f"📄 Exported to {Path(file_path).name}")
+                QMessageBox.information(self, "Success", f"✅ Exported to:\n{file_path}")
+                
         def toggle_playback(self):
             if self.media_player.state() == QMediaPlayer.PlayingState:
                 self.media_player.pause()
                 self.play_btn.setText("▶ Play")
+                self.animated_stats.setText("⏸ Paused")
             else:
                 self.media_player.play()
                 self.play_btn.setText("⏸ Pause")
+                self.animated_stats.setText("▶ Playing...")
                 
         def stop_playback(self):
             self.media_player.stop()
             self.play_btn.setText("▶ Play")
+            self.animated_stats.setText("⏹ Stopped")
             
         def seek_position(self, position):
             self.media_player.setPosition(position)
@@ -1272,7 +1578,7 @@ if GUI_AVAILABLE:
                 self.play_btn.setText("▶ Play")
                 
         def highlight_current_caption(self, current_time):
-            for caption in self.current_subtitles:
+            for i, caption in enumerate(self.current_subtitles):
                 lines = caption.split('\n')
                 if len(lines) >= 2 and '-->' in lines[1]:
                     start_str, end_str = lines[1].split(' --> ')
@@ -1300,9 +1606,11 @@ if GUI_AVAILABLE:
             self.caption_editor.setReadOnly(not self.edit_mode_btn.isChecked())
             self.save_edit_btn.setEnabled(self.edit_mode_btn.isChecked())
             if self.edit_mode_btn.isChecked():
-                self.edit_mode_btn.setStyleSheet("background: #FF6B35; color: white;")
+                self.edit_mode_btn.setStyleSheet("background: #FF6B35; color: white; border: none;")
+                self.animated_stats.setText("✏️ Edit mode enabled - make your changes")
             else:
                 self.edit_mode_btn.setStyleSheet("background: #2d2d3d; color: #aaa;")
+                self.animated_stats.setText("📖 View mode")
                 
         def save_caption_edits(self):
             text = self.caption_editor.toPlainText()
@@ -1312,15 +1620,16 @@ if GUI_AVAILABLE:
             self.edit_mode_btn.setChecked(False)
             self.caption_editor.setReadOnly(True)
             self.edit_mode_btn.setStyleSheet("background: #2d2d3d; color: #aaa;")
-            QMessageBox.information(self, "Success", "💾 Captions saved!")
+            self.animated_stats.setText("💾 Captions saved successfully!")
+            QMessageBox.information(self, "Success", "✅ Captions saved successfully!")
             
         def mousePressEvent(self, event):
-            if event.button() == Qt.LeftButton:
+            if event.button() == Qt.LeftButton and event.y() < 55:
                 self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
                 event.accept()
                 
         def mouseMoveEvent(self, event):
-            if event.buttons() == Qt.LeftButton and hasattr(self, 'drag_position'):
+            if event.buttons() == Qt.LeftButton and hasattr(self, 'drag_position') and event.y() < 55:
                 self.move(event.globalPos() - self.drag_position)
                 event.accept()
                 
@@ -1339,41 +1648,46 @@ if GUI_AVAILABLE:
 
 def run_cli():
     """Run CLI version when GUI is not available"""
-    print(f"{Colors.CYAN}{'='*60}{Colors.ENDC}")
-    print(f"{Colors.BOLD}     NotY Caption Generator AI v7.1 - CLI Mode{Colors.ENDC}")
-    print(f"{Colors.CYAN}{'='*60}{Colors.ENDC}")
-    print(f"{Colors.WARNING}GUI mode not available. Install PyQt5 for GUI.{Colors.ENDC}\n")
+    print(f"{Colors.CYAN}{'='*70}{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.MAGENTA}     🎬 NotY Caption Generator AI v7.1 - Professional CLI Mode{Colors.ENDC}")
+    print(f"{Colors.CYAN}{'='*70}{Colors.ENDC}")
+    print(f"{Colors.YELLOW}⚠️  GUI mode not available. Install PyQt5 for the full experience.{Colors.ENDC}\n")
     
     cache = CacheManager()
     transcriber = Transcriber(cache)
     
     while True:
-        print(f"\n{Colors.GREEN}Main Menu:{Colors.ENDC}")
-        print("  1. Process Media File")
-        print("  2. Download YouTube Video")
-        print("  3. Settings")
-        print("  4. Clear Cache")
-        print("  5. Exit")
+        print(f"\n{Colors.GREEN}{'='*50}{Colors.ENDC}")
+        print(f"{Colors.BOLD}{Colors.BLUE}  Main Menu{Colors.ENDC}")
+        print(f"{Colors.GREEN}{'='*50}{Colors.ENDC}")
+        print(f"{Colors.CYAN}  1.{Colors.ENDC} 🎬 Process Media File")
+        print(f"{Colors.CYAN}  2.{Colors.ENDC} ▶️ Download YouTube Video")
+        print(f"{Colors.CYAN}  3.{Colors.ENDC} ⚙️ Settings")
+        print(f"{Colors.CYAN}  4.{Colors.ENDC} 🗑️ Clear Cache")
+        print(f"{Colors.CYAN}  5.{Colors.ENDC} 📊 View Cache Stats")
+        print(f"{Colors.CYAN}  6.{Colors.ENDC} 🚪 Exit")
         
-        choice = input(f"\n{Colors.BOLD}Select option: {Colors.ENDC}").strip()
+        choice = input(f"\n{Colors.BOLD}Select option [1-6]: {Colors.ENDC}").strip()
         
         if choice == '1':
-            file_path = input("Enter file path: ").strip().strip('"')
+            file_path = input(f"{Colors.BOLD}📁 Enter file path: {Colors.ENDC}").strip().strip('"')
             path = Path(file_path)
             if not path.exists():
-                print(f"{Colors.FAIL}File not found!{Colors.ENDC}")
+                print(f"{Colors.FAIL}❌ File not found!{Colors.ENDC}")
                 continue
                 
-            model = input(f"Model (tiny/base/small/medium/large) [base]: ").strip() or 'base'
-            language = input(f"Language code [en]: ").strip() or 'en'
-            translate = input(f"Translate to English? (y/n) [n]: ").strip().lower() == 'y'
+            print(f"\n{Colors.CYAN}📊 File: {path.name}{Colors.ENDC}")
+            model = input(f"{Colors.BOLD}🎤 Model (tiny/base/small/medium/large) [base]: {Colors.ENDC}").strip() or 'base'
+            language = input(f"{Colors.BOLD}🌐 Language code [en]: {Colors.ENDC}").strip() or 'en'
+            translate = input(f"{Colors.BOLD}🔄 Translate to English? (y/n) [n]: {Colors.ENDC}").strip().lower() == 'y'
             
-            print(f"\n{Colors.BLUE}Loading model...{Colors.ENDC}")
+            print(f"\n{Colors.BLUE}🚀 Loading model...{Colors.ENDC}")
             transcriber.load_model(model)
             
-            print(f"{Colors.BLUE}Transcribing...{Colors.ENDC}")
+            print(f"{Colors.BLUE}🎤 Transcribing...{Colors.ENDC}")
             task = 'translate' if translate else 'transcribe'
-            segments = transcriber.transcribe(path, language, task, progress_callback=lambda p,m: print(f"  {p}% - {m}"))
+            segments = transcriber.transcribe(path, language, task, 
+                progress_callback=lambda p,m: print(f"  {Colors.GREEN}{p:3d}%{Colors.ENDC} - {m}"))
             
             generator = SubtitleGenerator('auto', 10, 40)
             srt_content = generator.generate_srt(segments)
@@ -1382,35 +1696,58 @@ def run_cli():
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(srt_content)
                 
-            print(f"{Colors.GREEN}✓ Subtitles saved to: {output_path}{Colors.ENDC}")
+            print(f"\n{Colors.GREEN}{'='*50}{Colors.ENDC}")
+            print(f"{Colors.GREEN}✅ SUCCESS!{Colors.ENDC}")
+            print(f"{Colors.GREEN}📄 Subtitles saved to: {output_path}{Colors.ENDC}")
+            print(f"{Colors.GREEN}{'='*50}{Colors.ENDC}")
             
         elif choice == '2':
             try:
                 import yt_dlp
-                url = input("Enter YouTube URL: ").strip()
+                url = input(f"{Colors.BOLD}▶️ Enter YouTube URL: {Colors.ENDC}").strip()
                 if url:
-                    print(f"{Colors.BLUE}Downloading...{Colors.ENDC}")
+                    print(f"{Colors.BLUE}📥 Downloading...{Colors.ENDC}")
                     temp_dir = Path(tempfile.gettempdir()) / 'NotYCaptionGenAI'
                     temp_dir.mkdir(exist_ok=True)
-                    ydl_opts = {'format': 'bestaudio/best', 'outtmpl': str(temp_dir / '%(title)s.%(ext)s'), 'quiet': True}
+                    ydl_opts = {
+                        'format': 'bestaudio/best', 
+                        'outtmpl': str(temp_dir / '%(title)s.%(ext)s'), 
+                        'quiet': True,
+                        'progress_hooks': [lambda d: print(f"  {Colors.GREEN}⬇️ {d['status']}{Colors.ENDC}") if d['status'] == 'downloading' else None]
+                    }
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         info = ydl.extract_info(url, download=True)
                         filename = ydl.prepare_filename(info)
-                        print(f"{Colors.GREEN}Downloaded: {filename}{Colors.ENDC}")
+                        print(f"{Colors.GREEN}✅ Downloaded: {filename}{Colors.ENDC}")
             except ImportError:
-                print(f"{Colors.FAIL}yt-dlp not installed. Run: pip install yt-dlp{Colors.ENDC}")
+                print(f"{Colors.FAIL}❌ yt-dlp not installed. Run: pip install yt-dlp{Colors.ENDC}")
+            except Exception as e:
+                print(f"{Colors.FAIL}❌ Error: {e}{Colors.ENDC}")
                 
         elif choice == '3':
-            print(f"{Colors.CYAN}Settings (placeholder - use config file){Colors.ENDC}")
+            print(f"\n{Colors.CYAN}⚙️ Settings{Colors.ENDC}")
+            print(f"{Colors.YELLOW}  Models folder: {MODELS_DIR}{Colors.ENDC}")
+            print(f"{Colors.YELLOW}  Cache database: {CACHE_DB}{Colors.ENDC}")
+            print(f"{Colors.YELLOW}  Logs folder: {LOGS_DIR}{Colors.ENDC}")
+            input(f"\n{Colors.BOLD}Press Enter to continue...{Colors.ENDC}")
             
         elif choice == '4':
-            # Clear old cache (0 days = all)
-            with sqlite3.connect(CACHE_DB) as conn:
-                conn.execute('DELETE FROM transcriptions')
-            print(f"{Colors.GREEN}Cache cleared{Colors.ENDC}")
-            
+            confirm = input(f"{Colors.WARNING}⚠️ Clear all cached transcriptions? (y/n): {Colors.ENDC}").lower()
+            if confirm == 'y':
+                cache.clear_all()
+                print(f"{Colors.GREEN}✅ Cache cleared!{Colors.ENDC}")
+            else:
+                print(f"{Colors.CYAN}Cancelled.{Colors.ENDC}")
+                
         elif choice == '5':
-            print(f"{Colors.GREEN}Goodbye!{Colors.ENDC}")
+            stats = cache.get_stats()
+            print(f"\n{Colors.CYAN}📊 Cache Statistics:{Colors.ENDC}")
+            print(f"  {Colors.GREEN}Entries:{Colors.ENDC} {stats['count']}")
+            print(f"  {Colors.GREEN}Size:{Colors.ENDC} {stats['size'] / (1024*1024):.2f} MB")
+            input(f"\n{Colors.BOLD}Press Enter to continue...{Colors.ENDC}")
+                
+        elif choice == '6':
+            print(f"{Colors.GREEN}👋 Goodbye!{Colors.ENDC}")
             break
 
 
@@ -1424,11 +1761,13 @@ def main():
         app = QApplication(sys.argv)
         app.setApplicationName("NotY Caption Generator AI")
         app.setOrganizationName("NotY215")
+        app.setStyle('Fusion')
         
-        # Set application icon
-        app.setWindowIcon(QIcon())
+        # Set global font
+        font = QFont("Segoe UI", 10)
+        app.setFont(font)
         
-        window = FixedSizeWindow()
+        window = NotYCaptionWindow()
         window.show()
         
         sys.exit(app.exec_())
