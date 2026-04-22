@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NotY Caption Generator AI v7.1 - Unified Professional Application
+NotY Caption Generator AI v7.1 - Fixed Size Window with Auto-Scaling UI
 Copyright (c) 2026 NotY215
 
-Modern UI with animations, gradients, and professional design
-Inspired by Adobe After Effects, Premiere Pro, and Filmora
+Features:
+- Fixed initial window size (1200x800)
+- Only maximize and minimize (no manual resize)
+- Automatic UI scaling when maximized
+- All buttons and elements scale proportionally
+- Professional modern design
 """
 
 import os
@@ -23,7 +27,6 @@ import glob
 from pathlib import Path
 from datetime import timedelta
 from threading import Thread, Lock
-from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple, Any
 from enum import Enum
 from functools import partial
@@ -68,7 +71,7 @@ try:
         QPushButton, QLabel, QFileDialog, QComboBox, QTextEdit, QSlider,
         QProgressBar, QGroupBox, QCheckBox, QSpinBox, QLineEdit, QDialog,
         QDialogButtonBox, QTabWidget, QMessageBox, QFrame, QScrollArea,
-        QGridLayout, QSplitter, QStackedWidget, QToolTip, QGraphicsDropShadowEffect
+        QGridLayout, QSplitter, QStackedWidget, QToolTip, QSizePolicy
     )
     from PyQt5.QtCore import (
         Qt, QThread, pyqtSignal, QTimer, QUrl, QSettings, QSize, QPropertyAnimation,
@@ -76,7 +79,7 @@ try:
     )
     from PyQt5.QtGui import (
         QFont, QIcon, QPalette, QColor, QLinearGradient, QBrush, QPainter,
-        QPen, QFontDatabase, QMovie, QPixmap, QPainterPath, QRegion
+        QPen, QFontDatabase, QMovie, QPixmap, QPainterPath, QRegion, QResizeEvent
     )
     from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
     GUI_AVAILABLE = True
@@ -246,21 +249,21 @@ class SubtitleGenerator:
 
 
 # ============================================================================
-# GUI MODE (Modern Professional UI)
+# GUI MODE (Fixed Size Window with Auto-Scaling)
 # ============================================================================
 
 if GUI_AVAILABLE:
     
-    class AnimatedButton(QPushButton):
-        """Modern animated button with hover effects and gradients"""
+    class ScalableAnimatedButton(QPushButton):
+        """Button that scales proportionally with window size"""
         
-        def __init__(self, text, color_start="#FF6B35", color_end="#F7931E", parent=None):
+        def __init__(self, text, color_start="#FF6B35", color_end="#F7931E", parent=None, base_height=40):
             super().__init__(text, parent)
             self.color_start = color_start
             self.color_end = color_end
+            self.base_height = base_height
             self.animation = QPropertyAnimation(self, b"geometry")
             self.animation.setDuration(150)
-            self.setMinimumHeight(40)
             self.setCursor(Qt.PointingHandCursor)
             self._setup_style()
             
@@ -274,7 +277,7 @@ if GUI_AVAILABLE:
                     color: white;
                     font-weight: bold;
                     font-size: 14px;
-                    padding: 10px 20px;
+                    padding: 8px 16px;
                 }}
                 QPushButton:hover {{
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -293,11 +296,19 @@ if GUI_AVAILABLE:
             """)
             
         def _adjust_brightness(self, color, factor):
-            """Adjust color brightness"""
             r = int(int(color[1:3], 16) * factor)
             g = int(int(color[3:5], 16) * factor)
             b = int(int(color[5:7], 16) * factor)
             return f"#{max(0,min(255,r)):02x}{max(0,min(255,g)):02x}{max(0,min(255,b)):02x}"
+            
+        def resize_to_scale(self, scale_factor):
+            """Resize button based on scale factor"""
+            new_height = int(self.base_height * scale_factor)
+            self.setMinimumHeight(new_height)
+            self.setMaximumHeight(new_height)
+            font = self.font()
+            font.setPointSize(int(14 * scale_factor))
+            self.setFont(font)
             
         def enterEvent(self, event):
             self.animation.setStartValue(self.geometry())
@@ -312,8 +323,8 @@ if GUI_AVAILABLE:
             super().leaveEvent(event)
     
     
-    class GradientWidget(QWidget):
-        """Widget with gradient background"""
+    class ScalableGradientWidget(QWidget):
+        """Widget with gradient background that scales"""
         
         def __init__(self, color1="#1a1a2e", color2="#16213e", parent=None):
             super().__init__(parent)
@@ -329,14 +340,14 @@ if GUI_AVAILABLE:
             painter.fillRect(self.rect(), QBrush(gradient))
             
     
-    class ModernCard(QFrame):
-        """Modern card widget with shadow effect"""
+    class ScalableModernCard(QFrame):
+        """Modern card widget with shadow effect that scales"""
         
         def __init__(self, parent=None):
             super().__init__(parent)
-            self.setObjectName("ModernCard")
+            self.setObjectName("ScalableModernCard")
             self.setStyleSheet("""
-                #ModernCard {
+                #ScalableModernCard {
                     background-color: rgba(30, 30, 46, 0.9);
                     border-radius: 15px;
                     border: 1px solid rgba(255,255,255,0.1);
@@ -420,8 +431,8 @@ if GUI_AVAILABLE:
             return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
     
     
-    class NotYCaptionWindow(QMainWindow):
-        """Main application window with modern UI"""
+    class FixedSizeWindow(QMainWindow):
+        """Main window with fixed size - only maximize and minimize"""
         
         def __init__(self):
             super().__init__()
@@ -431,10 +442,14 @@ if GUI_AVAILABLE:
             self.current_segments = []
             self.worker = None
             self.media_player = None
+            self.scale_factor = 1.0
+            self.base_width = 1200
+            self.base_height = 800
             
-            self.setWindowTitle("NotY Caption Generator AI v7.1")
-            self.setMinimumSize(1400, 900)
-            self.setWindowFlags(Qt.FramelessWindowHint)
+            # Set window flags - no resize border, only maximize/minimize
+            self.setWindowFlags(Qt.Window | Qt.WindowMinimizeButtonHint | 
+                               Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+            self.setFixedSize(self.base_width, self.base_height)
             self.setAttribute(Qt.WA_TranslucentBackground)
             
             self._setup_ui()
@@ -442,9 +457,137 @@ if GUI_AVAILABLE:
             self._setup_animations()
             self._apply_theme()
             
+        def resizeEvent(self, event: QResizeEvent):
+            """Handle resize events - scale UI proportionally"""
+            if self.isMaximized():
+                # When maximized, scale everything based on screen size
+                screen = QApplication.primaryScreen().geometry()
+                self.scale_factor = min(screen.width() / self.base_width, 
+                                       screen.height() / self.base_height)
+                self._scale_ui(self.scale_factor)
+            else:
+                # When restored, reset to base size
+                self.scale_factor = 1.0
+                self.setFixedSize(self.base_width, self.base_height)
+                self._scale_ui(1.0)
+            super().resizeEvent(event)
+            
+        def _scale_ui(self, factor):
+            """Scale all UI elements proportionally"""
+            # Scale fonts
+            font = QFont("Segoe UI", int(10 * factor))
+            QApplication.setFont(font)
+            
+            # Scale all buttons
+            for widget in self.findChildren(ScalableAnimatedButton):
+                widget.resize_to_scale(factor)
+            
+            # Scale combo boxes
+            for combo in self.findChildren(QComboBox):
+                combo.setStyleSheet(f"""
+                    QComboBox {{
+                        background: #2d2d3d;
+                        border: 1px solid #3d3d4d;
+                        border-radius: {int(8 * factor)}px;
+                        padding: {int(8 * factor)}px;
+                        color: white;
+                        font-size: {int(12 * factor)}px;
+                    }}
+                    QComboBox::drop-down {{
+                        border: none;
+                    }}
+                """)
+            
+            # Scale spin boxes
+            for spin in self.findChildren(QSpinBox):
+                spin.setStyleSheet(f"""
+                    QSpinBox {{
+                        background: #2d2d3d;
+                        border: 1px solid #3d3d4d;
+                        border-radius: {int(8 * factor)}px;
+                        padding: {int(5 * factor)}px;
+                        color: white;
+                        font-size: {int(12 * factor)}px;
+                    }}
+                """)
+            
+            # Scale checkboxes
+            for check in self.findChildren(QCheckBox):
+                check.setStyleSheet(f"""
+                    QCheckBox {{
+                        color: #aaa;
+                        spacing: {int(8 * factor)}px;
+                        font-size: {int(12 * factor)}px;
+                    }}
+                    QCheckBox::indicator {{
+                        width: {int(16 * factor)}px;
+                        height: {int(16 * factor)}px;
+                        border-radius: {int(4 * factor)}px;
+                        border: {int(2 * factor)}px solid #FF6B35;
+                    }}
+                    QCheckBox::indicator:checked {{
+                        background-color: #FF6B35;
+                    }}
+                """)
+            
+            # Scale labels
+            for label in self.findChildren(QLabel):
+                if label.objectName() != "media_icon":
+                    current_font = label.font()
+                    current_font.setPointSize(int(12 * factor))
+                    label.setFont(current_font)
+            
+            # Scale text edit
+            self.caption_editor.setStyleSheet(f"""
+                QTextEdit {{
+                    background: #1a1a2e;
+                    border: 1px solid #2d2d3d;
+                    border-radius: {int(10 * factor)}px;
+                    padding: {int(15 * factor)}px;
+                    color: #ddd;
+                    font-family: 'Consolas', 'Monaco', monospace;
+                    font-size: {int(11 * factor)}px;
+                }}
+            """)
+            
+            # Scale progress bar
+            self.progress_bar.setStyleSheet(f"""
+                QProgressBar {{
+                    border: none;
+                    border-radius: {int(10 * factor)}px;
+                    background: #2d2d3d;
+                    height: {int(8 * factor)}px;
+                }}
+                QProgressBar::chunk {{
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #FF6B35, stop:1 #F7931E);
+                    border-radius: {int(10 * factor)}px;
+                }}
+            """)
+            
+            # Scale slider
+            self.time_slider.setStyleSheet(f"""
+                QSlider::groove:horizontal {{
+                    height: {int(4 * factor)}px;
+                    background: #2d2d3d;
+                    border-radius: {int(2 * factor)}px;
+                }}
+                QSlider::handle:horizontal {{
+                    background: #FF6B35;
+                    width: {int(12 * factor)}px;
+                    height: {int(12 * factor)}px;
+                    margin: -{int(4 * factor)}px 0;
+                    border-radius: {int(6 * factor)}px;
+                }}
+                QSlider::sub-page:horizontal {{
+                    background: #FF6B35;
+                    border-radius: {int(2 * factor)}px;
+                }}
+            """)
+            
         def _setup_ui(self):
             """Setup the main UI"""
-            central = GradientWidget("#1a1a2e", "#16213e")
+            central = ScalableGradientWidget("#1a1a2e", "#16213e")
             self.setCentralWidget(central)
             
             main_layout = QVBoxLayout(central)
@@ -456,7 +599,7 @@ if GUI_AVAILABLE:
             main_layout.addWidget(title_bar)
             
             # Main Content Card
-            content_card = ModernCard()
+            content_card = ScalableModernCard()
             content_layout = QVBoxLayout(content_card)
             content_layout.setContentsMargins(25, 25, 25, 25)
             content_layout.setSpacing(20)
@@ -478,7 +621,7 @@ if GUI_AVAILABLE:
             right_panel = self._create_caption_panel()
             splitter.addWidget(right_panel)
             
-            splitter.setSizes([450, 950])
+            splitter.setSizes([450, 750])
             content_layout.addWidget(splitter)
             
             # Progress Section
@@ -508,7 +651,7 @@ if GUI_AVAILABLE:
             
             layout.addStretch()
             
-            # Window Controls
+            # Window Controls - only minimize, maximize, close
             for name, color, action in [
                 ("─", "#555555", self.showMinimized),
                 ("□", "#555555", self.showMaximized),
@@ -554,7 +697,7 @@ if GUI_AVAILABLE:
             welcome.setStyleSheet("""
                 QLabel {
                     color: white;
-                    font-size: 22px;
+                    font-size: 20px;
                     font-weight: bold;
                     font-family: 'Segoe UI', 'Arial';
                 }
@@ -568,7 +711,7 @@ if GUI_AVAILABLE:
             stats.setStyleSheet("""
                 QLabel {
                     color: rgba(255,255,255,0.9);
-                    font-size: 14px;
+                    font-size: 13px;
                 }
             """)
             layout.addWidget(stats)
@@ -601,15 +744,16 @@ if GUI_AVAILABLE:
             layout.setSpacing(15)
             
             # Media Info Card
-            media_card = ModernCard()
+            media_card = ScalableModernCard()
             media_layout = QVBoxLayout(media_card)
             media_layout.setContentsMargins(15, 15, 15, 15)
             
             self.media_icon = QLabel("📁")
             self.media_icon.setStyleSheet("font-size: 48px;")
             self.media_label = QLabel("No Media Loaded")
-            self.media_label.setStyleSheet("color: #888; font-size: 14px;")
+            self.media_label.setStyleSheet("color: #888; font-size: 13px;")
             self.media_label.setWordWrap(True)
+            self.media_label.setAlignment(Qt.AlignCenter)
             
             media_layout.addWidget(self.media_icon, alignment=Qt.AlignCenter)
             media_layout.addWidget(self.media_label, alignment=Qt.AlignCenter)
@@ -620,11 +764,11 @@ if GUI_AVAILABLE:
             import_layout = QHBoxLayout(import_group)
             import_layout.setSpacing(10)
             
-            self.import_btn = AnimatedButton("📁 Import Media", "#3498db", "#2980b9")
+            self.import_btn = ScalableAnimatedButton("📁 Import Media", "#3498db", "#2980b9", base_height=40)
             self.import_btn.clicked.connect(self.import_media)
             import_layout.addWidget(self.import_btn)
             
-            self.youtube_btn = AnimatedButton("▶️ YouTube URL", "#e74c3c", "#c0392b")
+            self.youtube_btn = ScalableAnimatedButton("▶️ YouTube URL", "#e74c3c", "#c0392b", base_height=40)
             self.youtube_btn.clicked.connect(self.import_youtube)
             import_layout.addWidget(self.youtube_btn)
             
@@ -639,20 +783,19 @@ if GUI_AVAILABLE:
             ]
             
             for title, widget in sections:
-                section = ModernCard()
+                section = ScalableModernCard()
                 section_layout = QVBoxLayout(section)
                 section_layout.setContentsMargins(15, 10, 15, 10)
                 
                 title_label = QLabel(title)
-                title_label.setStyleSheet("color: #FF6B35; font-weight: bold; font-size: 14px;")
+                title_label.setStyleSheet("color: #FF6B35; font-weight: bold; font-size: 13px;")
                 section_layout.addWidget(title_label)
                 section_layout.addWidget(widget)
                 
                 layout.addWidget(section)
             
             # Generate Button
-            self.generate_btn = AnimatedButton("🚀 GENERATE CAPTIONS", "#FF6B35", "#F7931E")
-            self.generate_btn.setMinimumHeight(50)
+            self.generate_btn = ScalableAnimatedButton("🚀 GENERATE CAPTIONS", "#FF6B35", "#F7931E", base_height=50)
             self.generate_btn.clicked.connect(self.generate_captions)
             self.generate_btn.setEnabled(False)
             layout.addWidget(self.generate_btn)
@@ -818,7 +961,7 @@ if GUI_AVAILABLE:
             layout.setSpacing(15)
             
             # Player Controls Card
-            player_card = ModernCard()
+            player_card = ScalableModernCard()
             player_layout = QVBoxLayout(player_card)
             player_layout.setContentsMargins(15, 15, 15, 15)
             
@@ -847,20 +990,20 @@ if GUI_AVAILABLE:
             
             # Control Buttons
             controls = QHBoxLayout()
-            self.play_btn = AnimatedButton("▶ Play", "#2ecc71", "#27ae60")
+            self.play_btn = ScalableAnimatedButton("▶ Play", "#2ecc71", "#27ae60", base_height=35)
             self.play_btn.setFixedWidth(100)
             self.play_btn.clicked.connect(self.toggle_playback)
             self.play_btn.setEnabled(False)
             controls.addWidget(self.play_btn)
             
-            self.stop_btn = AnimatedButton("⏹ Stop", "#e74c3c", "#c0392b")
+            self.stop_btn = ScalableAnimatedButton("⏹ Stop", "#e74c3c", "#c0392b", base_height=35)
             self.stop_btn.setFixedWidth(100)
             self.stop_btn.clicked.connect(self.stop_playback)
             self.stop_btn.setEnabled(False)
             controls.addWidget(self.stop_btn)
             
             self.time_label = QLabel("00:00:00 / 00:00:00")
-            self.time_label.setStyleSheet("color: #FF6B35; font-family: monospace; font-size: 14px;")
+            self.time_label.setStyleSheet("color: #FF6B35; font-family: monospace; font-size: 13px;")
             controls.addWidget(self.time_label)
             controls.addStretch()
             
@@ -868,7 +1011,7 @@ if GUI_AVAILABLE:
             layout.addWidget(player_card)
             
             # Caption Editor Card
-            editor_card = ModernCard()
+            editor_card = ScalableModernCard()
             editor_layout = QVBoxLayout(editor_card)
             editor_layout.setContentsMargins(15, 15, 15, 15)
             
@@ -934,7 +1077,7 @@ if GUI_AVAILABLE:
             
         def _create_progress_section(self):
             """Create progress section"""
-            card = ModernCard()
+            card = ScalableModernCard()
             layout = QVBoxLayout(card)
             layout.setContentsMargins(15, 10, 15, 10)
             
@@ -1136,7 +1279,6 @@ if GUI_AVAILABLE:
                     start = self._parse_srt_time(start_str)
                     end = self._parse_srt_time(end_str)
                     if start <= current_time <= end:
-                        # Highlight the caption
                         cursor = self.caption_editor.textCursor()
                         text = self.caption_editor.toPlainText()
                         pos = text.find(caption)
@@ -1262,7 +1404,9 @@ def run_cli():
             print(f"{Colors.CYAN}Settings (placeholder - use config file){Colors.ENDC}")
             
         elif choice == '4':
-            cache.clear_old(0)
+            # Clear old cache (0 days = all)
+            with sqlite3.connect(CACHE_DB) as conn:
+                conn.execute('DELETE FROM transcriptions')
             print(f"{Colors.GREEN}Cache cleared{Colors.ENDC}")
             
         elif choice == '5':
@@ -1284,7 +1428,7 @@ def main():
         # Set application icon
         app.setWindowIcon(QIcon())
         
-        window = NotYCaptionWindow()
+        window = FixedSizeWindow()
         window.show()
         
         sys.exit(app.exec_())
