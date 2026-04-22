@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build NotY Caption Generator AI Executable v7.1 - PURE CODE ONLY
+NotY Caption Generator AI - Build Pure Executable v7.1
 Copyright (c) 2026 NotY215
 """
 
@@ -11,112 +11,82 @@ import shutil
 import subprocess
 from pathlib import Path
 
-APP_NAME = "NotYCaptionGenAI"
-APP_VERSION = "7.1"
 
-def clean_build_artifacts(builder_dir):
-    build_dir = builder_dir / "build"
-    if build_dir.exists():
-        shutil.rmtree(build_dir)
-        print("  Removed build folder")
+def clean_build_artifacts():
+    """Clean previous build artifacts"""
+    dirs_to_clean = ['build', 'dist', '__pycache__']
+    files_to_clean = ['*.spec']
     
-    for spec_file in builder_dir.glob("*.spec"):
-        spec_file.unlink()
-        print(f"  Removed {spec_file.name}")
+    for dir_name in dirs_to_clean:
+        dir_path = Path(dir_name)
+        if dir_path.exists():
+            shutil.rmtree(dir_path)
+            print(f"Cleaned: {dir_path}")
+            
+    for pattern in files_to_clean:
+        for file in Path('.').glob(pattern):
+            file.unlink()
+            print(f"Cleaned: {file}")
+
 
 def build_exe():
+    """Build the pure code executable"""
     print("=" * 60)
-    print(f"Building {APP_NAME} Executable v{APP_VERSION}")
-    print("PURE CODE ONLY - 5-10 MB (NO PACKAGES)")
+    print("  NotY Caption Generator AI - Build Pure Executable")
     print("=" * 60)
-
-    base_dir = Path(__file__).parent.parent
-    builder_dir = Path(__file__).parent
-    resources_dir = base_dir / "resources"
-    dist_dir = base_dir / "dist"
-
-    dist_dir.mkdir(parents=True, exist_ok=True)
-
-    source_file = base_dir / "noty_caption_gen.py"
-    icon_file = resources_dir / "app.ico"
-
+    
+    # Clean previous builds
+    clean_build_artifacts()
+    
+    # PyInstaller command
     cmd = [
-        sys.executable, "-m", "PyInstaller",
-        "--onefile",
-        "--console",
-        f"--name={APP_NAME}",
-        f"--icon={icon_file}",
-        "--exclude-module=torch",
-        "--exclude-module=torchaudio",
-        "--exclude-module=whisper",
-        "--exclude-module=numpy",
-        "--exclude-module=yt_dlp",
-        "--exclude-module=tensorflow",
-        "--exclude-module=spleeter",
-        "--exclude-module=librosa",
-        "--exclude-module=soundfile",
-        "--exclude-module=scipy",
-        "--exclude-module=numba",
-        "--exclude-module=llvmlite",
-        "--noconfirm",
-        "--clean",
-        "--log-level=ERROR",
-        str(source_file)
+        sys.executable, '-m', 'PyInstaller',
+        '--onefile',                          # Single executable
+        '--windowed',                         # No console for GUI
+        '--name', 'NotYCaptionGenAI',
+        '--icon', 'resources/app.ico',
+        '--add-data', 'ffmpeg;ffmpeg',        # FFmpeg binaries
+        '--add-data', 'models;models',        # Whisper models
+        '--add-data', 'pretrained_models;pretrained_models',  # Spleeter models
+        '--add-data', 'resources;resources',  # Resources
+        '--hidden-import', 'whisper',
+        '--hidden-import', 'torch',
+        '--hidden-import', 'numpy',
+        '--collect-all', 'whisper',
+        '--exclude-module', 'tensorflow',     # Exclude heavy packages
+        '--exclude-module', 'spleeter',
+        '--exclude-module', 'torchvision',
+        '--exclude-module', 'matplotlib',
+        '--exclude-module', 'pandas',
+        '--exclude-module', 'scipy',
+        '--exclude-module', 'PIL',
+        'noty_caption_gui.py'
     ]
-
-    print("\n[INFO] Building with PyInstaller...")
-    print("[INFO] Expected size: 5-10 MB")
-    sys.stdout.flush()
-
+    
+    print("\nRunning PyInstaller...")
+    print("Command:", ' '.join(cmd))
+    
     try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            cwd=str(builder_dir)
-        )
-
-        for line in process.stdout:
-            if "ERROR" in line:
-                print(f"  {line.rstrip()}")
-            sys.stdout.flush()
-
-        process.wait(timeout=1800)
-
-        if process.returncode != 0:
-            print("\n[ERROR] PyInstaller build failed!")
-            return None
-
-        print("\n[OK] Build completed successfully!")
-
-    except subprocess.TimeoutExpired:
-        print("\n[ERROR] Build timed out!")
-        return None
-    except Exception as e:
-        print(f"\n[ERROR] Build failed: {e}")
-        return None
-
-    exe_file = builder_dir / "dist" / f"{APP_NAME}.exe"
-    if exe_file.exists():
-        final_exe = dist_dir / f"{APP_NAME}.exe"
-        shutil.move(str(exe_file), str(final_exe))
-        size = final_exe.stat().st_size / 1024 / 1024
-        print(f"\n[OK] Executable built: {final_exe} ({size:.2f} MB)")
+        subprocess.run(cmd, check=True)
+        print(f"\n{Colors.GREEN}Build successful!{Colors.ENDC}")
         
-        print("\n[INFO] Cleaning build artifacts...")
-        clean_build_artifacts(builder_dir)
-        
-        return final_exe
-    else:
-        print("\n[ERROR] Executable not found!")
-        return None
+        # Show output file info
+        exe_path = Path('dist/NotYCaptionGenAI.exe')
+        if exe_path.exists():
+            size_mb = exe_path.stat().st_size / (1024 * 1024)
+            print(f"\nOutput: {exe_path}")
+            print(f"Size: {size_mb:.2f} MB")
+            
+    except subprocess.CalledProcessError as e:
+        print(f"\n{Colors.FAIL}Build failed: {e}{Colors.ENDC}")
+        sys.exit(1)
+
+
+class Colors:
+    GREEN = '\033[92m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+
 
 if __name__ == "__main__":
-    result = build_exe()
-    if result:
-        print(f"\n[SUCCESS] Build successful! Run: {result}")
-    else:
-        print("\n[FAILED] Build failed!")
-        sys.exit(1)
+    build_exe()
